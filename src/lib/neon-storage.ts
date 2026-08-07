@@ -2034,32 +2034,27 @@ export async function getAdminTruths(limit = 100, offset = 0, filters?: {
   region?: string;
 }) {
   const sql = getDb();
-  let query = sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE 1=1`;
-  
-  if (filters?.region) {
-    query = sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.region_name, 'Unknown') = ${filters.region}`;
-  }
-  if (filters?.state) {
-    query = sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.state_name, t.ip_region, 'Unknown') = ${filters.state}`;
-  }
-  if (filters?.lga) {
-    query = sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.lga_name, 'Unknown') = ${filters.lga}`;
-  }
-  if (filters?.community) {
-    query = sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.community_name, 'Unknown') = ${filters.community}`;
+
+  // Build WHERE conditions dynamically and execute with proper SQL filtering
+  // before LIMIT/OFFSET, not in JS after fetching.
+  let rows: SqlRow[];
+
+  if (filters?.village) {
+    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.village_name, 'Unknown') = ${filters.village} ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
+  } else if (filters?.community) {
+    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.community_name, 'Unknown') = ${filters.community} ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
+  } else if (filters?.lga) {
+    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.lga_name, 'Unknown') = ${filters.lga} ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
+  } else if (filters?.state) {
+    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.state_name, t.ip_region, 'Unknown') = ${filters.state} ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
+  } else if (filters?.region) {
+    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.region_name, 'Unknown') = ${filters.region} ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
+  } else {
+    // No filters — fetch all
+    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
   }
 
-  const rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
-  
-  // Apply filters in JS if set (since we can't easily chain tagged template conditionals)
-  let filtered = rows;
-  if (filters?.region) filtered = filtered.filter(r => (r.region_name || r.ip_region || 'Unknown') === filters.region);
-  if (filters?.state) filtered = filtered.filter(r => (r.state_name || r.ip_region || 'Unknown') === filters.state);
-  if (filters?.lga) filtered = filtered.filter(r => (r.lga_name || 'Unknown') === filters.lga);
-  if (filters?.community) filtered = filtered.filter(r => (r.community_name || 'Unknown') === filters.community);
-  if (filters?.village) filtered = filtered.filter(r => (r.village_name || 'Unknown') === filters.village);
-
-  return filtered.map((r) => ({
+  return rows.map((r) => ({
     id: r.id,
     neighborhoodId: r.neighborhood_id,
     neighborhoodName: r.neighborhood_name,

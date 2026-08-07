@@ -1,6 +1,7 @@
 import { ensureDbInitialized } from "@/lib/db";
-import { updatePlatformUser, getPlatformUserByClerkId } from "@/lib/neon-storage";
-import { getClerkUserId, sanitizeText } from "@/lib/api-helpers";
+import { updatePlatformUser } from "@/lib/neon-storage";
+import { isSuperAdmin } from "@/lib/admin-auth";
+import { sanitizeText } from "@/lib/api-helpers";
 import { z } from "zod";
 
 const updateSchema = z.object({
@@ -11,20 +12,17 @@ const updateSchema = z.object({
 });
 
 /**
- * Update a platform user's role/status. Admin-only.
+ * Update a platform user's role/status. Super admin only.
  */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   await ensureDbInitialized();
-  const clerkUserId = await getClerkUserId();
-  if (!clerkUserId) {
-    return Response.json({ message: "Unauthorized" }, { status: 401 });
-  }
-  const platformUser = await getPlatformUserByClerkId(clerkUserId);
-  if (!platformUser?.is_admin) {
-    return Response.json({ message: "Forbidden — admin access required" }, { status: 403 });
+
+  const isAdmin = await isSuperAdmin();
+  if (!isAdmin) {
+    return Response.json({ message: "Forbidden — Super admin access required" }, { status: 403 });
   }
 
   const { id } = await params;

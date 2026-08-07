@@ -17,16 +17,17 @@ export function isSuperAdminEmail(email: string | null | undefined): boolean {
 
 /**
  * Client-side: Check if a user profile object represents the super admin.
+ * ONLY the designated email is considered super admin — DB role flags
+ * are intentionally excluded to prevent privilege escalation.
  */
 export function isSuperAdminProfile(profile: { email?: string; isAdmin?: boolean; is_admin?: boolean } | null | undefined): boolean {
   if (!profile) return false;
-  if (isSuperAdminEmail(profile.email)) return true;
-  return Boolean(profile.isAdmin ?? profile.is_admin);
+  return isSuperAdminEmail(profile.email);
 }
 
 /**
  * Determine which dashboard a user should see based on their account type.
- * - Super admin email → "admin"
+ * - Super admin email → "admin" (email-only, not DB role)
  * - Org admin → "org"
  * - Regular user → "user"
  */
@@ -39,7 +40,8 @@ export function getDashboardType(profile: {
   organizationId?: number | null;
 } | null | undefined): "admin" | "org" | "user" {
   if (!profile) return "user";
-  if (isSuperAdminEmail(profile.email) || profile.isAdmin || profile.is_admin) return "admin";
+  // Super admin is email-only — DB isAdmin flag does NOT grant admin dashboard
+  if (isSuperAdminEmail(profile.email)) return "admin";
   if (profile.isOrgAdmin || profile.is_org_admin || profile.organizationId) return "org";
   return "user";
 }
