@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Soke — Nigeria Digital Ecosystem</title>
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #0a0a0a; color: #fafafa; }
+    .loader { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; gap: 16px; }
+    .spinner { width: 40px; height: 40px; border: 3px solid #1a1a1a; border-top-color: #16a34a; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .text { font-size: 14px; color: #71717a; }
+  </style>
+</head>
+<body>
+  <div class="loader">
+    <div class="spinner"></div>
+    <div class="text">Loading Soke...</div>
+  </div>
+  <script>
+    // __PORT_5000__ is replaced by deploy_website with the proxy path (port/5000)
+    // Falls back to http://localhost:5000 for local testing
+    var BASE = '__PORT_5000__';
+    if (BASE.startsWith('__')) BASE = '';  // local: no prefix needed
+    window.location.replace(BASE + '/');
+  </script>
+</body>
+</html>
