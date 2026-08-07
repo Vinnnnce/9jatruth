@@ -23,11 +23,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  Zap, Fuel, Car, Tag, Shield, ChevronRight, Clock, ShieldCheck, CheckCircle2,
+  ChevronRight, Clock, ShieldCheck, CheckCircle2,
   ThumbsUp, ThumbsDown, MapPin, Newspaper,
 } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
 import { FeedFilterBar, DEFAULT_FILTERS, type FeedFilters } from "@/components/feed-filter-bar";
+import { getCategoryConfig } from "@/lib/categories";
 
 type Truth = {
   id: number;
@@ -48,13 +49,7 @@ type Truth = {
 
 type Neighborhood = { id: number; name: string; region: string };
 
-const categoryConfig: Record<string, { icon: typeof Zap; color: string; label: string; bg: string }> = {
-  power: { icon: Zap, color: "text-amber-500", label: "Power", bg: "bg-amber-500/10" },
-  fuel: { icon: Fuel, color: "text-orange-500", label: "Fuel", bg: "bg-orange-500/10" },
-  traffic: { icon: Car, color: "text-blue-500", label: "Traffic", bg: "bg-blue-500/10" },
-  prices: { icon: Tag, color: "text-purple-500", label: "Prices", bg: "bg-purple-500/10" },
-  safety: { icon: Shield, color: "text-green-500", label: "Safety", bg: "bg-green-500/10" },
-};
+const categoryConfig = getCategoryConfig;
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -160,7 +155,7 @@ export default function FeedsPage() {
       ) : (
         <div className="space-y-3">
           {truths.map((truth) => {
-            const cat = categoryConfig[truth.category] || categoryConfig.safety;
+            const cat = categoryConfig(truth.category);
             const Icon = cat.icon;
             return (
               <Card key={truth.id} data-testid={`card-feed-${truth.id}`}>

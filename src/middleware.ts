@@ -5,6 +5,8 @@ import type { NextRequest } from "next/server";
 const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
 
+const SUPER_ADMIN_EMAIL = "insights793@gmail.com";
+
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
@@ -25,16 +27,15 @@ const isPublicRoute = createRouteMatcher([
 
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
 const isOrgRoute = createRouteMatcher(["/org(.*)"]);
+const isUserRoute = createRouteMatcher(["/user(.*)"]);
 
 // When Clerk is not configured, use a pass-through middleware
 const passThrough = () => NextResponse.next();
 
 const middleware = isClerkConfigured
   ? clerkMiddleware(async (auth, req) => {
-      if (isAdminRoute(req) || isOrgRoute(req)) {
-        await auth.protect();
-      }
-      if (req.nextUrl.pathname.startsWith("/user")) {
+      // Protect admin, org, and user routes — require authentication
+      if (isAdminRoute(req) || isOrgRoute(req) || isUserRoute(req)) {
         await auth.protect();
       }
     })

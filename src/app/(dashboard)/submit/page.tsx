@@ -18,9 +18,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/hooks/use-toast";
-import { Zap, Fuel, Car, Tag, Shield, Send, CheckCircle2, Info, MapPin, LocateFixed, Building2 } from "lucide-react";
+import { Send, CheckCircle2, Info, MapPin, LocateFixed, Building2 } from "lucide-react";
 import { useLiveLocation } from "@/hooks/use-live-location";
 import { useAgencyAuth } from "@/hooks/use-agency-auth";
+import { CATEGORY_LIST } from "@/lib/categories";
 
 type Neighborhood = {
   id: number;
@@ -28,13 +29,7 @@ type Neighborhood = {
   region: string;
 };
 
-const categories = [
-  { value: "power", label: "Power", icon: Zap, color: "text-amber-500" },
-  { value: "fuel", label: "Fuel", icon: Fuel, color: "text-orange-500" },
-  { value: "traffic", label: "Traffic", icon: Car, color: "text-blue-500" },
-  { value: "prices", label: "Prices", icon: Tag, color: "text-purple-500" },
-  { value: "safety", label: "Safety", icon: Shield, color: "text-green-500" },
-];
+const categories = CATEGORY_LIST;
 
 export default function SubmitTruth() {
   const [neighborhoodId, setNeighborhoodId] = useState<string>("");

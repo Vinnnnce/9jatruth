@@ -1,6 +1,6 @@
 import { ensureDbInitialized } from "@/lib/db";
 import { getPlatformUsers, getPlatformUserByClerkId } from "@/lib/neon-storage";
-import { getClerkUserId } from "@/lib/api-helpers";
+import { isSuperAdmin } from "@/lib/admin-auth";
 import { z } from "zod";
 
 const querySchema = z.object({
@@ -9,17 +9,14 @@ const querySchema = z.object({
 });
 
 /**
- * List all platform users. Admin-only.
+ * List all platform users with IP tracking data. Super admin only.
  */
 export async function GET(request: Request) {
   await ensureDbInitialized();
-  const clerkUserId = await getClerkUserId();
-  if (!clerkUserId) {
-    return Response.json({ message: "Unauthorized" }, { status: 401 });
-  }
-  const platformUser = await getPlatformUserByClerkId(clerkUserId);
-  if (!platformUser?.is_admin) {
-    return Response.json({ message: "Forbidden — admin access required" }, { status: 403 });
+
+  const isAdmin = await isSuperAdmin();
+  if (!isAdmin) {
+    return Response.json({ message: "Forbidden — Super admin access required" }, { status: 403 });
   }
 
   const { searchParams } = new URL(request.url);

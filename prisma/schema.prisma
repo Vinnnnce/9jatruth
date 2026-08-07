@@ -1,0 +1,388 @@
+// Prisma schema for Soke — Eyes on the Street
+// This schema mirrors the Neon PostgreSQL tables managed by db.ts
+// Use `npx prisma generate` to generate the client, `npx prisma db push` to sync
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL")
+}
+
+// ─── Geo Hierarchy ───
+
+model Region {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("regions")
+}
+
+model State {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  regionId  Int?     @map("region_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("states")
+}
+
+model Lga {
+  id        Int      @id @default(autoincrement())
+  name      String
+  stateId   Int?     @map("state_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("lgas")
+}
+
+model Village {
+  id        Int      @id @default(autoincrement())
+  name      String
+  lgaId     Int?     @map("lga_id")
+  lat       Float?
+  lng       Float?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("villages")
+}
+
+model Community {
+  id        Int      @id @default(autoincrement())
+  name      String
+  villageId Int?     @map("village_id")
+  geoHash   String   @map("geo_hash")
+  lat       Float
+  lng       Float
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("communities")
+}
+
+// ─── Core Tables ───
+
+model Neighborhood {
+  id        Int      @id @default(autoincrement())
+  name      String
+  region    String
+  geoHash   String   @map("geo_hash")
+  lat       Float
+  lng       Float
+  state     String?
+  lga       String?
+  community String?
+  village   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("neighborhoods")
+}
+
+model MicroTruth {
+  id                 Int      @id @default(autoincrement())
+  neighborhoodId     Int      @map("neighborhood_id")
+  category           String
+  content            String
+  trustScore         Int      @default(50) @map("trust_score")
+  decayFactor        Float    @default(1.0) @map("decay_factor")
+  verificationChain  String   @default("[]") @map("verification_chain")
+  userHash           String   @map("user_hash")
+  status             String   @default("pending")
+  createdAt          DateTime @default(now()) @map("created_at")
+  ipHash             String?  @map("ip_hash")
+  ipRegion           String?  @map("ip_region")
+  ipCity             String?  @map("ip_city")
+  reportLat          Float?   @map("report_lat")
+  reportLng          Float?   @map("report_lng")
+  locationSource     String?  @map("location_source")
+  organizationId     Int?     @map("organization_id")
+  // Geo hierarchy
+  stateName          String?  @map("state_name")
+  lgaName            String?  @map("lga_name")
+  communityName      String?  @map("community_name")
+  villageName        String?  @map("village_name")
+  regionName         String?  @map("region_name")
+
+  @@map("micro_truths")
+}
+
+model Snapshot {
+  id             Int      @id @default(autoincrement())
+  neighborhoodId Int      @map("neighborhood_id")
+  powerStatus    String   @map("power_status")
+  fuelStatus     String   @map("fuel_status")
+  trafficLevel   String   @map("traffic_level")
+  priceIndex     Int      @default(100) @map("price_index")
+  safetyIndex    Int      @default(70) @map("safety_index")
+  activeTruths   Int      @default(0) @map("active_truths")
+  updatedAt      DateTime @default(now()) @map("updated_at")
+
+  @@map("snapshots")
+}
+
+model Prediction {
+  id             Int      @id @default(autoincrement())
+  category       String
+  neighborhoodId Int      @map("neighborhood_id")
+  prediction     String
+  confidence     Int      @default(50)
+  timeframe      String
+  trend          String   @default("stable")
+  modelVersion   String   @default("soke-heuristic-v1") @map("model_version")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("predictions")
+}
+
+model RewardLedger {
+  id          Int      @id @default(autoincrement())
+  userHash    String   @map("user_hash")
+  amount      Int
+  type        String
+  description String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("reward_ledger")
+}
+
+model DeviceProfile {
+  id               Int      @id @default(autoincrement())
+  deviceIdHash     String   @unique @map("device_id_hash")
+  trustScore       Int      @default(50) @map("trust_score")
+  totalSubmissions Int      @default(0) @map("total_submissions")
+  rewardsBalance   Int      @default(0) @map("rewards_balance")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@map("device_profiles")
+}
+
+model Verification {
+  id        Int      @id @default(autoincrement())
+  truthId   Int      @map("truth_id")
+  userHash  String   @map("user_hash")
+  action    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([truthId, userHash], name: "idx_verifications_truth_user")
+  @@map("verifications")
+}
+
+model Organization {
+  id           Int      @id @default(autoincrement())
+  name         String
+  type         String
+  description  String?
+  contactEmail String   @map("contact_email")
+  contactPhone String?  @map("contact_phone")
+  website      String?
+  logoUrl      String?  @map("logo_url")
+  region       String?
+  city         String?
+  lat          Float?
+  lng          Float?
+  verified     Int      @default(0)
+  active       Int      @default(1)
+  adminHash    String   @map("admin_hash")
+  clerkUserId  String?  @map("clerk_user_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("organizations")
+}
+
+model AgencyAccount {
+  id             Int       @id @default(autoincrement())
+  organizationId Int       @map("organization_id")
+  email          String    @unique
+  passwordHash   String     @map("password_hash")
+  displayName    String     @map("display_name")
+  role           String     @default("admin")
+  active         Int       @default(1)
+  lastLoginAt    DateTime?  @map("last_login_at")
+  clerkUserId    String?   @map("clerk_user_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @map("updated_at")
+
+  @@map("agency_accounts")
+}
+
+model PlatformUser {
+  id             Int      @id @default(autoincrement())
+  clerkUserId    String   @unique @map("clerk_user_id")
+  email          String
+  displayName    String?  @map("display_name")
+  avatarUrl      String?  @map("avatar_url")
+  role           String   @default("user")
+  isAdmin        Boolean  @default(false) @map("is_admin")
+  isOrgAdmin     Boolean  @default(false) @map("is_org_admin")
+  organizationId Int?     @map("organization_id")
+  // IP tracking
+  lastIpHash     String?  @map("last_ip_hash")
+  lastIpRegion   String?  @map("last_ip_region")
+  lastIpCity     String?  @map("last_ip_city")
+  // Geo hierarchy
+  state          String?
+  lga            String?
+  community      String?
+  village        String?
+  region         String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @map("updated_at")
+
+  @@map("platform_users")
+}
+
+model OrgMember {
+  id             Int      @id @default(autoincrement())
+  organizationId Int      @map("organization_id")
+  clerkUserId    String   @map("clerk_user_id")
+  email          String
+  displayName    String    @map("display_name")
+  role           String    @default("member")
+  permissions    Json     @default("[]")
+  active         Int      @default(1)
+  invitedBy      String?  @map("invited_by")
+  invitedAt      DateTime @default(now()) @map("invited_at")
+  joinedAt       DateTime? @map("joined_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @map("updated_at")
+
+  @@unique([organizationId, clerkUserId], name: "idx_org_members_org_clerk")
+  @@map("org_members")
+}
+
+model Vacancy {
+  id                 Int       @id @default(autoincrement())
+  organizationId     Int       @map("organization_id")
+  title              String
+  description        String
+  category           String    @default("general")
+  location          String?
+  employmentType     String     @default("full-time") @map("employment_type")
+  salaryRange        String?   @map("salary_range")
+  requirements       Json      @default("[]")
+  responsibilities   Json      @default("[]")
+  status             String    @default("open")
+  applicationDeadline DateTime? @map("application_deadline")
+  postedByClerkId    String     @map("posted_by_clerk_id")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @default(now()) @map("updated_at")
+
+  @@map("vacancies")
+}
+
+model VacancyApplication {
+  id            Int      @id @default(autoincrement())
+  vacancyId     Int      @map("vacancy_id")
+  clerkUserId   String?  @map("clerk_user_id")
+  applicantName String   @map("applicant_name")
+  applicantEmail String  @map("applicant_email")
+  coverLetter   String?  @map("cover_letter")
+  resumeUrl     String?  @map("resume_url")
+  status        String   @default("pending")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("vacancy_applications")
+}
+
+// ─── Sync / Mesh ───
+
+model SyncQueue {
+  id                 Int       @id @default(autoincrement())
+  deviceHash         String    @map("device_hash")
+  operation          String
+  payload            String
+  status             String    @default("pending")
+  conflictResolution String?   @map("conflict_resolution")
+  bundleId           String?   @map("bundle_id")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  syncedAt           DateTime?  @map("synced_at")
+
+  @@map("sync_queue")
+}
+
+model MeshEvent {
+  id          Int      @id @default(autoincrement())
+  bundleId    String   @map("bundle_id")
+  deviceHash  String   @map("device_hash")
+  event       String
+  recordCount Int      @default(0) @map("record_count")
+  metadata    String   @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("mesh_events")
+}
+
+model PushSubscription {
+  id            Int      @id @default(autoincrement())
+  deviceHash    String   @map("device_hash")
+  endpoint      String
+  p256dh        String
+  auth          String
+  categories    String   @default("[]")
+  neighborhoods String   @default("[]")
+  active        Int      @default(1)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("push_subscriptions")
+}
+
+model Achievement {
+  id         Int      @id @default(autoincrement())
+  deviceHash String   @map("device_hash")
+  achievement String
+  tier       String   @default("bronze")
+  xpAwarded  Int      @default(0) @map("xp_awarded")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("achievements")
+}
+
+model UserStat {
+  id                Int      @id @default(autoincrement())
+  deviceHash        String   @unique @map("device_hash")
+  xp               Int      @default(0)
+  level            Int      @default(1)
+  currentStreak     Int      @default(0) @map("current_streak")
+  longestStreak     Int      @default(0) @map("longest_streak")
+  lastReportDate    String?  @map("last_report_date")
+  totalReports      Int      @default(0) @map("total_reports")
+  totalVerifications Int     @default(0) @map("total_verifications")
+  badges           String   @default("[]")
+  updatedAt        DateTime @default(now()) @map("updated_at")
+
+  @@map("user_stats")
+}
+
+model GeoCluster {
+  id             Int      @id @default(autoincrement())
+  geoHash        String   @map("geo_hash")
+  neighborhoodId Int?     @map("neighborhood_id")
+  clusterType    String   @map("cluster_type")
+  reportCount    Int      @default(0) @map("report_count")
+  avgTrustScore  Int      @default(50) @map("avg_trust_score")
+  centroidLat    Float    @map("centroid_lat")
+  centroidLng    Float    @map("centroid_lng")
+  radiusMeters   Int      @default(500) @map("radius_meters")
+  lastReportAt   DateTime @default(now()) @map("last_report_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("geo_clusters")
+}
+
+model ModelRun {
+  id           Int      @id @default(autoincrement())
+  modelName    String   @map("model_name")
+  modelVersion String   @map("model_version")
+  inputType    String   @map("input_type")
+  inputId      Int?
+  output       String   @default("{}")
+  confidence   Float    @default(0.5)
+  explanation  String?
+  executionMs  Int      @default(0) @map("execution_ms")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("model_runs")
+}

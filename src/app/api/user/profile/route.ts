@@ -2,16 +2,18 @@ import { ensureDbInitialized } from "@/lib/db";
 import {
   getPlatformUserByClerkId,
   upsertPlatformUser,
+  updatePlatformUserIpInfo,
   getOrganization,
 } from "@/lib/neon-storage";
-import { getClerkUserId } from "@/lib/api-helpers";
+import { getClerkUserId, getIpLocation } from "@/lib/api-helpers";
 import { currentUser } from "@clerk/nextjs/server";
 
 /**
  * Get the current user's platform profile. Falls back to Clerk user data
  * when no platform_users row exists yet (e.g. before the webhook runs).
+ * Also tracks the user's IP and geo info for admin dashboard.
  */
-export async function GET() {
+export async function GET(request: Request) {
   await ensureDbInitialized();
   const clerkUserId = await getClerkUserId();
   if (!clerkUserId) {
@@ -32,6 +34,24 @@ export async function GET() {
     });
   }
 
+  // Track IP and geo info for the admin dashboard
+  try {
+    const ipLocation = await getIpLocation(request);
+    if (ipLocation.ipHash) {
+      await updatePlatformUserIpInfo(clerkUserId, {
+        ipHash: ipLocation.ipHash,
+        ipRegion: ipLocation.ipRegion,
+        ipCity: ipLocation.ipCity,
+        state: ipLocation.ipRegion,
+        region: ipLocation.ipRegion,
+      });
+      // Refresh the user object with updated IP info
+      platformUser = await getPlatformUserByClerkId(clerkUserId);
+    }
+  } catch {
+    // Non-critical — don't fail the profile request
+  }
+
   let organization = null;
   if (platformUser?.organization_id) {
     organization = await getOrganization(platformUser.organization_id);
@@ -50,6 +70,14 @@ export async function GET() {
     organization: organization
       ? { id: organization.id, name: organization.name, type: organization.type, verified: organization.verified }
       : null,
+    lastIpHash: platformUser.last_ip_hash ?? null,
+    lastIpRegion: platformUser.last_ip_region ?? null,
+    lastIpCity: platformUser.last_ip_city ?? null,
+    state: platformUser.state ?? null,
+    lga: platformUser.lga ?? null,
+    community: platformUser.community ?? null,
+    village: platformUser.village ?? null,
+    region: platformUser.region ?? null,
     createdAt: platformUser.created_at,
     updatedAt: platformUser.updated_at,
   });

@@ -1,11 +1,12 @@
 import { ensureDbInitialized } from "@/lib/db";
-import { getAdminStats, getPlatformUserByClerkId } from "@/lib/neon-storage";
+import { deleteAllTruths } from "@/lib/neon-storage";
 import { isSuperAdmin } from "@/lib/admin-auth";
 
 /**
- * Platform-wide admin stats. Requires the super admin email.
+ * Delete all truths/posts and verifications (demo data cleanup).
+ * Super admin only.
  */
-export async function GET() {
+export async function DELETE() {
   await ensureDbInitialized();
 
   const isAdmin = await isSuperAdmin();
@@ -13,6 +14,6 @@ export async function GET() {
     return Response.json({ message: "Forbidden — Super admin access required" }, { status: 403 });
   }
 
-  const stats = await getAdminStats();
-  return Response.json(stats);
+  const result = await deleteAllTruths();
+  return Response.json({ ...result, message: "All posts and verifications deleted" });
 }

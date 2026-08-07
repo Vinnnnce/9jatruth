@@ -3,56 +3,58 @@
 /**
  * LocationPrompt Component
  * 
- * Shows when user hasn't granted location access yet.
- * Prompts them to enable location for nearby posts.
+ * Auto-detects user location via IP address. No manual switch needed.
+ * Shows a subtle indicator of detected location.
  */
 
-import { useEffect } from "react";
-import { useLiveLocation } from "../hooks/use-live-location";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { MapPin, LocateFixed, AlertCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { MapPin, LocateFixed } from "lucide-react";
 
 interface LocationPromptProps {
-  onLocationObtained?: (lat: number, lng: number) => void;
+  onLocationObtained?: (lat: number, lng: number, region?: string, city?: string) => void;
 }
 
 export function LocationPrompt({ onLocationObtained }: LocationPromptProps) {
-  const { lat, lng, loading, error, permission, requestLocation } = useLiveLocation();
+  const [detected, setDetected] = useState(false);
+  const [region, setRegion] = useState<string | null>(null);
+  const [city, setCity] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Notify parent when location is obtained (in useEffect, not during render)
   useEffect(() => {
-    if (lat !== null && lng !== null && onLocationObtained) {
-      onLocationObtained(lat, lng);
-    }
-  }, [lat, lng, onLocationObtained]);
+    // Auto-detect location via IP address — no manual switch
+    fetch("/api/geo/nearby")
+      .then(res => res.json())
+      .then(data => {
+        if (data.userLocation) {
+          setRegion(data.userLocation.region || null);
+          setCity(data.userLocation.city || null);
+          if (data.userLocation.lat && data.userLocation.lng) {
+            onLocationObtained?.(data.userLocation.lat, data.userLocation.lng, data.userLocation.region, data.userLocation.city);
+          }
+          setDetected(true);
+        }
+      })
+      .catch(() => {
+        // Silent fail — location is optional
+      })
+      .finally(() => setLoading(false));
+  }, [onLocationObtained]);
 
-  if (lat !== null) return null; // Location obtained, hide prompt
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <LocateFixed className="h-3.5 w-3.5 animate-spin text-primary" />
+        Detecting your location...
+      </div>
+    );
+  }
+
+  if (!detected) return null;
 
   return (
-    <Card className="border-dashed">
-      <CardContent className="p-6 flex flex-col items-center text-center gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-          {error ? <AlertCircle className="h-6 w-6 text-amber-500" /> : <MapPin className="h-6 w-6 text-primary" />}
-        </div>
-        <div>
-          <h3 className="text-sm font-medium">Enable Location for Nearby Posts</h3>
-          <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-            {error
-              ? error
-              : "We use your live location to show only posts and feeds near you. Your exact location is never stored — only approximate distance is used."}
-          </p>
-        </div>
-        <Button onClick={requestLocation} disabled={loading} size="sm" className="gap-1">
-          <LocateFixed className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          {loading ? "Locating..." : "Share My Location"}
-        </Button>
-        {permission === "denied" && (
-          <p className="text-[10px] text-muted-foreground">
-            Location access was denied. You can enable it in your browser settings.
-          </p>
-        )}
-      </CardContent>
-    </Card>
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <MapPin className="h-3.5 w-3.5 text-primary" />
+      {city && region ? `${city}, ${region}` : region || "Location detected"}
+    </div>
   );
 }

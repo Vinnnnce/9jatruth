@@ -1,4 +1,4 @@
-export function CrlLogo({ className = "h-8 w-8" }: { className?: string }) {
+export function SokeLogo({ className = "h-8 w-8" }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -6,7 +6,7 @@ export function CrlLogo({ className = "h-8 w-8" }: { className?: string }) {
       fill="none"
       stroke="currentColor"
       stroke-width="2"
-      aria-label="CRL Logo"
+      aria-label="Soke Logo"
     >
       <circle cx="16" cy="16" r="3" fill="currentColor" stroke="none" />
       <circle cx="16" cy="16" r="7" stroke-opacity="0.6" />
@@ -23,14 +23,18 @@ export function CrlLogo({ className = "h-8 w-8" }: { className?: string }) {
   );
 }
 
-export function CrlLogoFull({ className = "h-7" }: { className?: string }) {
+export function SokeLogoFull({ className = "h-7" }: { className?: string }) {
   return (
     <div className="flex items-center gap-2.5">
-      <CrlLogo className="h-7 w-7" />
+      <SokeLogo className="h-7 w-7" />
       <div className="flex flex-col leading-none">
-        <span className={`font-display font-700 text-sm tracking-tight`}>CRL</span>
-        <span className="text-[10px] text-muted-foreground tracking-wider uppercase">Reality Layer</span>
+        <span className={`font-display font-700 text-sm tracking-tight`}>Soke</span>
+        <span className="text-[10px] text-muted-foreground tracking-wider uppercase">Eyes on the Street</span>
       </div>
     </div>
   );
 }
+
+// Backward-compatible aliases
+export const CrlLogo = SokeLogo;
+export const CrlLogoFull = SokeLogoFull;

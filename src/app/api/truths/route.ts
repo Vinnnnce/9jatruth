@@ -13,7 +13,7 @@ import { z } from "zod";
 const truthsQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).default(50),
   neighborhoodId: z.coerce.number().int().positive().max(1_000_000).optional(),
-  category: z.enum(["power", "fuel", "traffic", "prices", "safety"]).optional(),
+  category: z.enum(["power", "fuel", "traffic", "prices", "safety", "security", "real-estate", "housing", "patrol-gas-station", "restaurant", "hotel", "school", "pharmacy", "hospital", "supermarket"]).optional(),
 });
 
 export async function GET(request: Request) {
@@ -56,16 +56,24 @@ export async function POST(request: Request) {
     const userHash = await getUserId(request);
     const ipLocation = await getIpLocation(request);
 
+    // Determine geo hierarchy from IP location
+    const stateName = ipLocation.ipRegion || undefined;
+    const regionName = ipLocation.ipRegion || undefined;
+
+    // Strip null-typed geo fields from schema data before spreading
+    const { stateName: _sn, lgaName: _ln, communityName: _cn, villageName: _vn, regionName: _rn, ...restData } = data;
     const truth = await createTruth({
-      ...data,
+      ...restData,
       content: sanitizedContent,
       userHash,
       ipHash: ipLocation.ipHash || undefined,
       ipRegion: ipLocation.ipRegion || undefined,
       ipCity: ipLocation.ipCity || undefined,
-      reportLat: data.reportLat,
-      reportLng: data.reportLng,
+      reportLat: data.reportLat || (ipLocation.ipLat ?? undefined),
+      reportLng: data.reportLng || (ipLocation.ipLng ?? undefined),
       locationSource: data.locationSource || (ipLocation.ipLat ? "ip" : undefined),
+      stateName,
+      regionName,
     });
     return Response.json(truth, { status: 201 });
   } catch (err) {

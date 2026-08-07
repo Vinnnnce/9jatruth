@@ -12,12 +12,16 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarInset,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { CrlLogoFull } from "@/components/logo";
+import { SokeLogoFull } from "@/components/logo";
 import { OfflineStatus } from "@/components/offline-status";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserButton } from "@clerk/nextjs";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { isSuperAdminProfile, getDashboardType } from "@/lib/admin-auth-client";
 
 const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
@@ -50,67 +54,103 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-const navSections = [
-  {
-    label: "Main",
-    items: [
-      { path: "/", label: "Dashboard", icon: LayoutDashboard },
-      { path: "/search", label: "Search", icon: Search },
-      { path: "/submit", label: "Submit Truth", icon: Send },
-      { path: "/feeds", label: "Feeds", icon: Newspaper },
-      { path: "/activity", label: "Activity", icon: ActivityIcon },
-    ],
-  },
-  {
-    label: "Insights",
-    items: [
-      { path: "/trends", label: "Trends", icon: BarChart3 },
-      { path: "/map", label: "Geo Map", icon: MapIcon },
-      { path: "/compare", label: "Compare", icon: GitCompare },
-      { path: "/alerts", label: "Alerts", icon: Bell },
-      { path: "/predictions", label: "Predictions", icon: TrendingUp },
-      { path: "/rewards", label: "Rewards", icon: Coins },
-      { path: "/leaderboard", label: "Leaderboard", icon: Trophy },
-    ],
-  },
-  {
-    label: "Account",
-    items: [
-      { path: "/profile", label: "Profile", icon: User },
-      { path: "/organizations", label: "Organizations", icon: Building2 },
-      { path: "/agency-auth", label: "Agency Login", icon: Shield },
-      { path: "/account", label: "Account Settings", icon: Settings },
-    ],
-  },
-  {
-    label: "Dashboards",
-    items: [
-      { path: "/admin", label: "Admin Dashboard", icon: ShieldCheck },
-      { path: "/user", label: "User Dashboard", icon: User },
-      { path: "/org", label: "Org Dashboard", icon: Building2 },
-    ],
-  },
-  {
-    label: "Legal",
-    items: [
-      { path: "/privacy", label: "Privacy Policy", icon: Shield },
-      { path: "/terms", label: "Terms of Use", icon: FileText },
-      { path: "/cookies", label: "Cookie Policy", icon: Cookie },
-      { path: "/operations", label: "Operations", icon: Activity },
-    ],
-  },
-];
+type UserProfile = {
+  id: string;
+  email?: string;
+  name?: string;
+  isAdmin?: boolean;
+  is_admin?: boolean;
+  isOrgAdmin?: boolean;
+  is_org_admin?: boolean;
+  organizationId?: number | null;
+};
+
+function useNavSections() {
+  const { data: profile } = useQuery<UserProfile>({
+    queryKey: ["/api/user/profile"],
+  });
+
+  const dashboardType = getDashboardType(profile);
+
+  const sections = [
+    {
+      label: "Main",
+      items: [
+        { path: "/", label: "Dashboard", icon: LayoutDashboard },
+        { path: "/search", label: "Search", icon: Search },
+        { path: "/submit", label: "Submit Truth", icon: Send },
+        { path: "/feeds", label: "Feeds", icon: Newspaper },
+        { path: "/activity", label: "Activity", icon: ActivityIcon },
+      ],
+    },
+    {
+      label: "Insights",
+      items: [
+        { path: "/trends", label: "Trends", icon: BarChart3 },
+        { path: "/map", label: "Geo Map", icon: MapIcon },
+        { path: "/compare", label: "Compare", icon: GitCompare },
+        { path: "/alerts", label: "Alerts", icon: Bell },
+        { path: "/predictions", label: "Predictions", icon: TrendingUp },
+        { path: "/rewards", label: "Rewards", icon: Coins },
+        { path: "/leaderboard", label: "Leaderboard", icon: Trophy },
+      ],
+    },
+    {
+      label: "Account",
+      items: [
+        { path: "/profile", label: "Profile", icon: User },
+        { path: "/organizations", label: "Organizations", icon: Building2 },
+        { path: "/agency-auth", label: "Agency Login", icon: Shield },
+        { path: "/account", label: "Account Settings", icon: Settings },
+      ],
+    },
+    {
+      label: "Dashboards",
+      items: [
+        // Only show admin dashboard to super admin
+        ...(dashboardType === "admin"
+          ? [{ path: "/admin", label: "Super Admin Dashboard", icon: ShieldCheck }]
+          : []),
+        // Show user dashboard for all authenticated users
+        { path: "/user", label: "User Dashboard", icon: User },
+        // Show org dashboard only for org admins
+        ...(dashboardType === "org"
+          ? [{ path: "/org", label: "Org Dashboard", icon: Building2 }]
+          : []),
+      ],
+    },
+    {
+      label: "Legal",
+      items: [
+        { path: "/privacy", label: "Privacy Policy", icon: Shield },
+        { path: "/terms", label: "Terms of Use", icon: FileText },
+        { path: "/cookies", label: "Cookie Policy", icon: Cookie },
+        { path: "/operations", label: "Operations", icon: Activity },
+      ],
+    },
+  ];
+
+  return sections;
+}
 
 function AppSidebar() {
   const pathname = usePathname();
-  const { setOpenMobile } = useSidebar();
+  const { setOpenMobile, setOpen, openMobile, open } = useSidebar();
+  const navSections = useNavSections();
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border px-4 h-16 flex flex-row items-center justify-center group-data-[collapsible=icon]:px-2">
-        <Link href="/" onClick={() => setOpenMobile(false)}>
+        <Link
+          href="/"
+          onClick={() => {
+            setOpenMobile(false);
+            // On desktop, collapse after navigation
+            if (window.innerWidth >= 768) setOpen(false);
+          }}
+        >
           <div className="text-sidebar-foreground hover-elevate rounded-md p-1 -m-1 transition-colors">
-            <CrlLogoFull />
+            <SokeLogoFull />
           </div>
         </Link>
       </SidebarHeader>
@@ -131,7 +171,11 @@ function AppSidebar() {
                     asChild
                     isActive={isActive}
                     tooltip={item.label}
-                    onClick={() => setOpenMobile(false)}
+                    onClick={() => {
+                      setOpenMobile(false);
+                      // On desktop, collapse after navigation
+                      if (window.innerWidth >= 768) setOpen(false);
+                    }}
                   >
                     <Link href={item.path}>
                       <Icon className="h-4 w-4 shrink-0" />
@@ -150,7 +194,7 @@ function AppSidebar() {
           <span className="group-data-[collapsible=icon]:hidden">Mesh network active</span>
         </div>
         <div className="mt-1.5 text-[10px] text-sidebar-foreground/40 font-mono group-data-[collapsible=icon]:hidden">
-          Nigeria Digital Ecosystem
+          Soke — Eyes on the Street
         </div>
         <div className="mt-2 flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
           <Link href="/privacy" className="hover:underline">Privacy</Link>
@@ -166,13 +210,13 @@ function AppSidebar() {
 
 function TopBar() {
   return (
-    <header className="flex items-center justify-between h-16 px-4 md:px-6 border-b border-border bg-background/80 backdrop-blur-sm">
+    <header className="flex items-center justify-between h-16 px-4 md:px-6 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-30">
       <div className="flex items-center gap-2 md:gap-3">
         <SidebarTrigger className="md:hidden" />
         <SidebarTrigger className="hidden md:flex" />
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Globe className="h-4 w-4 text-primary" />
-          <span className="hidden sm:inline">Nigeria Digital Ecosystem</span>
+          <span className="hidden sm:inline">Soke — Eyes on the Street</span>
         </div>
       </div>
       <div className="flex items-center gap-2 md:gap-3">
@@ -202,12 +246,12 @@ function TopBar() {
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={false}>
       <AppSidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <SidebarInset>
         <TopBar />
         <main className="flex-1 overflow-y-auto scrollbar-thin">{children}</main>
-      </div>
+      </SidebarInset>
     </SidebarProvider>
   );
 }

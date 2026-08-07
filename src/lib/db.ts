@@ -80,7 +80,7 @@ export async function ensureDbInitialized() {
     confidence INTEGER NOT NULL DEFAULT 50,
     timeframe TEXT NOT NULL,
     trend TEXT NOT NULL DEFAULT 'stable',
-    model_version TEXT NOT NULL DEFAULT 'crl-heuristic-v1',
+    model_version TEXT NOT NULL DEFAULT 'soke-heuristic-v1',
     created_at TIMESTAMPTZ DEFAULT NOW()
   )`;
 
@@ -312,26 +312,124 @@ export async function ensureDbInitialized() {
   await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS report_lng DOUBLE PRECISION`;
   await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS location_source TEXT`;
   await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS organization_id INTEGER`;
+  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS state_name TEXT`;
+  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS lga_name TEXT`;
+  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS community_name TEXT`;
+  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS village_name TEXT`;
+  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS region_name TEXT`;
   await sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS clerk_user_id TEXT`;
   await sql`ALTER TABLE agency_accounts ADD COLUMN IF NOT EXISTS clerk_user_id TEXT`;
 
-  // Seed reference data (neighborhoods only — no demo posts)
+  // Add geo hierarchy columns to neighborhoods
+  await sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS state TEXT`;
+  await sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS lga TEXT`;
+  await sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS community TEXT`;
+  await sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS village TEXT`;
+
+  // Add IP tracking columns to platform_users
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS last_ip_hash TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS last_ip_region TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS last_ip_city TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS state TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS lga TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS community TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS village TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS region TEXT`;
+
+  // ─── Geo Hierarchy Reference Tables ───
+  await sql`CREATE TABLE IF NOT EXISTS regions (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE TABLE IF NOT EXISTS states (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    region_id INTEGER REFERENCES regions(id),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE TABLE IF NOT EXISTS lgas (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    state_id INTEGER REFERENCES states(id),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE TABLE IF NOT EXISTS villages (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    lga_id INTEGER REFERENCES lgas(id),
+    lat DOUBLE PRECISION,
+    lng DOUBLE PRECISION,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE TABLE IF NOT EXISTS communities (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    village_id INTEGER REFERENCES villages(id),
+    geo_hash TEXT NOT NULL,
+    lat DOUBLE PRECISION NOT NULL,
+    lng DOUBLE PRECISION NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+
+  // Seed geo hierarchy reference data (Nigeria regions/states only — no demo posts)
+  const existingRegions = await sql`SELECT COUNT(*) as count FROM regions`;
+  if ((existingRegions as any)[0].count === 0) {
+    const regions = [
+      { name: "North Central" }, { name: "North East" }, { name: "North West" },
+      { name: "South East" }, { name: "South South" }, { name: "South West" },
+    ];
+    for (const r of regions) {
+      await sql`INSERT INTO regions (name) VALUES (${r.name})`;
+    }
+
+    const states = [
+      { name: "Lagos", region: "South West" }, { name: "Ogun", region: "South West" },
+      { name: "Oyo", region: "South West" }, { name: "Osun", region: "South West" },
+      { name: "Ondo", region: "South West" }, { name: "Ekiti", region: "South West" },
+      { name: "Ekiti", region: "South West" },
+      { name: "Abia", region: "South East" }, { name: "Anambra", region: "South East" },
+      { name: "Ebonyi", region: "South East" }, { name: "Enugu", region: "South East" },
+      { name: "Imo", region: "South East" },
+      { name: "Akwa Ibom", region: "South South" }, { name: "Bayelsa", region: "South South" },
+      { name: "Cross River", region: "South South" }, { name: "Delta", region: "South South" },
+      { name: "Edo", region: "South South" }, { name: "Rivers", region: "South South" },
+      { name: "Benue", region: "North Central" }, { name: "Kogi", region: "North Central" },
+      { name: "Kwara", region: "North Central" }, { name: "Nasarawa", region: "North Central" },
+      { name: "Plateau", region: "North Central" }, { name: "FCT", region: "North Central" },
+      { name: "Adamawa", region: "North East" }, { name: "Bauchi", region: "North East" },
+      { name: "Borno", region: "North East" }, { name: "Gombe", region: "North East" },
+      { name: "Taraba", region: "North East" }, { name: "Yobe", region: "North East" },
+      { name: "Jigawa", region: "North West" }, { name: "Kaduna", region: "North West" },
+      { name: "Kano", region: "North West" }, { name: "Katsina", region: "North West" },
+      { name: "Kebbi", region: "North West" }, { name: "Sokoto", region: "North West" },
+      { name: "Zamfara", region: "North West" },
+    ];
+    for (const s of states) {
+      const regionRow = (await sql`SELECT id FROM regions WHERE name = ${s.region}`) as any;
+      const regionId = regionRow[0]?.id;
+      await sql`INSERT INTO states (name, region_id) VALUES (${s.name}, ${regionId})`;
+    }
+    console.log("[Soke] Geo hierarchy reference data initialized (regions & states)");
+  }
+
+  // Seed neighborhoods with geo hierarchy (reference data only — no demo posts)
   const existing = await sql`SELECT COUNT(*) as count FROM neighborhoods`;
   if ((existing as any)[0].count === 0) {
     const neighborhoods = [
-      { name: "Lekki Phase 1", region: "Lagos", geoHash: "s6z1x4", lat: 6.4474, lng: 3.4735 },
-      { name: "Yaba", region: "Lagos", geoHash: "s6z1k3", lat: 6.5244, lng: 3.3792 },
-      { name: "Ikeja GRA", region: "Lagos", geoHash: "s6z1g2", lat: 6.5833, lng: 3.3436 },
-      { name: "Wuse 2", region: "Abuja", geoHash: "s1z0c4", lat: 9.082, lng: 7.475 },
-      { name: "Garki", region: "Abuja", geoHash: "s1z0c3", lat: 9.0338, lng: 7.4884 },
-      { name: "New Haven", region: "Enugu", geoHash: "s1z2z3", lat: 6.454, lng: 7.5438 },
-      { name: "Dline", region: "Port Harcourt", geoHash: "s1z3x2", lat: 4.8156, lng: 7.0498 },
-      { name: "Bodija", region: "Ibadan", geoHash: "s1z1k4", lat: 7.43, lng: 3.91 },
+      { name: "Lekki Phase 1", region: "Lagos", geoHash: "s6z1x4", lat: 6.4474, lng: 3.4735, state: "Lagos", lga: "Eti-Osa", community: "Lekki Phase 1", village: null },
+      { name: "Yaba", region: "Lagos", geoHash: "s6z1k3", lat: 6.5244, lng: 3.3792, state: "Lagos", lga: "Lagos Mainland", community: "Yaba", village: null },
+      { name: "Ikeja GRA", region: "Lagos", geoHash: "s6z1g2", lat: 6.5833, lng: 3.3436, state: "Lagos", lga: "Ikeja", community: "Ikeja GRA", village: null },
+      { name: "Wuse 2", region: "Abuja", geoHash: "s1z0c4", lat: 9.082, lng: 7.475, state: "FCT", lga: "Municipal Area Council", community: "Wuse 2", village: null },
+      { name: "Garki", region: "Abuja", geoHash: "s1z0c3", lat: 9.0338, lng: 7.4884, state: "FCT", lga: "Municipal Area Council", community: "Garki", village: null },
+      { name: "New Haven", region: "Enugu", geoHash: "s1z2z3", lat: 6.454, lng: 7.5438, state: "Enugu", lga: "Enugu East", community: "New Haven", village: null },
+      { name: "Dline", region: "Port Harcourt", geoHash: "s1z3x2", lat: 4.8156, lng: 7.0498, state: "Rivers", lga: "Port Harcourt", community: "Dline", village: null },
+      { name: "Bodija", region: "Ibadan", geoHash: "s1z1k4", lat: 7.43, lng: 3.91, state: "Oyo", lga: "Ibadan North", community: "Bodija", village: null },
     ];
     for (const n of neighborhoods) {
-      await sql`INSERT INTO neighborhoods (name, region, geo_hash, lat, lng) VALUES (${n.name}, ${n.region}, ${n.geoHash}, ${n.lat}, ${n.lng})`;
+      await sql`INSERT INTO neighborhoods (name, region, geo_hash, lat, lng, state, lga, community, village) VALUES (${n.name}, ${n.region}, ${n.geoHash}, ${n.lat}, ${n.lng}, ${n.state}, ${n.lga}, ${n.community}, ${n.village})`;
     }
-    console.log("[Soke] Reference data initialized (neighborhoods only, no demo posts)");
+    console.log("[Soke] Reference data initialized (neighborhoods with geo hierarchy, no demo posts)");
   }
 
   initialized = true;

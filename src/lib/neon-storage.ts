@@ -88,6 +88,11 @@ function mapTruth(r: SqlRow): MicroTruth {
     reportLng: r.report_lng ?? null,
     locationSource: r.location_source ?? null,
     organizationId: r.organization_id ?? null,
+    stateName: r.state_name ?? null,
+    lgaName: r.lga_name ?? null,
+    communityName: r.community_name ?? null,
+    villageName: r.village_name ?? null,
+    regionName: r.region_name ?? null,
   };
 }
 
@@ -320,6 +325,11 @@ export interface CreateTruthInput {
   reportLng?: number;
   locationSource?: string;
   organizationId?: number;
+  stateName?: string;
+  lgaName?: string;
+  communityName?: string;
+  villageName?: string;
+  regionName?: string;
 }
 
 export async function createTruth(data: CreateTruthInput): Promise<MicroTruth> {
@@ -329,7 +339,7 @@ export async function createTruth(data: CreateTruthInput): Promise<MicroTruth> {
   const trustScore = Math.min(100, baseTrust + Math.floor(Math.random() * 10));
   const chain = JSON.stringify(buildVerificationChain(trustScore));
 
-  const rows = (await sql`INSERT INTO micro_truths (neighborhood_id, category, content, trust_score, decay_factor, verification_chain, user_hash, status, ip_hash, ip_region, ip_city, report_lat, report_lng, location_source, organization_id) VALUES (${data.neighborhoodId}, ${data.category}, ${data.content}, ${trustScore}, 1.0, ${chain}, ${data.userHash}, 'pending', ${data.ipHash ?? null}, ${data.ipRegion ?? null}, ${data.ipCity ?? null}, ${data.reportLat ?? null}, ${data.reportLng ?? null}, ${data.locationSource ?? null}, ${data.organizationId ?? null}) RETURNING *`) as unknown as SqlRow[];
+  const rows = (await sql`INSERT INTO micro_truths (neighborhood_id, category, content, trust_score, decay_factor, verification_chain, user_hash, status, ip_hash, ip_region, ip_city, report_lat, report_lng, location_source, organization_id, state_name, lga_name, community_name, village_name, region_name) VALUES (${data.neighborhoodId}, ${data.category}, ${data.content}, ${trustScore}, 1.0, ${chain}, ${data.userHash}, 'pending', ${data.ipHash ?? null}, ${data.ipRegion ?? null}, ${data.ipCity ?? null}, ${data.reportLat ?? null}, ${data.reportLng ?? null}, ${data.locationSource ?? null}, ${data.organizationId ?? null}, ${data.stateName ?? null}, ${data.lgaName ?? null}, ${data.communityName ?? null}, ${data.villageName ?? null}, ${data.regionName ?? null}) RETURNING *`) as unknown as SqlRow[];
   const truth = mapTruth(rows[0]);
 
   await sql`INSERT INTO reward_ledger (user_hash, amount, type, description) VALUES (${data.userHash}, 20, 'submission', ${`Truth submitted: ${data.category} report`})`;
@@ -1791,6 +1801,13 @@ export async function getAdminStats() {
   const members = (await sql`SELECT COUNT(*) as count FROM org_members WHERE active = 1`) as unknown as SqlRow[];
   const vacancies = (await sql`SELECT COUNT(*) as count FROM vacancies WHERE status = 'open'`) as unknown as SqlRow[];
 
+  // Geo-hierarchical breakdown of truths
+  const truthsByState = (await sql`SELECT COALESCE(state_name, ip_region, 'Unknown') as name, COUNT(*) as count FROM micro_truths GROUP BY COALESCE(state_name, ip_region, 'Unknown') ORDER BY count DESC`) as unknown as SqlRow[];
+  const truthsByCategory = (await sql`SELECT category, COUNT(*) as count FROM micro_truths GROUP BY category ORDER BY count DESC`) as unknown as SqlRow[];
+  const truthsByLga = (await sql`SELECT COALESCE(lga_name, 'Unknown') as name, COUNT(*) as count FROM micro_truths GROUP BY COALESCE(lga_name, 'Unknown') ORDER BY count DESC LIMIT 20`) as unknown as SqlRow[];
+  const truthsByCommunity = (await sql`SELECT COALESCE(community_name, 'Unknown') as name, COUNT(*) as count FROM micro_truths GROUP BY COALESCE(community_name, 'Unknown') ORDER BY count DESC LIMIT 20`) as unknown as SqlRow[];
+  const truthsByRegion = (await sql`SELECT COALESCE(region_name, 'Unknown') as name, COUNT(*) as count FROM micro_truths GROUP BY COALESCE(region_name, 'Unknown') ORDER BY count DESC`) as unknown as SqlRow[];
+
   return {
     totalUsers: users[0]?.count ?? 0,
     totalOrganizations: orgs[0]?.count ?? 0,
@@ -1799,6 +1816,11 @@ export async function getAdminStats() {
     pendingOrganizations: pendingOrgs[0]?.count ?? 0,
     totalMembers: members[0]?.count ?? 0,
     openVacancies: vacancies[0]?.count ?? 0,
+    truthsByState: truthsByState.map((r: SqlRow) => ({ name: r.name, count: r.count })),
+    truthsByCategory: truthsByCategory.map((r: SqlRow) => ({ name: r.category, count: r.count })),
+    truthsByLga: truthsByLga.map((r: SqlRow) => ({ name: r.name, count: r.count })),
+    truthsByCommunity: truthsByCommunity.map((r: SqlRow) => ({ name: r.name, count: r.count })),
+    truthsByRegion: truthsByRegion.map((r: SqlRow) => ({ name: r.name, count: r.count })),
   };
 }
 
@@ -1815,6 +1837,14 @@ export async function getPlatformUsers(limit = 100, offset = 0) {
     isAdmin: r.is_admin,
     isOrgAdmin: r.is_org_admin,
     organizationId: r.organization_id,
+    lastIpHash: r.last_ip_hash ?? null,
+    lastIpRegion: r.last_ip_region ?? null,
+    lastIpCity: r.last_ip_city ?? null,
+    state: r.state ?? null,
+    lga: r.lga ?? null,
+    community: r.community ?? null,
+    village: r.village ?? null,
+    region: r.region ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }));
@@ -1968,6 +1998,127 @@ export async function createVacancyApplication(data: {
   const sql = getDb();
   const rows = (await sql`INSERT INTO vacancy_applications (vacancy_id, clerk_user_id, applicant_name, applicant_email, cover_letter, resume_url, status) VALUES (${data.vacancyId}, ${data.clerkUserId ?? null}, ${data.applicantName}, ${data.applicantEmail}, ${data.coverLetter ?? null}, ${data.resumeUrl ?? null}, 'pending') RETURNING *`) as unknown as SqlRow[];
   return rows[0];
+}
+
+// ─── Admin: IP Tracking & Geo-Hierarchical Functions ───
+
+export async function updatePlatformUserIpInfo(clerkUserId: string, data: {
+  ipHash?: string | null;
+  ipRegion?: string | null;
+  ipCity?: string | null;
+  state?: string | null;
+  lga?: string | null;
+  community?: string | null;
+  village?: string | null;
+  region?: string | null;
+}) {
+  const sql = getDb();
+  await sql`UPDATE platform_users SET 
+    last_ip_hash = COALESCE(${data.ipHash ?? null}, last_ip_hash), 
+    last_ip_region = COALESCE(${data.ipRegion ?? null}, last_ip_region), 
+    last_ip_city = COALESCE(${data.ipCity ?? null}, last_ip_city),
+    state = COALESCE(${data.state ?? null}, state),
+    lga = COALESCE(${data.lga ?? null}, lga),
+    community = COALESCE(${data.community ?? null}, community),
+    village = COALESCE(${data.village ?? null}, village),
+    region = COALESCE(${data.region ?? null}, region),
+    updated_at = NOW() 
+    WHERE clerk_user_id = ${clerkUserId}`;
+}
+
+export async function getAdminTruths(limit = 100, offset = 0, filters?: {
+  state?: string;
+  lga?: string;
+  community?: string;
+  village?: string;
+  region?: string;
+}) {
+  const sql = getDb();
+  let query = sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE 1=1`;
+  
+  if (filters?.region) {
+    query = sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.region_name, 'Unknown') = ${filters.region}`;
+  }
+  if (filters?.state) {
+    query = sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.state_name, t.ip_region, 'Unknown') = ${filters.state}`;
+  }
+  if (filters?.lga) {
+    query = sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.lga_name, 'Unknown') = ${filters.lga}`;
+  }
+  if (filters?.community) {
+    query = sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.community_name, 'Unknown') = ${filters.community}`;
+  }
+
+  const rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
+  
+  // Apply filters in JS if set (since we can't easily chain tagged template conditionals)
+  let filtered = rows;
+  if (filters?.region) filtered = filtered.filter(r => (r.region_name || r.ip_region || 'Unknown') === filters.region);
+  if (filters?.state) filtered = filtered.filter(r => (r.state_name || r.ip_region || 'Unknown') === filters.state);
+  if (filters?.lga) filtered = filtered.filter(r => (r.lga_name || 'Unknown') === filters.lga);
+  if (filters?.community) filtered = filtered.filter(r => (r.community_name || 'Unknown') === filters.community);
+  if (filters?.village) filtered = filtered.filter(r => (r.village_name || 'Unknown') === filters.village);
+
+  return filtered.map((r) => ({
+    id: r.id,
+    neighborhoodId: r.neighborhood_id,
+    neighborhoodName: r.neighborhood_name,
+    category: r.category,
+    content: r.content,
+    trustScore: r.trust_score,
+    status: r.status,
+    createdAt: r.created_at,
+    ipHash: r.ip_hash ?? null,
+    ipRegion: r.ip_region ?? null,
+    ipCity: r.ip_city ?? null,
+    reportLat: r.report_lat ?? null,
+    reportLng: r.report_lng ?? null,
+    locationSource: r.location_source ?? null,
+    stateName: r.state_name ?? null,
+    lgaName: r.lga_name ?? null,
+    communityName: r.community_name ?? null,
+    villageName: r.village_name ?? null,
+    regionName: r.region_name ?? null,
+    userHash: r.user_hash,
+  }));
+}
+
+export async function getGeoHierarchy() {
+  const sql = getDb();
+  const regions = (await sql`SELECT id, name FROM regions ORDER BY name`) as unknown as SqlRow[];
+  const states = (await sql`SELECT s.id, s.name, r.name as region_name FROM states s LEFT JOIN regions r ON s.region_id = r.id ORDER BY s.name`) as unknown as SqlRow[];
+  const lgas = (await sql`SELECT l.id, l.name, s.name as state_name FROM lgas l LEFT JOIN states s ON l.state_id = s.id ORDER BY l.name`) as unknown as SqlRow[];
+  const villages = (await sql`SELECT v.id, v.name, l.name as lga_name FROM villages v LEFT JOIN lgas l ON v.lga_id = l.id ORDER BY v.name`) as unknown as SqlRow[];
+  const communities = (await sql`SELECT c.id, c.name, v.name as village_name FROM communities c LEFT JOIN villages v ON c.village_id = v.id ORDER BY c.name`) as unknown as SqlRow[];
+  // Also get distinct geo values from neighborhoods and micro_truths
+  const truthStates = (await sql`SELECT DISTINCT COALESCE(state_name, ip_region) as name FROM micro_truths WHERE COALESCE(state_name, ip_region) IS NOT NULL ORDER BY name`) as unknown as SqlRow[];
+  const truthLgas = (await sql`SELECT DISTINCT lga_name as name FROM micro_truths WHERE lga_name IS NOT NULL ORDER BY name`) as unknown as SqlRow[];
+  const truthCommunities = (await sql`SELECT DISTINCT community_name as name FROM micro_truths WHERE community_name IS NOT NULL ORDER BY name`) as unknown as SqlRow[];
+  const truthRegions = (await sql`SELECT DISTINCT region_name as name FROM micro_truths WHERE region_name IS NOT NULL ORDER BY name`) as unknown as SqlRow[];
+  const neighborhoodStates = (await sql`SELECT DISTINCT state as name FROM neighborhoods WHERE state IS NOT NULL ORDER BY name`) as unknown as SqlRow[];
+  const neighborhoodLgas = (await sql`SELECT DISTINCT lga as name FROM neighborhoods WHERE lga IS NOT NULL ORDER BY name`) as unknown as SqlRow[];
+  const neighborhoodCommunities = (await sql`SELECT DISTINCT community as name FROM neighborhoods WHERE community IS NOT NULL ORDER BY name`) as unknown as SqlRow[];
+
+  // Merge reference data with truth-derived data
+  const allStates = [...new Set([...states.map(s => s.name), ...truthStates.map(s => s.name), ...neighborhoodStates.map(s => s.name)])].sort();
+  const allLgas = [...new Set([...lgas.map(l => l.name), ...truthLgas.map(l => l.name), ...neighborhoodLgas.map(l => l.name)])].sort();
+  const allCommunities = [...new Set([...communities.map(c => c.name), ...truthCommunities.map(c => c.name), ...neighborhoodCommunities.map(c => c.name)])].sort();
+  const allRegions = [...new Set([...regions.map(r => r.name), ...truthRegions.map(r => r.name)])].sort();
+
+  return {
+    regions: allRegions,
+    states: allStates,
+    lgas: allLgas,
+    communities: allCommunities,
+    villages: villages.map(v => v.name),
+  };
+}
+
+export async function deleteAllTruths() {
+  const sql = getDb();
+  await sql`DELETE FROM micro_truths`;
+  await sql`DELETE FROM verifications`;
+  return { success: true };
 }
 
 // Re-export commonly used constants

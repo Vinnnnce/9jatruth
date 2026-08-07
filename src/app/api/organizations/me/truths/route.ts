@@ -50,19 +50,24 @@ export async function POST(request: Request) {
 
     const userHash = await getUserId(request);
     const ipLocation = await getIpLocation(request);
+    const stateName = ipLocation.ipRegion || undefined;
+    const regionName = ipLocation.ipRegion || undefined;
 
     // organizationId comes from the auth token, never from the request body
+    const { stateName: _sn, lgaName: _ln, communityName: _cn, villageName: _vn, regionName: _rn, ...restData } = data;
     const truth = await createTruth({
-      ...data,
+      ...restData,
       content: sanitizedContent,
       userHash,
       ipHash: ipLocation.ipHash || undefined,
       ipRegion: ipLocation.ipRegion || undefined,
       ipCity: ipLocation.ipCity || undefined,
-      reportLat: data.reportLat,
-      reportLng: data.reportLng,
+      reportLat: data.reportLat || (ipLocation.ipLat ?? undefined),
+      reportLng: data.reportLng || (ipLocation.ipLng ?? undefined),
       locationSource: data.locationSource || (ipLocation.ipLat ? "ip" : undefined),
       organizationId: authAccount.organizationId,
+      stateName,
+      regionName,
     });
     return Response.json(truth, { status: 201 });
   } catch (err) {

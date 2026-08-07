@@ -158,6 +158,12 @@ export const microTruths = sqliteTable("micro_truths", {
   reportLng: real("report_lng"), // Live GPS longitude at submission time
   locationSource: text("location_source"), // gps | ip | manual
   organizationId: integer("organization_id"), // Partner org that submitted this truth
+  // Geo hierarchy fields
+  stateName: text("state_name"),
+  lgaName: text("lga_name"),
+  communityName: text("community_name"),
+  villageName: text("village_name"),
+  regionName: text("region_name"),
 });
 
 // ─── Snapshots ───
@@ -182,7 +188,7 @@ export const predictions = sqliteTable("predictions", {
   confidence: integer("confidence").notNull().default(50),
   timeframe: text("timeframe").notNull(),
   trend: text("trend").notNull().default("stable"), // up | down | stable
-  modelVersion: text("model_version").notNull().default("crl-heuristic-v1"),
+  modelVersion: text("model_version").notNull().default("soke-heuristic-v1"),
   createdAt: text("created_at").notNull().default(new Date().toISOString()),
 });
 
@@ -233,7 +239,7 @@ export const insertMicroTruthSchema = createInsertSchema(microTruths).omit({
   ipCity: true,
 }).extend({
   content: z.string().min(10, "Content must be at least 10 characters").max(500, "Content must not exceed 500 characters"),
-  category: z.enum(["power", "fuel", "traffic", "prices", "safety"]),
+  category: z.enum(["power", "fuel", "traffic", "prices", "safety", "security", "real-estate", "housing", "patrol-gas-station", "restaurant", "hotel", "school", "pharmacy", "hospital", "supermarket"]),
   neighborhoodId: z.number().int().positive().max(1000000),
   userHash: z.string().optional(),
   reportLat: z.number().optional(),
@@ -271,8 +277,35 @@ export type Verification = typeof verifications.$inferSelect;
 export type VerificationAction = "corroborate" | "dispute" | "stale";
 
 // ─── Truth Categories ───
-export const TRUTH_CATEGORIES = ["power", "fuel", "traffic", "prices", "safety"] as const;
+export const TRUTH_CATEGORIES = [
+  "power", "fuel", "traffic", "prices", "safety",
+  "security", "real-estate", "housing", "patrol-gas-station",
+  "restaurant", "hotel", "school", "pharmacy", "hospital", "supermarket",
+] as const;
 export type TruthCategory = typeof TRUTH_CATEGORIES[number];
+
+// ─── Category Metadata ───
+export const CATEGORY_META: Record<string, { label: string; icon: string }> = {
+  power: { label: "Power", icon: "Zap" },
+  fuel: { label: "Fuel", icon: "Fuel" },
+  traffic: { label: "Traffic", icon: "Car" },
+  prices: { label: "Prices", icon: "Tag" },
+  safety: { label: "Safety", icon: "Shield" },
+  security: { label: "Security", icon: "ShieldCheck" },
+  "real-estate": { label: "Real Estate", icon: "Building2" },
+  housing: { label: "Housing", icon: "Home" },
+  "patrol-gas-station": { label: "Patrol/Gas Station", icon: "Fuel" },
+  restaurant: { label: "Restaurant", icon: "UtensilsCrossed" },
+  hotel: { label: "Hotel", icon: "BedDouble" },
+  school: { label: "School", icon: "GraduationCap" },
+  pharmacy: { label: "Pharmacy", icon: "Pill" },
+  hospital: { label: "Hospital", icon: "Cross" },
+  supermarket: { label: "Supermarket", icon: "ShoppingCart" },
+};
+
+// ─── Geo Hierarchy ───
+export const GEO_LEVELS = ["community", "village", "lga", "state", "region"] as const;
+export type GeoLevel = typeof GEO_LEVELS[number];
 
 // ─── Sync Queue Types ───
 export const insertSyncQueueSchema = createInsertSchema(syncQueue).omit({

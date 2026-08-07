@@ -15,7 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Zap, Fuel, Car, Tag, Shield, SlidersHorizontal, MapPin, X } from "lucide-react";
+import { SlidersHorizontal, MapPin, X } from "lucide-react";
+import { CATEGORY_LIST } from "@/lib/categories";
 
 export interface FeedFilters {
   category: string;
@@ -35,13 +36,9 @@ export const DEFAULT_FILTERS: FeedFilters = {
   search: "",
 };
 
-const categoryConfig: Record<string, { icon: typeof Zap; color: string; label: string }> = {
-  power: { icon: Zap, color: "text-amber-500", label: "Power" },
-  fuel: { icon: Fuel, color: "text-orange-500", label: "Fuel" },
-  traffic: { icon: Car, color: "text-blue-500", label: "Traffic" },
-  prices: { icon: Tag, color: "text-purple-500", label: "Prices" },
-  safety: { icon: Shield, color: "text-green-500", label: "Safety" },
-};
+const categoryConfig: Record<string, { icon: any; color: string; label: string }> = Object.fromEntries(
+  CATEGORY_LIST.map(({ value, icon, color, label }) => [value, { icon, color, label }])
+);
 
 interface FeedFilterBarProps {
   filters: FeedFilters;
