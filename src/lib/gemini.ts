@@ -28,7 +28,7 @@ export function getGeminiModel(): string {
 export async function generateGeminiText(
   systemPrompt: string,
   userPrompt: string,
-  options?: { temperature?: number; maxOutputTokens?: number }
+  options?: { temperature?: number; maxOutputTokens?: number; jsonMode?: boolean }
 ): Promise<string | null> {
   if (!isGeminiConfigured()) return null;
 
@@ -51,7 +51,7 @@ export async function generateGeminiText(
         generationConfig: {
           temperature: options?.temperature ?? 0.7,
           maxOutputTokens: options?.maxOutputTokens ?? 1024,
-          responseMimeType: "application/json",
+          ...(options?.jsonMode ? { responseMimeType: "application/json" } : {}),
         },
       }),
     });
@@ -81,7 +81,10 @@ export async function generateGeminiJson<T>(
   fallback: T,
   options?: { temperature?: number; maxOutputTokens?: number }
 ): Promise<{ data: T; source: "gemini" | "fallback" }> {
-  const raw = await generateGeminiText(systemPrompt, userPrompt, options);
+  const raw = await generateGeminiText(systemPrompt, userPrompt, {
+    ...options,
+    jsonMode: true,
+  });
 
   if (!raw) {
     return { data: fallback, source: "fallback" };

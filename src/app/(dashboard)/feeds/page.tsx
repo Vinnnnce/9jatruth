@@ -133,11 +133,7 @@ function trendIcon(trend: string) {
 function useBrowsingTracker() {
   const recordEvent = useCallback(async (eventType: string, data?: Record<string, any>) => {
     try {
-      await fetch("/api/user/browsing-events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventType, ...data }),
-      });
+      await apiRequest("POST", "/api/user/browsing-events", { eventType, ...data });
     } catch {
       // silently fail — tracking is non-critical
     }
@@ -525,15 +521,11 @@ function NeighborhoodSnapshotCard({
                         className="flex items-center gap-2.5 py-2 px-1 rounded-lg hover:bg-white/5 transition-colors"
                         onClick={() => {
                           // Track post detail open
-                          fetch("/api/user/browsing-events", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              eventType: "post_detail_open",
-                              truthId: report.id,
-                              neighborhoodId: card.id,
-                              category: report.category,
-                            }),
+                          apiRequest("POST", "/api/user/browsing-events", {
+                            eventType: "post_detail_open",
+                            truthId: report.id,
+                            neighborhoodId: card.id,
+                            category: report.category,
                           }).catch(() => {});
                         }}
                       >

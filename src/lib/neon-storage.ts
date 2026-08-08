@@ -2563,6 +2563,10 @@ export async function generateWeeklyReviews() {
   for (const user of users) {
     const clerkId = user.clerk_user_id;
 
+    // Compute the same hashed user ID used by getUserId()
+    const crypto = await import("node:crypto");
+    const hashedUserId = `dev_${crypto.createHash("sha256").update(clerkId).digest("hex").substring(0, 12)}`;
+
     // Browsing events this week
     const browsingRow = (await sql`
       SELECT
@@ -2570,28 +2574,28 @@ export async function generateWeeklyReviews() {
         COUNT(DISTINCT category) as categories_viewed,
         COUNT(DISTINCT neighborhood_id) as neighborhoods_viewed
       FROM user_browsing_events
-      WHERE clerk_user_id = ${clerkId}
+      WHERE (clerk_user_id = ${clerkId} OR user_hash = ${hashedUserId})
         AND created_at >= ${weekStart}
     `) as unknown as SqlRow[];
 
     // Truths submitted this week
     const truthsRow = (await sql`
       SELECT COUNT(*) as count FROM micro_truths
-      WHERE user_hash = ${user.clerk_user_id} OR user_hash = ${user.email}
+      WHERE (user_hash = ${hashedUserId} OR user_hash = ${clerkId} OR user_hash = ${user.email})
         AND created_at >= ${weekStart}
     `) as unknown as SqlRow[];
 
     // Verifications this week
     const verificationsRow = (await sql`
       SELECT COUNT(*) as count FROM verifications
-      WHERE user_hash = ${clerkId}
+      WHERE (user_hash = ${hashedUserId} OR user_hash = ${clerkId})
         AND created_at >= ${weekStart}
     `) as unknown as SqlRow[];
 
     // Likes this week
     const likesRow = (await sql`
       SELECT COUNT(*) as count FROM feed_likes
-      WHERE user_hash = ${clerkId}
+      WHERE (user_hash = ${hashedUserId} OR user_hash = ${clerkId})
         AND created_at >= ${weekStart}
     `) as unknown as SqlRow[];
 
@@ -2599,7 +2603,7 @@ export async function generateWeeklyReviews() {
     const topCats = (await sql`
       SELECT category, COUNT(*) as count
       FROM user_browsing_events
-      WHERE clerk_user_id = ${clerkId} AND category IS NOT NULL
+      WHERE (clerk_user_id = ${clerkId} OR user_hash = ${hashedUserId}) AND category IS NOT NULL
         AND created_at >= ${weekStart}
       GROUP BY category ORDER BY count DESC LIMIT 3
     `) as unknown as SqlRow[];
