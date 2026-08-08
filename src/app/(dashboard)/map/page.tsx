@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { MapPin, Navigation, Sparkles, Brain, Star, Loader2 } from "lucide-react";
+import { MapPin, Navigation, Sparkles, Star, Loader2 } from "lucide-react";
+import { APIProvider, Map, Marker, InfoWindow } from "@vis.gl/react-google-maps";
 
 type DashboardData = {
   neighborhood: { id: number; name: string; region: string; geoHash: string; lat: number; lng: number };
@@ -48,6 +49,12 @@ const CATEGORY_FILTERS = [
 
 const GOOGLE_MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
+const statusColors: Record<string, string> = {
+  on: "#22c55e", available: "#22c55e", low: "#22c55e",
+  off: "#ef4444", unavailable: "#ef4444", gridlock: "#ef4444",
+  unstable: "#f59e0b", scarce: "#f59e0b", heavy: "#f59e0b", moderate: "#3b82f6",
+};
+
 export default function GeoMap() {
   const { data, isLoading } = useQuery<DashboardData[]>({
     queryKey: ["/api/dashboard"],
@@ -59,8 +66,8 @@ export default function GeoMap() {
 
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<DashboardData | null>(null);
   const [activeCategory, setActiveCategory] = useState("all");
+  const [selectedPlace, setSelectedPlace] = useState<NearbyPlace | null>(null);
 
-  // Fetch nearby places when a neighborhood is selected
   const { data: nearbyData, isLoading: nearbyLoading } = useQuery({
     queryKey: ["/api/maps/nearby", selectedNeighborhood?.neighborhood.id, activeCategory],
     queryFn: async () => {
@@ -77,6 +84,7 @@ export default function GeoMap() {
 
   const handleNeighborhoodClick = useCallback((d: DashboardData) => {
     setSelectedNeighborhood(d);
+    setSelectedPlace(null);
   }, []);
 
   if (isLoading || !data) {
@@ -89,6 +97,8 @@ export default function GeoMap() {
   }
 
   const selected = selectedNeighborhood || data[0];
+  const center = { lat: selected.neighborhood.lat, lng: selected.neighborhood.lng };
+  const places: NearbyPlace[] = nearbyData?.places || [];
 
   return (
     <div className="p-4 md:p-6 max-w-6xl space-y-6">
@@ -120,20 +130,70 @@ export default function GeoMap() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Google Map */}
+        {/* Google Map with markers */}
         <Card className="border-border lg:col-span-2">
           <CardContent className="p-4">
             {GOOGLE_MAPS_KEY ? (
-              <div className="relative w-full rounded-lg overflow-hidden" style={{ height: "450px" }}>
-                <iframe
-                  title="Google Map"
-                  width="100%"
-                  height="100%"
-                  loading="lazy"
-                  style={{ border: 0 }}
-                  src={`https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_KEY}&q=${selected?.neighborhood.lat},${selected?.neighborhood.lng}&zoom=14`}
-                  data-testid="google-map-iframe"
-                />
+              <div className="rounded-lg overflow-hidden" style={{ height: "450px" }} data-testid="google-map">
+                <APIProvider apiKey={GOOGLE_MAPS_KEY}>
+                  <Map
+                    center={center}
+                    zoom={14}
+                    gestureHandling="greedy"
+                    disableDefaultUI
+                    mapTypeControl={false}
+                    style={{ width: "100%", height: "100%" }}
+                  >
+                    {/* Center marker for selected neighborhood */}
+                    <Marker
+                      position={center}
+                      title={selected.neighborhood.name}
+                      label={selected.neighborhood.name}
+                    />
+
+                    {/* Markers for nearby places */}
+                    {places.map((place, idx) => (
+                      <Marker
+                        key={`${place.id}-${idx}`}
+                        position={{ lat: place.lat, lng: place.lng }}
+                        title={place.name}
+                        onClick={() => setSelectedPlace(place)}
+                        label={{
+                          text: place.icon,
+                          fontSize: "14px",
+                        }}
+                      />
+                    ))}
+
+                    {/* Info window for selected place */}
+                    {selectedPlace && (
+                      <InfoWindow
+                        position={{ lat: selectedPlace.lat, lng: selectedPlace.lng }}
+                        onCloseClick={() => setSelectedPlace(null)}
+                      >
+                        <div className="p-1 max-w-[200px]">
+                          <p className="text-xs font-medium">{selectedPlace.name}</p>
+                          <p className="text-[10px] text-gray-500">{selectedPlace.category}</p>
+                          {selectedPlace.vicinity && (
+                            <p className="text-[10px] text-gray-400">{selectedPlace.vicinity}</p>
+                          )}
+                          {selectedPlace.rating != null && (
+                            <p className="text-[10px]">
+                              <Star className="h-2.5 w-2.5 inline fill-amber-400 text-amber-400" />
+                              {" "}{selectedPlace.rating}
+                              {selectedPlace.userRatingsTotal ? ` (${selectedPlace.userRatingsTotal})` : ""}
+                            </p>
+                          )}
+                          {selectedPlace.distance != null && (
+                            <p className="text-[10px] text-gray-400">
+                              {(selectedPlace.distance / 1000).toFixed(1)}km away
+                            </p>
+                          )}
+                        </div>
+                      </InfoWindow>
+                    )}
+                  </Map>
+                </APIProvider>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-[450px] bg-muted/30 rounded-lg">
@@ -176,19 +236,27 @@ export default function GeoMap() {
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-md bg-muted/30 p-2">
                   <p className="text-[10px] text-muted-foreground">Power</p>
-                  <p className="text-xs font-medium capitalize">{selected.snapshot.powerStatus}</p>
+                  <p className="text-xs font-medium capitalize" style={{ color: statusColors[selected.snapshot.powerStatus] || undefined }}>
+                    {selected.snapshot.powerStatus}
+                  </p>
                 </div>
                 <div className="rounded-md bg-muted/30 p-2">
                   <p className="text-[10px] text-muted-foreground">Fuel</p>
-                  <p className="text-xs font-medium capitalize">{selected.snapshot.fuelStatus}</p>
+                  <p className="text-xs font-medium capitalize" style={{ color: statusColors[selected.snapshot.fuelStatus] || undefined }}>
+                    {selected.snapshot.fuelStatus}
+                  </p>
                 </div>
                 <div className="rounded-md bg-muted/30 p-2">
                   <p className="text-[10px] text-muted-foreground">Traffic</p>
-                  <p className="text-xs font-medium capitalize">{selected.snapshot.trafficLevel}</p>
+                  <p className="text-xs font-medium capitalize" style={{ color: statusColors[selected.snapshot.trafficLevel] || undefined }}>
+                    {selected.snapshot.trafficLevel}
+                  </p>
                 </div>
                 <div className="rounded-md bg-muted/30 p-2">
                   <p className="text-[10px] text-muted-foreground">Safety</p>
-                  <p className="text-xs font-medium">{selected.snapshot.safetyIndex}%</p>
+                  <p className="text-xs font-medium" style={{ color: selected.snapshot.safetyIndex < 65 ? "#ef4444" : selected.snapshot.safetyIndex < 75 ? "#f59e0b" : "#22c55e" }}>
+                    {selected.snapshot.safetyIndex}%
+                  </p>
                 </div>
               </div>
             )}
@@ -244,7 +312,8 @@ export default function GeoMap() {
               {nearbyData.places.map((place: NearbyPlace, idx: number) => (
                 <div
                   key={`${place.id}-${idx}`}
-                  className="flex items-start gap-2.5 rounded-md bg-muted/30 p-2.5 hover:bg-muted/50 transition-colors"
+                  className="flex items-start gap-2.5 rounded-md bg-muted/30 p-2.5 hover:bg-muted/50 transition-colors cursor-pointer"
+                  onClick={() => setSelectedPlace(place)}
                   data-testid={`place-${place.id}`}
                 >
                   <span className="text-lg shrink-0">{place.icon}</span>
@@ -289,7 +358,7 @@ export default function GeoMap() {
               <MapPin className="h-6 w-6 text-muted-foreground mx-auto mb-1 opacity-50" />
               <p className="text-xs text-muted-foreground">
                 {nearbyData?.configured === false
-                  ? "Google Maps API key not configured"
+                  ? "Google Maps API key not configured. Set GOOGLE_MAPS_SERVER_KEY in .env"
                   : "No nearby places found. Select a neighborhood."}
               </p>
             </div>

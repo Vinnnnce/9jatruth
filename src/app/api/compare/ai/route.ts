@@ -136,7 +136,7 @@ Provide a detailed side-by-side comparison.`;
       metric: "Traffic",
       a: dataA.traffic || "unknown",
       b: dataB.traffic || "unknown",
-      winner: compareStatus(dataA.traffic, dataB.traffic, true),
+      winner: compareStatus(dataA.traffic, dataB.traffic),
     },
     {
       metric: "Price Index",

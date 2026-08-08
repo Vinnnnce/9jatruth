@@ -644,6 +644,7 @@ function ReportDialog({
         </div>
         {/* AI Verification Section */}
         <AIVerificationSection truthId={report.id} />
+        <AIPredictionSection truthId={report.id} />
         {/* Actions */}
         <div className="flex items-center gap-0.5 pt-2" style={{ borderTop: `1px solid ${COLORS.tile}` }}>
           <Button
@@ -806,6 +807,81 @@ function AIVerificationSection({ truthId }: { truthId: number }) {
           <Button size="sm" variant="ghost" onClick={handleVerify} className="h-5 text-[9px] gap-1">
             <Sparkles className="h-2 w-2" />
             Re-check
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── AI Prediction Section (inline on each post dialog) ───
+
+function AIPredictionSection({ truthId }: { truthId: number }) {
+  const [result, setResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handlePredict = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiRequest("POST", `/api/truths/${truthId}/prediction`);
+      if (!res.ok) throw new Error("Prediction failed");
+      const data = await res.json();
+      setResult(data);
+    } catch {
+      setError("Could not generate AI prediction.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const riskColor = (r: string) => {
+    if (r === "high") return COLORS.red;
+    if (r === "moderate") return COLORS.orange;
+    return COLORS.green;
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium flex items-center gap-1">
+          <TrendingUp className="h-3.5 w-3.5" style={{ color: COLORS.accent }} />
+          AI Prediction
+        </p>
+        {!result && !loading && (
+          <Button size="sm" variant="outline" onClick={handlePredict} className="h-6 text-[10px] gap-1 px-2">
+            <Sparkles className="h-2.5 w-2.5" />
+            Predict
+          </Button>
+        )}
+      </div>
+      {loading && (
+        <div className="flex items-center gap-2 text-xs py-1" style={{ color: COLORS.textSecondary }}>
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Generating prediction...
+        </div>
+      )}
+      {error && <p className="text-xs" style={{ color: COLORS.red }}>{error}</p>}
+      {result && !loading && (
+        <div className="rounded-md border p-2.5 space-y-2" style={{ background: COLORS.tile, borderColor: `${riskColor(result.riskLevel)}30` }}>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-medium" style={{ color: riskColor(result.riskLevel) }}>
+              Risk: <span className="capitalize">{result.riskLevel}</span>
+            </span>
+            <span className="text-xs font-mono font-bold" style={{ color: COLORS.accent }}>
+              {result.confidence}%
+            </span>
+          </div>
+          <p className="text-[10px]" style={{ color: COLORS.textSecondary }}>{result.prediction}</p>
+          {result.aiPowered && (
+            <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: `${COLORS.accent}15`, color: COLORS.accent }}>
+              Kimi K3 AI
+            </span>
+          )}
+          <Button size="sm" variant="ghost" onClick={handlePredict} className="h-5 text-[9px] gap-1">
+            <Sparkles className="h-2 w-2" />
+            Re-predict
           </Button>
         </div>
       )}

@@ -1,3 +1,4 @@
+import { csrfCheck } from "@/lib/security";
 import { ensureDbInitialized, getDb } from "@/lib/db";
 import { getClerkUserId, getUserId, sanitizeText, validate, validationErrorResponse } from "@/lib/api-helpers";
 import { z } from "zod";
@@ -47,6 +48,8 @@ const createSchema = z.object({
 
 export async function POST(request: Request) {
   await ensureDbInitialized();
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
 
   const clerkUserId = await getClerkUserId();
   if (!clerkUserId) {

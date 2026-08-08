@@ -115,6 +115,21 @@ export async function PUT(request: Request) {
     return Response.json({ message: "Invalid JSON body" }, { status: 400 });
   }
 
+  // AI security check for profile fields
+  const profileText = Object.values(body).filter(v => typeof v === "string").join(" ");
+  if (profileText) {
+    const { securityCheck } = await import("@/lib/ai-security");
+    const { getClientIP } = await import("@/lib/rate-limiter");
+    const clientIP = getClientIP(request);
+    const secCheck = await securityCheck(profileText, clientIP, "user/profile/PUT");
+    if (!secCheck.allowed) {
+      return Response.json(
+        { message: secCheck.reason || "Content flagged by security monitor", aiSecurity: secCheck },
+        { status: 403 }
+      );
+    }
+  }
+
   // Build SET clause dynamically from allowed fields
   const allowedFields: Record<string, string> = {
     bio: "bio",

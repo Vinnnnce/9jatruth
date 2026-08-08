@@ -9,6 +9,8 @@ import {
   getClerkUserId,
 } from "@/lib/api-helpers";
 import { csrfCheck } from "@/lib/security";
+import { securityCheck } from "@/lib/ai-security";
+import { getClientIP } from "@/lib/rate-limiter";
 import { insertMicroTruthSchema, TRUTH_CATEGORIES } from "@shared/schema";
 import { z } from "zod";
 
@@ -101,6 +103,16 @@ export async function POST(request: Request) {
     }
     if (!TRUTH_CATEGORIES.includes(data.category as any)) {
       return Response.json({ message: "Invalid category" }, { status: 400 });
+    }
+
+    // AI security check — blocks suspicious content (SQLi, XSS, injection patterns)
+    const clientIP = getClientIP(request);
+    const secCheck = await securityCheck(sanitizedContent, clientIP, "truths/POST");
+    if (!secCheck.allowed) {
+      return Response.json(
+        { message: secCheck.reason || "Content flagged by security monitor", aiSecurity: secCheck },
+        { status: 403 }
+      );
     }
 
     const userHash = await getUserId(request);

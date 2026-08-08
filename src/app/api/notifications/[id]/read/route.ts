@@ -1,3 +1,4 @@
+import { csrfCheck } from "@/lib/security";
 import { ensureDbInitialized, getDb } from "@/lib/db";
 import { getClerkUserId, getUserId } from "@/lib/api-helpers";
 
@@ -8,6 +9,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
+
   await ensureDbInitialized();
 
   const clerkUserId = await getClerkUserId();

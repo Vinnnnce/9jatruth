@@ -1,4 +1,6 @@
 import { csrfCheck } from "@/lib/security";
+import { securityCheck } from "@/lib/ai-security";
+import { getClientIP } from "@/lib/rate-limiter";
 import { ensureDbInitialized } from "@/lib/db";
 import { getOrganizations, createOrganization } from "@/lib/neon-storage";
 import { validate, validationErrorResponse, getUserId, getClerkUserId } from "@/lib/api-helpers";
@@ -24,6 +26,18 @@ export async function POST(request: Request) {
     if (!parsed.success) return validationErrorResponse(parsed.error);
     const adminHash = await getUserId(request);
     const clerkUserId = await getClerkUserId();
+
+    // AI security check for org name/description
+    const orgText = `${parsed.data.name || ""} ${parsed.data.description || ""} ${parsed.data.contactEmail || ""}`;
+    const clientIP = getClientIP(request);
+    const secCheck = await securityCheck(orgText, clientIP, "organizations/POST");
+    if (!secCheck.allowed) {
+      return Response.json(
+        { message: secCheck.reason || "Content flagged by security monitor", aiSecurity: secCheck },
+        { status: 403 }
+      );
+    }
+
     const org = await createOrganization({
       ...parsed.data,
       adminHash,
