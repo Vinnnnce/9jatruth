@@ -60,13 +60,13 @@ export async function POST(request: Request) {
         // Look up or create neighborhood by name
         const { getDb } = await import("@/lib/db");
         const sql = getDb();
-        const existing = await sql`SELECT id FROM neighborhoods WHERE name ILIKE ${name} LIMIT 1` as unknown as any[];
+        const existing: any[] = await sql`SELECT id FROM neighborhoods WHERE name ILIKE ${name} LIMIT 1` as unknown as any[];
         if (existing.length > 0) {
-          neighborhoodId = (existing as any[])[0].id;
+          neighborhoodId = existing[0].id;
         } else {
-          // Auto-create neighborhood from user input
-          const created = await sql`INSERT INTO neighborhoods (name, region) VALUES (${name}, ${body.regionName || "Unknown"}) RETURNING id` as unknown as any[];
-          neighborhoodId = (created as any[])[0].id;
+          // Auto-create neighborhood from user input — provide defaults for NOT NULL fields
+          const created: any[] = await sql`INSERT INTO neighborhoods (name, region, geo_hash, lat, lng) VALUES (${name}, ${body.regionName || "Unknown"}, ${"manual_" + name.toLowerCase().replace(/\\s/g, "_")}, 0.0, 0.0) RETURNING id` as unknown as any[];
+          neighborhoodId = created[0].id;
         }
         body.neighborhoodId = neighborhoodId;
       } catch (dbErr) {

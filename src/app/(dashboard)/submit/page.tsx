@@ -44,10 +44,18 @@ function getErrorStatus(error: any): number | null {
 /** Extract the server message from an apiRequest error */
 function getErrorMessage(error: any): string {
   const msg = error?.message || String(error);
-  // Format is "STATUS: message text"
+  // Format is "STATUS: body" where body may be JSON like {"message":"..."}
   const idx = msg.indexOf(":");
-  if (idx > 0) return msg.substring(idx + 1).trim();
-  return msg;
+  let body = idx > 0 ? msg.substring(idx + 1).trim() : msg;
+  // Try to parse JSON response body
+  try {
+    const parsed = JSON.parse(body);
+    if (parsed.message) return parsed.message;
+    if (parsed.error) return parsed.error;
+  } catch {
+    // Not JSON, return as-is
+  }
+  return body;
 }
 
 export default function SubmitTruth() {
