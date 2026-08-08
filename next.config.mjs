@@ -34,7 +34,7 @@ const nextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self), interest-cohort=()" },
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
           { key: "X-XSS-Protection", value: "1; mode=block" },
-          { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.moonshot.ai https://maps.googleapis.com https://maps.gstatic.com; frame-src 'self' https://www.google.com; worker-src 'self' blob:;" },
+          { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://*.clerk.accounts.dev https://*.clerk.com https://clerk.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.clerk.accounts.dev https://*.clerk.com; img-src 'self' data: https: blob:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.moonshot.ai https://maps.googleapis.com https://maps.gstatic.com https://*.clerk.accounts.dev https://*.clerk.com https://clerk.com; frame-src 'self' https://www.google.com https://*.clerk.accounts.dev https://*.clerk.com; worker-src 'self' blob:;" },
         ],
       },
     ];

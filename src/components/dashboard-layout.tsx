@@ -268,9 +268,14 @@ function TopBar() {
           </>
         )}
         {!isClerkConfigured && (
-          <Link href="/sign-in" className="text-sm text-primary hover:underline">
-            Sign In
-          </Link>
+          <>
+            <Link href="/sign-in" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted">
+              Log In
+            </Link>
+            <Link href="/sign-up" className="text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 transition-colors px-4 py-1.5 rounded-md">
+              Sign Up
+            </Link>
+          </>
         )}
       </div>
     </header>
