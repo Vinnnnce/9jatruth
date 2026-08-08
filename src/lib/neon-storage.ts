@@ -470,21 +470,28 @@ export async function getSnapshot(neighborhoodId: number): Promise<Snapshot | un
 export async function getPredictions(category?: string, neighborhoodId?: number): Promise<Prediction[]> {
   const sql = getDb();
   let rows: SqlRow[];
+  // Only return non-expired predictions (or ones without expiration)
+  const freshnessFilter = sql`AND (expires_at IS NULL OR expires_at > NOW())`;
   if (category && neighborhoodId) {
-    rows = (await sql`SELECT * FROM predictions WHERE category = ${category} AND neighborhood_id = ${neighborhoodId} ORDER BY created_at DESC`) as unknown as SqlRow[];
+    rows = (await sql`SELECT * FROM predictions WHERE category = ${category} AND neighborhood_id = ${neighborhoodId} ${freshnessFilter} ORDER BY created_at DESC`) as unknown as SqlRow[];
   } else if (category) {
-    rows = (await sql`SELECT * FROM predictions WHERE category = ${category} ORDER BY created_at DESC`) as unknown as SqlRow[];
+    rows = (await sql`SELECT * FROM predictions WHERE category = ${category} ${freshnessFilter} ORDER BY created_at DESC`) as unknown as SqlRow[];
   } else if (neighborhoodId) {
-    rows = (await sql`SELECT * FROM predictions WHERE neighborhood_id = ${neighborhoodId} ORDER BY created_at DESC`) as unknown as SqlRow[];
+    rows = (await sql`SELECT * FROM predictions WHERE neighborhood_id = ${neighborhoodId} ${freshnessFilter} ORDER BY created_at DESC`) as unknown as SqlRow[];
   } else {
-    rows = (await sql`SELECT * FROM predictions ORDER BY created_at DESC`) as unknown as SqlRow[];
+    rows = (await sql`SELECT * FROM predictions WHERE 1=1 ${freshnessFilter} ORDER BY created_at DESC LIMIT 100`) as unknown as SqlRow[];
   }
   return rows.map(mapPrediction);
 }
 
-export async function createPrediction(data: Omit<Prediction, "id" | "createdAt">): Promise<Prediction> {
+export async function createPrediction(data: Omit<Prediction, "id" | "createdAt"> & { expiresAt?: string }): Promise<Prediction> {
   const sql = getDb();
-  const rows = (await sql`INSERT INTO predictions (category, neighborhood_id, prediction, confidence, timeframe, trend, model_version) VALUES (${data.category}, ${data.neighborhoodId}, ${data.prediction}, ${data.confidence}, ${data.timeframe}, ${data.trend}, ${data.modelVersion}) RETURNING *`) as unknown as SqlRow[];
+  // Expire old predictions for the same neighborhood + category + model
+  if (data.neighborhoodId) {
+    await sql`UPDATE predictions SET expires_at = NOW() WHERE neighborhood_id = ${data.neighborhoodId} AND category = ${data.category} AND model_version = ${data.modelVersion} AND (expires_at IS NULL OR expires_at > NOW())`;
+  }
+  const expiresAt = data.expiresAt || new Date(Date.now() + 48 * 3600 * 1000).toISOString();
+  const rows = (await sql`INSERT INTO predictions (category, neighborhood_id, prediction, confidence, timeframe, trend, model_version, expires_at) VALUES (${data.category}, ${data.neighborhoodId}, ${data.prediction}, ${data.confidence}, ${data.timeframe}, ${data.trend}, ${data.modelVersion}, ${expiresAt}) RETURNING *`) as unknown as SqlRow[];
   return mapPrediction(rows[0]);
 }
 
@@ -1728,6 +1735,12 @@ export function runPredictiveOutageModel(params: { neighborhood: Neighborhood; s
 
 export async function runAllPredictions() {
   const sql = getDb();
+
+  // ─── Aggregate time-series data first ───
+  await aggregateEventTimeSeries("daily");
+  await aggregateEventTimeSeries("weekly");
+  await aggregateEventTimeSeries("monthly");
+
   const allNeighborhoods = ((await sql`SELECT * FROM neighborhoods`) as unknown as SqlRow[]).map(mapNeighborhood);
   const allSnapshots = ((await sql`SELECT * FROM snapshots`) as unknown as SqlRow[]).map(mapSnapshot);
   const allTruths = ((await sql`SELECT * FROM micro_truths`) as unknown as SqlRow[]).map(mapTruth);
@@ -2305,9 +2318,16 @@ export async function getUserBrowsingProfile(clerkUserId?: string | null, userHa
     WHERE user_hash = ${userHash ?? clerkUserId ?? ''}
   `) as unknown as SqlRow[];
 
-  // Most viewed truths
+  // Most viewed truths (with avg dwell time)
   const viewedTruths = (await sql`
-    SELECT truth_id, COUNT(*) as views
+    SELECT truth_id, COUNT(*) as views,
+      COALESCE(AVG(
+        CASE
+          WHEN metadata->>'dwellMs' IS NOT NULL
+          THEN (metadata->>'dwellMs')::numeric
+          ELSE 0
+        END
+      ), 0) as avg_dwell_ms
     FROM user_browsing_events
     WHERE ${clerkUserId ? sql`clerk_user_id = ${clerkUserId}` : sql`user_hash = ${userHash}`}
       AND event_type = 'post_detail_open' AND truth_id IS NOT NULL
@@ -2321,7 +2341,7 @@ export async function getUserBrowsingProfile(clerkUserId?: string | null, userHa
     topCategories: topCategories.map(r => ({ category: r.category, count: Number(r.count) })),
     topNeighborhoods: topNeighborhoods.map(r => ({ neighborhoodId: r.neighborhood_id, count: Number(r.count) })),
     likedTruthIds: likedTruths.map(r => r.truth_id),
-    viewedTruthIds: viewedTruths.map(r => ({ truthId: r.truth_id, views: Number(r.views) })),
+    viewedTruthIds: viewedTruths.map(r => ({ truthId: r.truth_id, views: Number(r.views), dwellMs: Number(r.avg_dwell_ms) || 0 })),
   };
 }
 
@@ -2352,25 +2372,93 @@ export async function generatePostSuggestions(opts: {
 
   if (candidateRows.length === 0) return [];
 
-  // Heuristic scoring
+  // Heuristic scoring with enhanced behavioral signals
   const viewedSet = new Set(profile?.viewedTruthIds?.map(v => v.truthId) ?? []);
   const likedSet = new Set(profile?.likedTruthIds ?? []);
   const topCatSet = new Set(profile?.topCategories?.map(c => c.category) ?? []);
   const topNeighborhoodSet = new Set(profile?.topNeighborhoods?.map(n => n.neighborhoodId) ?? []);
 
-  const scored = candidateRows.map(r => {
-    let score = 0.3; // base score
-    const reasons: string[] = [];
+  // Build dwell-time map: truthId -> total dwell seconds
+  const dwellMap = new Map<number, number>();
+  if (profile?.viewedTruthIds) {
+    for (const v of profile.viewedTruthIds) {
+      dwellMap.set(v.truthId, (dwellMap.get(v.truthId) ?? 0) + (v.dwellMs ?? 0));
+    }
+  }
+  const totalDwell = Array.from(dwellMap.values()).reduce((a, b) => a + b, 0) || 1;
 
-    // Category match
-    if (topCatSet.has(r.category)) {
-      score += 0.25;
-      reasons.push(`matches your interest in ${r.category}`);
+  // Category affinity scores (normalized 0-1 based on dwell time)
+  const categoryDwell = new Map<string, number>();
+  if (profile?.viewedTruthIds) {
+    // This requires joining viewedTruthIds with truth categories - approximate from topCategories
+    for (const c of profile.topCategories) {
+      categoryDwell.set(c.category, c.count / (profile.topCategories[0]?.count || 1));
+    }
+  }
+
+  // Repeated category view boost: if user viewed 3+ truths in a category
+  const repeatedCatSet = new Set(
+    profile?.topCategories?.filter(c => c.count >= 3).map(c => c.category) ?? []
+  );
+
+  // Neighborhood affinity (normalized)
+  const maxNeighborhoodCount = Math.max(...(profile?.topNeighborhoods?.map(n => n.count) ?? [1]), 1);
+  const neighborhoodAffinity = new Map<number, number>();
+  if (profile?.topNeighborhoods) {
+    for (const n of profile.topNeighborhoods) {
+      neighborhoodAffinity.set(n.neighborhoodId, n.count / maxNeighborhoodCount);
+    }
+  }
+
+  // Category affinity (normalized)
+  const maxCategoryCount = Math.max(...(profile?.topCategories?.map(c => c.count) ?? [1]), 1);
+  const categoryAffinity = new Map<string, number>();
+  if (profile?.topCategories) {
+    for (const c of profile.topCategories) {
+      categoryAffinity.set(c.category, c.count / maxCategoryCount);
+    }
+  }
+
+  // Get engagement counts for candidate truths
+  const candidateIds = candidateRows.map(r => Number(r.id));
+  let engagementMap = new Map<number, { likes: number; comments: number; shares: number }>();
+  if (candidateIds.length > 0) {
+    // Query likes, comments, shares separately and merge
+    const likeRows = (await sql`SELECT truth_id, COUNT(*) as cnt FROM feed_likes WHERE truth_id = ANY(${candidateIds}::int[]) GROUP BY truth_id`) as unknown as SqlRow[];
+    const commentRows = (await sql`SELECT truth_id, COUNT(*) as cnt FROM feed_comments WHERE truth_id = ANY(${candidateIds}::int[]) GROUP BY truth_id`) as unknown as SqlRow[];
+    const shareRows = (await sql`SELECT truth_id, COUNT(*) as cnt FROM feed_shares WHERE truth_id = ANY(${candidateIds}::int[]) GROUP BY truth_id`) as unknown as SqlRow[];
+
+    for (const id of candidateIds) {
+      engagementMap.set(id, { likes: 0, comments: 0, shares: 0 });
+    }
+    for (const r of likeRows) engagementMap.get(Number(r.truth_id))!.likes = Number(r.cnt) || 0;
+    for (const r of commentRows) engagementMap.get(Number(r.truth_id))!.comments = Number(r.cnt) || 0;
+    for (const r of shareRows) engagementMap.get(Number(r.truth_id))!.shares = Number(r.cnt) || 0;
+  }
+
+  const scored = candidateRows.map(r => {
+    let score = 0.2; // base score
+    const reasons: string[] = [];
+    const cat = r.category;
+    const nid = r.neighborhood_id;
+
+    // Category affinity (enhanced with dwell-time weighting)
+    if (topCatSet.has(cat)) {
+      const affinity = categoryAffinity.get(cat) ?? 0.5;
+      score += 0.15 + affinity * 0.15; // 0.15 - 0.30
+      reasons.push(`matches your interest in ${cat}`);
     }
 
-    // Neighborhood match
-    if (topNeighborhoodSet.has(r.neighborhood_id)) {
-      score += 0.2;
+    // Repeated category views boost (3+ views = strong signal)
+    if (repeatedCatSet.has(cat)) {
+      score += 0.1;
+      reasons.push(`you frequently follow ${cat} updates`);
+    }
+
+    // Neighborhood affinity (graduated)
+    if (topNeighborhoodSet.has(nid)) {
+      const affinity = neighborhoodAffinity.get(nid) ?? 0.5;
+      score += 0.1 + affinity * 0.15; // 0.1 - 0.25
       reasons.push("from a neighborhood you follow");
     }
 
@@ -2378,23 +2466,44 @@ export async function generatePostSuggestions(opts: {
     if (r.trust_score >= 70) {
       score += 0.15;
       reasons.push("high community trust");
+    } else if (r.trust_score >= 50) {
+      score += 0.05;
     }
 
-    // Recency boost (within last 6 hours)
+    // Recency boost (within last 6 hours = strong, 24h = moderate)
     const ageHours = (Date.now() - new Date(r.created_at).getTime()) / 3600000;
     if (ageHours < 6) {
-      score += 0.1;
+      score += 0.12;
       reasons.push("recently reported");
+    } else if (ageHours < 24) {
+      score += 0.06;
     }
 
-    // Penalize already-viewed
+    // Engagement boost (likes, comments, shares)
+    const engagement = engagementMap.get(Number(r.id));
+    if (engagement) {
+      const totalEng = engagement.likes + engagement.comments + engagement.shares;
+      if (totalEng > 0) {
+        score += Math.min(0.15, totalEng * 0.03);
+        if (engagement.likes >= 5) reasons.push("popular with your community");
+        if (engagement.comments >= 3) reasons.push("sparking discussion");
+        if (engagement.shares >= 2) reasons.push("widely shared");
+      }
+    }
+
+    // Penalize already-viewed (but not as harshly — maybe they want updates)
     if (viewedSet.has(r.id)) {
-      score -= 0.2;
+      score -= 0.15;
+      // But if it has new engagement, still surface it
+      if (engagement && engagement.comments > 0) {
+        score += 0.05;
+        reasons.push("new comments on a post you've seen");
+      }
     }
 
     // Don't suggest liked posts again
     if (likedSet.has(r.id)) {
-      score -= 0.3;
+      score -= 0.25;
     }
 
     return {
@@ -2472,7 +2581,7 @@ export async function getFeedSnapshots() {
   const neighborhoods = (await sql`SELECT * FROM neighborhoods ORDER BY name`) as unknown as SqlRow[];
   const snapshots = (await sql`SELECT * FROM snapshots`) as unknown as SqlRow[];
   const truths = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE t.status != 'rejected' ORDER BY t.created_at DESC LIMIT 200`) as unknown as SqlRow[];
-  const predictions = (await sql`SELECT * FROM predictions ORDER BY created_at DESC LIMIT 50`) as unknown as SqlRow[];
+  const predictions = (await sql`SELECT * FROM predictions WHERE (expires_at IS NULL OR expires_at > NOW()) ORDER BY created_at DESC LIMIT 50`) as unknown as SqlRow[];
 
   // Summary stats
   const activeTruths = truths.length;
@@ -2758,6 +2867,347 @@ export async function getWeeklyReviews(weekStart?: string) {
     weekEnd: reviews[0]?.weekEnd ?? null,
     reviews,
   };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Event Time-Series Aggregation & AI Predictions
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Aggregate truth reports into time-series buckets (daily/weekly/monthly/yearly).
+ * Idempotent — uses ON CONFLICT to upsert.
+ */
+export async function aggregateEventTimeSeries(periodType: "daily" | "weekly" | "monthly" | "yearly" = "daily") {
+  const sql = getDb();
+  const periodFn = periodType === "daily" ? sql`date_trunc('day', created_at)`
+    : periodType === "weekly" ? sql`date_trunc('week', created_at)`
+    : periodType === "monthly" ? sql`date_trunc('month', created_at)`
+    : sql`date_trunc('year', created_at)`;
+
+  // Aggregate from micro_truths
+  const rows = (await sql`
+    SELECT
+      ${periodFn}::date as period_start,
+      neighborhood_id,
+      category,
+      COUNT(*) as event_count,
+      COALESCE(AVG(trust_score), 50)::int as avg_trust_score,
+      COUNT(*) FILTER (WHERE content ~* '\b(good|better|improved|restored|fixed|available|normal|safe)\b') as positive_count,
+      COUNT(*) FILTER (WHERE content ~* '\b(bad|worse|outage|unavailable|danger|broken|off|down)\b') as negative_count,
+      COUNT(*) FILTER (WHERE content !~* '\b(good|better|improved|restored|fixed|available|normal|safe|bad|worse|outage|unavailable|danger|broken|off|down)\b') as neutral_count
+    FROM micro_truths
+    WHERE status != 'rejected'
+    GROUP BY ${periodFn}, neighborhood_id, category
+    HAVING COUNT(*) > 0
+  `) as unknown as SqlRow[];
+
+  let upserted = 0;
+  for (const r of rows) {
+    const sentimentScore = r.event_count > 0
+      ? (Number(r.positive_count) - Number(r.negative_count)) / Number(r.event_count)
+      : 0;
+    const trend = sentimentScore > 0.2 ? "up" : sentimentScore < -0.2 ? "down" : "stable";
+    const summary = `${r.event_count} ${r.category} reports | ${r.positive_count} positive, ${r.negative_count} negative | avg trust ${r.avg_trust_score}`;
+
+    await sql`
+      INSERT INTO event_time_series
+        (period_type, period_start, neighborhood_id, category, event_count, avg_trust_score,
+         positive_count, negative_count, neutral_count, avg_sentiment_score, trend, summary, aggregated_at)
+      VALUES
+        (${periodType}, ${r.period_start}, ${r.neighborhood_id}, ${r.category},
+         ${r.event_count}, ${r.avg_trust_score}, ${r.positive_count}, ${r.negative_count}, ${r.neutral_count},
+         ${sentimentScore}, ${trend}, ${summary}, NOW())
+      ON CONFLICT (period_type, period_start, neighborhood_id, category)
+      DO UPDATE SET
+        event_count = EXCLUDED.event_count,
+        avg_trust_score = EXCLUDED.avg_trust_score,
+        positive_count = EXCLUDED.positive_count,
+        negative_count = EXCLUDED.negative_count,
+        neutral_count = EXCLUDED.neutral_count,
+        avg_sentiment_score = EXCLUDED.avg_sentiment_score,
+        trend = EXCLUDED.trend,
+        summary = EXCLUDED.summary,
+        aggregated_at = NOW()
+    `;
+    upserted++;
+  }
+
+  return { periodType, rowsAggregated: upserted };
+}
+
+/**
+ * Get historical time-series data for a neighborhood + category.
+ * Returns aggregated patterns across daily, weekly, and monthly periods.
+ */
+export async function getTimeSeriesData(neighborhoodId?: number, category?: string, limit = 30) {
+  const sql = getDb();
+  const conditions: string[] = [];
+
+  let dailyRows: SqlRow[];
+  let weeklyRows: SqlRow[];
+  let monthlyRows: SqlRow[];
+
+  const baseFilter = neighborhoodId
+    ? category
+      ? sql`WHERE neighborhood_id = ${neighborhoodId} AND category = ${category}`
+      : sql`WHERE neighborhood_id = ${neighborhoodId}`
+    : category
+      ? sql`WHERE category = ${category}`
+      : sql`WHERE 1=1`;
+
+  dailyRows = (await sql`SELECT * FROM event_time_series ${baseFilter} AND period_type = 'daily' ORDER BY period_start DESC LIMIT ${limit}`) as unknown as SqlRow[];
+  weeklyRows = (await sql`SELECT * FROM event_time_series ${baseFilter} AND period_type = 'weekly' ORDER BY period_start DESC LIMIT ${limit}`) as unknown as SqlRow[];
+  monthlyRows = (await sql`SELECT * FROM event_time_series ${baseFilter} AND period_type = 'monthly' ORDER BY period_start DESC LIMIT ${limit}`) as unknown as SqlRow[];
+
+  return {
+    daily: dailyRows.map(r => ({
+      periodStart: r.period_start,
+      neighborhoodId: r.neighborhood_id,
+      category: r.category,
+      eventCount: Number(r.event_count),
+      avgTrustScore: Number(r.avg_trust_score),
+      positiveCount: Number(r.positive_count),
+      negativeCount: Number(r.negative_count),
+      sentimentScore: Number(r.avg_sentiment_score),
+      trend: r.trend,
+      summary: r.summary,
+    })),
+    weekly: weeklyRows.map(r => ({
+      periodStart: r.period_start,
+      neighborhoodId: r.neighborhood_id,
+      category: r.category,
+      eventCount: Number(r.event_count),
+      avgTrustScore: Number(r.avg_trust_score),
+      positiveCount: Number(r.positive_count),
+      negativeCount: Number(r.negative_count),
+      sentimentScore: Number(r.avg_sentiment_score),
+      trend: r.trend,
+      summary: r.summary,
+    })),
+    monthly: monthlyRows.map(r => ({
+      periodStart: r.period_start,
+      neighborhoodId: r.neighborhood_id,
+      category: r.category,
+      eventCount: Number(r.event_count),
+      avgTrustScore: Number(r.avg_trust_score),
+      positiveCount: Number(r.positive_count),
+      negativeCount: Number(r.negative_count),
+      sentimentScore: Number(r.avg_sentiment_score),
+      trend: r.trend,
+      summary: r.summary,
+    })),
+  };
+}
+
+/**
+ * Generate AI-powered predictions for a user's location.
+ * Uses time-series data + recent truths + Kimi AI (if configured).
+ * Creates prediction entries that surface in the feed.
+ */
+export async function generateLocationBasedPredictions(userLocation: {
+  lat: number;
+  lng: number;
+  region?: string | null;
+  city?: string | null;
+}) {
+  const sql = getDb();
+
+  // Find nearby neighborhoods (within ~10km)
+  const nearbyNeighborhoods = (await sql`
+    SELECT *,
+      (6371 * acos(cos(radians(${userLocation.lat})) * cos(radians(lat)) * cos(radians(lng) - radians(${userLocation.lng})) + sin(radians(${userLocation.lat})) * sin(radians(lat)))) as distance_km
+    FROM neighborhoods
+    HAVING (6371 * acos(cos(radians(${userLocation.lat})) * cos(radians(lat)) * cos(radians(lng) - radians(${userLocation.lng})) + sin(radians(${userLocation.lat})) * sin(radians(lat)))) < 10
+    ORDER BY distance_km
+    LIMIT 5
+  `) as unknown as SqlRow[];
+
+  if (nearbyNeighborhoods.length === 0) {
+    // No neighborhoods nearby — try to find the closest one
+    const closest = (await sql`
+      SELECT *,
+        (6371 * acos(cos(radians(${userLocation.lat})) * cos(radians(lat)) * cos(radians(lng) - radians(${userLocation.lng})) + sin(radians(${userLocation.lat})) * sin(radians(lat)))) as distance_km
+      FROM neighborhoods
+      ORDER BY distance_km
+      LIMIT 1
+    `) as unknown as SqlRow[];
+    if (closest.length === 0) return { predictions: [], message: "No neighborhoods found" };
+    nearbyNeighborhoods.push(...closest);
+  }
+
+  const predictions: any[] = [];
+  const { isKimiConfigured, generateKimiJsonArray } = await import("@/lib/kimi");
+
+  for (const n of nearbyNeighborhoods) {
+    const neighborhoodId = Number(n.id);
+
+    // Get time-series data for this neighborhood
+    const timeSeries = await getTimeSeriesData(neighborhoodId, undefined, 7);
+
+    // Get recent truths
+    const recentTruths = (await sql`
+      SELECT * FROM micro_truths WHERE neighborhood_id = ${neighborhoodId} AND status != 'rejected'
+      ORDER BY created_at DESC LIMIT 20
+    `) as unknown as SqlRow[];
+
+    if (recentTruths.length === 0 && timeSeries.daily.length === 0) continue;
+
+    // Build context for AI
+    const context = {
+      neighborhood: n.name,
+      region: n.region,
+      distance_km: Number(n.distance_km).toFixed(1),
+      recentTruths: recentTruths.slice(0, 10).map(t => ({
+        category: t.category,
+        content: t.content,
+        trustScore: t.trust_score,
+        createdAt: t.created_at,
+      })),
+      historicalPatterns: {
+        daily: timeSeries.daily.slice(0, 7),
+        weekly: timeSeries.weekly.slice(0, 4),
+        monthly: timeSeries.monthly.slice(0, 3),
+      },
+    };
+
+    if (isKimiConfigured()) {
+      const systemPrompt = `You are an AI analyst for Soke, a community truth platform for Nigerian neighborhoods. Analyze the provided data including recent reports and historical time-series patterns. Generate 1-3 accurate, actionable predictions about what's likely to happen in this area. Consider seasonal patterns, recurring events, and current trends.`;
+
+      const userPrompt = `Analyze this neighborhood data and generate predictions as a JSON array:
+${JSON.stringify(context, null, 2)}
+
+Format: [{"category":"power|fuel|traffic|prices|safety|security","prediction":"specific prediction text","confidence":75,"timeframe":"next 6h|next 24h|next 3 days","trend":"up|down|stable|risk","reasoning":"brief explanation"}]
+
+Base predictions on:
+1. Historical patterns from time-series data (recurring events, trends)
+2. Recent truth reports (current situation)
+3. Seasonal patterns (time of day, day of week patterns)
+4. Sentiment trends (improving or worsening conditions)`;
+
+      const { data: aiResults, source } = await generateKimiJsonArray<any>(
+        systemPrompt, userPrompt, [],
+        { temperature: 0.4, maxOutputTokens: 1024 }
+      );
+
+      if (source === "kimi" && Array.isArray(aiResults)) {
+        for (const pred of aiResults.slice(0, 3)) {
+          if (pred.prediction && pred.category) {
+            const created = await createPrediction({
+              category: String(pred.category),
+              neighborhoodId,
+              prediction: String(pred.prediction),
+              confidence: Math.min(95, Math.max(30, Number(pred.confidence) || 60)),
+              timeframe: String(pred.timeframe || "next 24h"),
+              trend: String(pred.trend || "stable"),
+              modelVersion: "kimi:location-based",
+            });
+            predictions.push(created);
+          }
+        }
+      }
+    } else {
+      // Heuristic fallback: use time-series trends to generate predictions
+      for (const cat of TRUTH_CATEGORIES) {
+        const catDaily = timeSeries.daily.filter(d => d.category === cat);
+        const catRecent = recentTruths.filter(t => t.category === cat);
+        if (catDaily.length === 0 && catRecent.length === 0) continue;
+
+        const totalEvents = catDaily.reduce((s, d) => s + d.eventCount, 0);
+        const avgSentiment = catDaily.length > 0
+          ? catDaily.reduce((s, d) => s + d.sentimentScore, 0) / catDaily.length
+          : 0;
+
+        let trend: "up" | "down" | "stable" = "stable";
+        let prediction = "";
+        let confidence = 50;
+
+        if (avgSentiment < -0.3) {
+          trend = "down";
+          prediction = `${cat.charAt(0).toUpperCase() + cat.slice(1)} conditions may worsen in this area based on recent trends (${totalEvents} reports in the past week).`;
+          confidence = Math.min(75, 45 + Math.abs(avgSentiment) * 30);
+        } else if (avgSentiment > 0.3) {
+          trend = "up";
+          prediction = `${cat.charAt(0).toUpperCase() + cat.slice(1)} conditions appear to be improving based on recent trends (${totalEvents} reports in the past week).`;
+          confidence = Math.min(75, 45 + avgSentiment * 30);
+        } else if (totalEvents > 5) {
+          trend = "stable";
+          prediction = `${cat.charAt(0).toUpperCase() + cat.slice(1)} situation is stable with ${totalEvents} reports in the past week. No significant changes expected.`;
+          confidence = 55;
+        } else {
+          continue;
+        }
+
+        const created = await createPrediction({
+          category: cat,
+          neighborhoodId,
+          prediction,
+          confidence: Math.round(confidence),
+          timeframe: "next 24h",
+          trend,
+          modelVersion: "soke-heuristic-v2",
+        });
+        predictions.push(created);
+      }
+    }
+  }
+
+  return {
+    predictions,
+    neighborhoodsChecked: nearbyNeighborhoods.length,
+  };
+}
+
+/**
+ * Get AI predictions relevant to a user's location for display in the feed.
+ */
+export async function getLocationBasedPredictions(userLocation: {
+  lat: number;
+  lng: number;
+}, limit = 5) {
+  const sql = getDb();
+
+  // Find nearby neighborhoods
+  const nearby = (await sql`
+    SELECT id,
+      (6371 * acos(cos(radians(${userLocation.lat})) * cos(radians(lat)) * cos(radians(lng) - radians(${userLocation.lng})) + sin(radians(${userLocation.lat})) * sin(radians(lat)))) as distance_km
+    FROM neighborhoods
+    HAVING (6371 * acos(cos(radians(${userLocation.lat})) * cos(radians(lat)) * cos(radians(lng) - radians(${userLocation.lng})) + sin(radians(${userLocation.lat})) * sin(radians(lat)))) < 15
+    ORDER BY distance_km
+    LIMIT 5
+  `) as unknown as SqlRow[];
+
+  const neighborhoodIds = nearby.length > 0 ? nearby.map(n => Number(n.id)) : [];
+
+  if (neighborhoodIds.length === 0) {
+    // Return latest predictions regardless of location
+    const rows = (await sql`
+      SELECT p.*, n.name as neighborhood_name FROM predictions p
+      LEFT JOIN neighborhoods n ON p.neighborhood_id = n.id
+      WHERE (p.expires_at IS NULL OR p.expires_at > NOW())
+      ORDER BY p.created_at DESC LIMIT ${limit}
+    `) as unknown as SqlRow[];
+    return rows.map(r => ({
+      ...mapPrediction(r),
+      neighborhoodName: r.neighborhood_name,
+      distanceKm: null,
+    }));
+  }
+
+  const rows = (await sql`
+    SELECT p.*, n.name as neighborhood_name,
+      (6371 * acos(cos(radians(${userLocation.lat})) * cos(radians(n.lat)) * cos(radians(n.lng) - radians(${userLocation.lng})) + sin(radians(${userLocation.lat})) * sin(radians(n.lat)))) as distance_km
+    FROM predictions p
+    LEFT JOIN neighborhoods n ON p.neighborhood_id = n.id
+    WHERE p.neighborhood_id = ANY(${neighborhoodIds}::int[])
+      AND (p.expires_at IS NULL OR p.expires_at > NOW())
+    ORDER BY p.created_at DESC LIMIT ${limit}
+  `) as unknown as SqlRow[];
+
+  return rows.map(r => ({
+    ...mapPrediction(r),
+    neighborhoodName: r.neighborhood_name,
+    distanceKm: r.distance_km ? Number(r.distance_km).toFixed(1) : null,
+  }));
 }
 
 // Re-export commonly used constants

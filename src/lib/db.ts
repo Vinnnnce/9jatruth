@@ -585,5 +585,33 @@ export async function ensureDbInitialized() {
   )`;
   await sql`CREATE INDEX IF NOT EXISTS idx_weekly_review_week ON weekly_user_reviews(week_start)`;
 
+  // ─── Event Time-Series (aggregated historical patterns) ───
+  await sql`CREATE TABLE IF NOT EXISTS event_time_series (
+    id SERIAL PRIMARY KEY,
+    period_type TEXT NOT NULL,
+    period_start DATE NOT NULL,
+    neighborhood_id INTEGER,
+    category TEXT,
+    event_count INTEGER NOT NULL DEFAULT 0,
+    avg_trust_score INTEGER NOT NULL DEFAULT 50,
+    positive_count INTEGER NOT NULL DEFAULT 0,
+    negative_count INTEGER NOT NULL DEFAULT 0,
+    neutral_count INTEGER NOT NULL DEFAULT 0,
+    avg_sentiment_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    top_keywords JSONB DEFAULT '[]'::jsonb,
+    trend TEXT NOT NULL DEFAULT 'stable',
+    summary TEXT,
+    aggregated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(period_type, period_start, neighborhood_id, category)
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_timeseries_period ON event_time_series(period_type, period_start)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_timeseries_neighborhood ON event_time_series(neighborhood_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_timeseries_category ON event_time_series(category)`;
+
+  // ─── Prediction freshness / dedup ───
+  await sql`ALTER TABLE predictions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_predictions_neighborhood ON predictions(neighborhood_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_predictions_created ON predictions(created_at DESC)`;
+
   initialized = true;
 }

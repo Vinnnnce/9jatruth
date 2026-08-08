@@ -25,6 +25,8 @@ const isPublicRoute = createRouteMatcher([
   "/api/geo(.*)",
   "/api/organizations(.*)",
   "/api/push/vapid-key(.*)",
+  "/api/ai/feed-predictions(.*)",  // GET is public (feed display), POST is rate-limited
+  "/api/ai/time-series(.*)",  // Historical data is public
 ]);
 
 // Admin-only API routes — require super admin email
@@ -34,6 +36,7 @@ const isAdminApiRoute = createRouteMatcher([
   "/api/models(.*)",
   "/api/truths/delete(.*)",
   "/api/analytics/overview(.*)",
+  "/api/ai/aggregate(.*)",
 ]);
 
 // Org-only API routes — require org admin auth
