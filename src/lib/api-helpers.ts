@@ -30,6 +30,10 @@ export async function getUserId(_request?: Request): Promise<string> {
   } catch {
     // auth() can throw outside of a request context; fall through to dev fallback
   }
+  // In production, do not fall back to a shared dev identity — require auth
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Authentication required: getUserId() called without an authenticated session in production");
+  }
   return "dev_1d6e";
 }
 

@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback, useEffect } from "react";
+import { apiRequest } from "@/lib/queryClient";
 
 export interface PushNotificationState {
   supported: boolean;
@@ -77,13 +78,9 @@ export function usePushNotifications(): PushNotificationState {
 
       // Send subscription to server
       const subJson = subscription.toJSON();
-      await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          endpoint: subJson.endpoint,
-          keys: subJson.keys,
-        }),
+      await apiRequest("POST", "/api/push/subscribe", {
+        endpoint: subJson.endpoint,
+        keys: subJson.keys,
       });
 
       setSubscribed(true);
@@ -102,10 +99,8 @@ export function usePushNotifications(): PushNotificationState {
       const subscription = await reg.pushManager.getSubscription();
       if (subscription) {
         await subscription.unsubscribe();
-        await fetch("/api/push/unsubscribe", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        await apiRequest("POST", "/api/push/unsubscribe", {
+          endpoint: subscription.endpoint,
         });
       }
       setSubscribed(false);
