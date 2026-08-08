@@ -192,9 +192,9 @@ export default function Feeds() {
             const meta = CATEGORY_META[category];
             const Icon = meta.icon;
             return (
-              <div key={category} className="rounded-xl bg-muted/40 p-3 space-y-1.5">
+              <div key={category} className="rounded-xl bg-muted/40 p-3 space-y-1.5 overflow-hidden">
                 <Icon className={`h-4 w-4 ${meta.color}`} />
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{meta.label}</p>
+                <p className="text-[10px] uppercase tracking-normal text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">{meta.label}</p>
                 <div className="flex items-center gap-1.5">
                   <span className={`h-1.5 w-1.5 rounded-full ${
                     status === "On" || status === "Clear" ? "bg-green-500" :
@@ -215,9 +215,9 @@ export default function Feeds() {
             const meta = CATEGORY_META[category];
             const Icon = meta.icon;
             return (
-              <div key={category} className="rounded-xl bg-muted/40 p-3 space-y-1.5">
+              <div key={category} className="rounded-xl bg-muted/40 p-3 space-y-1.5 overflow-hidden">
                 <Icon className={`h-4 w-4 ${meta.color}`} />
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{meta.label}</p>
+                <p className="text-[10px] uppercase tracking-normal text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">{meta.label}</p>
                 <p className={`text-lg font-bold ${color}`}>{status}</p>
               </div>
             );

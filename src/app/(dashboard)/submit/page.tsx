@@ -28,6 +28,9 @@ import { useUser } from "@/lib/use-user-safe";
 import { SignedIn, SignedOut, SignInButton, SignUpButton } from "@clerk/nextjs";
 import { VerifiedBadge } from "@/components/verified-badge";
 
+const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
+
 const categories = CATEGORY_LIST;
 
 export default function SubmitTruth() {
@@ -141,189 +144,199 @@ export default function SubmitTruth() {
     );
   }
 
-  return (
-    <div className="p-4 md:p-6 max-w-2xl space-y-4">
-      <SignedOut>
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="p-6 flex flex-col items-center gap-3 text-center">
-            <h2 className="text-lg font-display font-700">Sign in to Submit Reports</h2>
-            <p className="text-sm text-muted-foreground">
-              Share neighborhood truths and earn credits for verified reports.
-            </p>
-            <div className="flex gap-2">
-              <SignInButton mode="modal">
-                <Button size="sm">Sign In</Button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <Button size="sm" variant="outline">Sign Up</Button>
-              </SignUpButton>
-            </div>
-          </CardContent>
-        </Card>
-      </SignedOut>
+  const formContent = (
+    <>
+      <div>
+        <h1 className="text-xl font-display font-700">Submit Truth</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Report what's happening in your neighborhood
+        </p>
+      </div>
 
-      <SignedIn>
-        <div>
-          <h1 className="text-xl font-display font-700">Submit Truth</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Report what's happening in your neighborhood
-          </p>
-        </div>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-display">New Report</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Location Detection */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-3 p-2.5 rounded-md bg-muted/30">
-                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 shrink-0">
-                  <Navigation className={`h-3.5 w-3.5 ${detectingLoc ? "animate-spin text-primary" : detectedLocation?.lat ? "text-green-500" : "text-primary"}`} />
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-display">New Report</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Location Detection */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 p-2.5 rounded-md bg-muted/30">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 shrink-0">
+                <Navigation className={`h-3.5 w-3.5 ${detectingLoc ? "animate-spin text-primary" : detectedLocation?.lat ? "text-green-500" : "text-primary"}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium">Your Location</div>
+                <div className="text-[10px] text-muted-foreground truncate">
+                  {detectingLoc
+                    ? "Detecting..."
+                    : detectedLocation?.city && detectedLocation?.region
+                    ? `${detectedLocation.city}, ${detectedLocation.region}`
+                    : detectedLocation?.region || "Not detected"}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium">Your Location</div>
-                  <div className="text-[10px] text-muted-foreground truncate">
-                    {detectingLoc
-                      ? "Detecting..."
-                      : detectedLocation?.city && detectedLocation?.region
-                      ? `${detectedLocation.city}, ${detectedLocation.region}`
-                      : detectedLocation?.region || "Not detected"}
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant={lat !== null ? "secondary" : "outline"}
-                  size="sm"
-                  onClick={requestLocation}
-                  disabled={locLoading}
-                  className="h-6 gap-1 text-[10px] px-2"
-                >
-                  <LocateFixed className={`h-2.5 w-2.5 ${locLoading ? "animate-spin" : ""}`} />
-                  {lat !== null ? "GPS" : locLoading ? "..." : "GPS"}
-                </Button>
-              </div>
-
-              {/* Neighborhood — manual text input */}
-              <div className="space-y-1">
-                <Label htmlFor="neighborhood" className="text-xs">Neighborhood / Area</Label>
-                <Input
-                  id="neighborhood"
-                  data-testid="input-neighborhood"
-                  value={neighborhoodInput}
-                  onChange={(e) => setNeighborhoodInput(e.target.value)}
-                  placeholder="e.g. Yaba, Lekki, Ikeja"
-                  className="h-9 text-sm"
-                />
-                {detectedLocation?.city && neighborhoodInput === detectedLocation.city && (
-                  <p className="text-[10px] text-green-500 flex items-center gap-1">
-                    <MapPin className="h-2.5 w-2.5" />
-                    Auto-detected from your location
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Category */}
-            <div className="space-y-1">
-              <Label htmlFor="category" className="text-xs">Category</Label>
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger id="category" data-testid="select-category" className="h-9 text-sm">
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>
-                      <span className="flex items-center gap-2">
-                        <c.icon className={`h-3.5 w-3.5 ${c.color}`} />
-                        {c.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Report Details */}
-            <div className="space-y-1">
-              <Label htmlFor="content" className="text-xs">Report Details</Label>
-              <Textarea
-                id="content"
-                data-testid="input-content"
-                placeholder="e.g. Power has been off for 2 hours on Admiralty Way. Transformer near Shoprite is sparking."
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                rows={4}
-                className="resize-none text-sm"
-              />
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] text-muted-foreground">{content.length} characters</p>
-                <p className="text-[10px] text-muted-foreground">Min 15 characters</p>
-              </div>
-            </div>
-
-            {/* Post as organization (safe access) */}
-            {!authLoading && isAgencyAuth && auth?.organization && (
-              <div className="flex items-center gap-3 rounded-md border border-primary/20 bg-primary/5 p-2.5">
-                <Checkbox
-                  id="post-as-org"
-                  checked={postAsOrg}
-                  onCheckedChange={(checked) => setPostAsOrg(checked === true)}
-                />
-                <label htmlFor="post-as-org" className="flex items-center gap-2 text-xs cursor-pointer flex-1">
-                  <Building2 className="h-3.5 w-3.5 text-primary" />
-                  <span>Post as <strong>{auth.organization.name}</strong></span>
-                  {auth.organization.verified === 1 && <VerifiedBadge showLabel />}
-                </label>
-              </div>
-            )}
-
-            {/* Submit row — credits and trust-scored badges inline */}
-            <div className="flex items-center justify-between gap-2 pt-1">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <Badge variant="secondary" className="text-[10px] gap-1">
-                  <Coins className="h-2.5 w-2.5" />
-                  +20 credits
-                </Badge>
-                <Badge variant="outline" className="text-[10px] gap-1">
-                  <ShieldCheck className="h-2.5 w-2.5" />
-                  Trust-scored
-                </Badge>
               </div>
               <Button
-                onClick={handleSubmit}
-                disabled={mutation.isPending}
-                data-testid="button-submit-truth"
-                className="gap-2"
+                type="button"
+                variant={lat !== null ? "secondary" : "outline"}
                 size="sm"
+                onClick={requestLocation}
+                disabled={locLoading}
+                className="h-6 gap-1 text-[10px] px-2"
               >
-                {mutation.isPending ? (
-                  "Submitting..."
-                ) : (
-                  <>
-                    <Send className="h-3.5 w-3.5" />
-                    Submit
-                  </>
-                )}
+                <LocateFixed className={`h-2.5 w-2.5 ${locLoading ? "animate-spin" : ""}`} />
+                {lat !== null ? "GPS" : locLoading ? "..." : "GPS"}
               </Button>
+            </div>
+
+            {/* Neighborhood — manual text input */}
+            <div className="space-y-1">
+              <Label htmlFor="neighborhood" className="text-xs">Neighborhood / Area</Label>
+              <Input
+                id="neighborhood"
+                data-testid="input-neighborhood"
+                value={neighborhoodInput}
+                onChange={(e) => setNeighborhoodInput(e.target.value)}
+                placeholder="e.g. Yaba, Lekki, Ikeja"
+                className="h-9 text-sm"
+              />
+              {detectedLocation?.city && neighborhoodInput === detectedLocation.city && (
+                <p className="text-[10px] text-green-500 flex items-center gap-1">
+                  <MapPin className="h-2.5 w-2.5" />
+                  Auto-detected from your location
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Category */}
+          <div className="space-y-1">
+            <Label htmlFor="category" className="text-xs">Category</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger id="category" data-testid="select-category" className="h-9 text-sm">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    <span className="flex items-center gap-2">
+                      <c.icon className={`h-3.5 w-3.5 ${c.color}`} />
+                      {c.label}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Report Details */}
+          <div className="space-y-1">
+            <Label htmlFor="content" className="text-xs">Report Details</Label>
+            <Textarea
+              id="content"
+              data-testid="input-content"
+              placeholder="e.g. Power has been off for 2 hours on Admiralty Way. Transformer near Shoprite is sparking."
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              rows={4}
+              className="resize-none text-sm"
+            />
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] text-muted-foreground">{content.length} characters</p>
+              <p className="text-[10px] text-muted-foreground">Min 15 characters</p>
+            </div>
+          </div>
+
+          {/* Post as organization (safe access) */}
+          {!authLoading && isAgencyAuth && auth?.organization && (
+            <div className="flex items-center gap-3 rounded-md border border-primary/20 bg-primary/5 p-2.5">
+              <Checkbox
+                id="post-as-org"
+                checked={postAsOrg}
+                onCheckedChange={(checked) => setPostAsOrg(checked === true)}
+              />
+              <label htmlFor="post-as-org" className="flex items-center gap-2 text-xs cursor-pointer flex-1">
+                <Building2 className="h-3.5 w-3.5 text-primary" />
+                <span>Post as <strong>{auth.organization.name}</strong></span>
+                {auth.organization.verified === 1 && <VerifiedBadge showLabel />}
+              </label>
+            </div>
+          )}
+
+          {/* Submit row — credits and trust-scored badges inline */}
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Badge variant="secondary" className="text-[10px] gap-1">
+                <Coins className="h-2.5 w-2.5" />
+                +20 credits
+              </Badge>
+              <Badge variant="outline" className="text-[10px] gap-1">
+                <ShieldCheck className="h-2.5 w-2.5" />
+                Trust-scored
+              </Badge>
+            </div>
+            <Button
+              onClick={handleSubmit}
+              disabled={mutation.isPending}
+              data-testid="button-submit-truth"
+              className="gap-2"
+              size="sm"
+            >
+              {mutation.isPending ? (
+                "Submitting..."
+              ) : (
+                <>
+                  <Send className="h-3.5 w-3.5" />
+                  Submit
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {mutation.isSuccess && (
+        <Card className="border-green-500/30 bg-green-500/5">
+          <CardContent className="p-4 flex items-start gap-3">
+            <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Truth submitted successfully</p>
+              <p className="text-xs text-muted-foreground">
+                Your report has entered the verification pipeline. It will be trust-scored, checked for duplicates, and corroborated against nearby reports.
+              </p>
             </div>
           </CardContent>
         </Card>
+      )}
+    </>
+  );
 
-        {mutation.isSuccess && (
-          <Card className="border-green-500/30 bg-green-500/5">
-            <CardContent className="p-4 flex items-start gap-3">
-              <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Truth submitted successfully</p>
-                <p className="text-xs text-muted-foreground">
-                  Your report has entered the verification pipeline. It will be trust-scored, checked for duplicates, and corroborated against nearby reports.
-                </p>
+  return (
+    <div className="p-4 md:p-6 max-w-2xl space-y-4">
+      {isClerkConfigured && (
+        <SignedOut>
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="p-6 flex flex-col items-center gap-3 text-center">
+              <h2 className="text-lg font-display font-700">Sign in to Submit Reports</h2>
+              <p className="text-sm text-muted-foreground">
+                Share neighborhood truths and earn credits for verified reports.
+              </p>
+              <div className="flex gap-2">
+                <SignInButton mode="modal">
+                  <Button size="sm">Sign In</Button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                  <Button size="sm" variant="outline">Sign Up</Button>
+                </SignUpButton>
               </div>
             </CardContent>
           </Card>
-        )}
-      </SignedIn>
+        </SignedOut>
+      )}
+
+      {isClerkConfigured ? (
+        <SignedIn>{formContent}</SignedIn>
+      ) : (
+        formContent
+      )}
     </div>
   );
 }
