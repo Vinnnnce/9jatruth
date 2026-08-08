@@ -1,3 +1,4 @@
+import { csrfCheck } from "@/lib/security";
 import { ensureDbInitialized } from "@/lib/db";
 import { deleteAllTruths } from "@/lib/neon-storage";
 import { isSuperAdmin } from "@/lib/admin-auth";
@@ -6,7 +7,10 @@ import { isSuperAdmin } from "@/lib/admin-auth";
  * Delete all truths/posts and verifications (demo data cleanup).
  * Super admin only.
  */
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
+
   await ensureDbInitialized();
 
   const isAdmin = await isSuperAdmin();

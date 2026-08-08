@@ -1,3 +1,4 @@
+import { csrfCheck } from "@/lib/security";
 import { ensureDbInitialized, getDb } from "@/lib/db";
 import {
   getPlatformUserByClerkId,
@@ -100,6 +101,8 @@ export async function GET(request: Request) {
  */
 export async function PUT(request: Request) {
   await ensureDbInitialized();
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
   const clerkUserId = await getClerkUserId();
   if (!clerkUserId) {
     return Response.json({ message: "Not authenticated" }, { status: 401 });

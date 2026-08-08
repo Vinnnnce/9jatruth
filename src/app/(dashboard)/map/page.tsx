@@ -1,11 +1,13 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapPin, Zap, Fuel, Car, Tag, Shield } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { MapPin, Navigation, Sparkles, Brain, Star, Loader2 } from "lucide-react";
 
 type DashboardData = {
   neighborhood: { id: number; name: string; region: string; geoHash: string; lat: number; lng: number };
@@ -17,22 +19,34 @@ type DashboardData = {
   predictions: Array<{ id: number; category: string; prediction: string; confidence: number; trend: string }>;
 };
 
-const statusConfig: Record<string, { color: string; label: string }> = {
-  on: { color: "text-green-500", label: "On" },
-  off: { color: "text-red-500", label: "Off" },
-  unstable: { color: "text-amber-500", label: "Unstable" },
-  available: { color: "text-green-500", label: "Available" },
-  scarce: { color: "text-amber-500", label: "Scarce" },
-  unavailable: { color: "text-red-500", label: "Unavailable" },
-  low: { color: "text-green-500", label: "Low" },
-  moderate: { color: "text-blue-500", label: "Moderate" },
-  heavy: { color: "text-amber-500", label: "Heavy" },
-  gridlock: { color: "text-red-500", label: "Gridlock" },
+type NearbyPlace = {
+  id: string;
+  name: string;
+  category: string;
+  icon: string;
+  lat: number;
+  lng: number;
+  rating?: number;
+  userRatingsTotal?: number;
+  priceLevel?: number;
+  vicinity?: string;
+  openNow?: boolean;
+  types?: string[];
+  distance?: number;
 };
 
-const categoryIcons: Record<string, typeof Zap> = {
-  power: Zap, fuel: Fuel, traffic: Car, prices: Tag, safety: Shield,
-};
+const CATEGORY_FILTERS = [
+  { key: "all", label: "All", icon: "📍" },
+  { key: "hotels", label: "Hotels", icon: "🏨" },
+  { key: "restaurants", label: "Restaurants", icon: "🍽️" },
+  { key: "fuel", label: "Petrol", icon: "⛽" },
+  { key: "police", label: "Police", icon: "🚔" },
+  { key: "hospitals", label: "Hospitals", icon: "🏥" },
+  { key: "pharmacies", label: "Pharmacies", icon: "💊" },
+  { key: "supermarkets", label: "Supermarkets", icon: "🛒" },
+];
+
+const GOOGLE_MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 export default function GeoMap() {
   const { data, isLoading } = useQuery<DashboardData[]>({
@@ -43,6 +57,28 @@ export default function GeoMap() {
     },
   });
 
+  const [selectedNeighborhood, setSelectedNeighborhood] = useState<DashboardData | null>(null);
+  const [activeCategory, setActiveCategory] = useState("all");
+
+  // Fetch nearby places when a neighborhood is selected
+  const { data: nearbyData, isLoading: nearbyLoading } = useQuery({
+    queryKey: ["/api/maps/nearby", selectedNeighborhood?.neighborhood.id, activeCategory],
+    queryFn: async () => {
+      if (!selectedNeighborhood) return null;
+      const n = selectedNeighborhood.neighborhood;
+      const res = await apiRequest(
+        "GET",
+        `/api/maps/nearby?lat=${n.lat}&lng=${n.lng}&radius=5000&category=${activeCategory}&ai=true`
+      );
+      return res.json();
+    },
+    enabled: !!selectedNeighborhood,
+  });
+
+  const handleNeighborhoodClick = useCallback((d: DashboardData) => {
+    setSelectedNeighborhood(d);
+  }, []);
+
   if (isLoading || !data) {
     return (
       <div className="p-4 md:p-6 max-w-5xl space-y-6">
@@ -52,129 +88,214 @@ export default function GeoMap() {
     );
   }
 
-  // Nigeria lat/lng bounds
-  const minLat = 4.2, maxLat = 13.9;
-  const minLng = 2.6, maxLng = 14.7;
-
-  const project = (lat: number, lng: number) => {
-    const x = ((lng - minLng) / (maxLng - minLng)) * 100;
-    const y = ((maxLat - lat) / (maxLat - minLat)) * 100;
-    return { x, y };
-  };
-
-  const getStatusColor = (d: DashboardData) => {
-    const snap = d.snapshot;
-    if (!snap) return "#64748b";
-    if (snap.powerStatus === "off") return "#ef4444";
-    if (snap.powerStatus === "unstable") return "#f59e0b";
-    if (snap.trafficLevel === "gridlock") return "#ef4444";
-    if (snap.safetyIndex < 65) return "#ef4444";
-    if (snap.fuelStatus === "scarce") return "#f59e0b";
-    return "#22c55e";
-  };
+  const selected = selectedNeighborhood || data[0];
 
   return (
-    <div className="p-4 md:p-6 max-w-5xl space-y-6">
+    <div className="p-4 md:p-6 max-w-6xl space-y-6">
       <div>
-        <h1 className="text-xl font-display font-700">Geo Map</h1>
+        <h1 className="text-xl font-display font-700 flex items-center gap-2">
+          <MapPin className="h-5 w-5 text-primary" />
+          Geo Map
+        </h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Neighborhood locations across Nigeria with live status indicators
+          Interactive map with nearby businesses, services, and live conditions
         </p>
       </div>
 
+      {/* Neighborhood selector */}
+      <div className="flex flex-wrap gap-2">
+        {data.map((d) => (
+          <Button
+            key={d.neighborhood.id}
+            size="sm"
+            variant={selected?.neighborhood.id === d.neighborhood.id ? "default" : "outline"}
+            onClick={() => handleNeighborhoodClick(d)}
+            className="text-xs"
+            data-testid={`btn-neighborhood-${d.neighborhood.id}`}
+          >
+            <MapPin className="h-3 w-3 mr-1" />
+            {d.neighborhood.name}
+          </Button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Map */}
+        {/* Google Map */}
         <Card className="border-border lg:col-span-2">
           <CardContent className="p-4">
-            <div className="relative w-full" style={{ paddingBottom: "100%" }}>
-              <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full">
-                {/* Nigeria outline (simplified) */}
-                <path
-                  d="M 15 20 L 30 15 L 50 12 L 70 15 L 85 25 L 90 40 L 85 55 L 80 70 L 70 80 L 55 85 L 40 82 L 25 75 L 15 60 L 10 45 L 12 30 Z"
-                  fill="hsl(var(--muted))"
-                  stroke="hsl(var(--border))"
-                  strokeWidth="0.5"
-                  opacity="0.5"
+            {GOOGLE_MAPS_KEY ? (
+              <div className="relative w-full rounded-lg overflow-hidden" style={{ height: "450px" }}>
+                <iframe
+                  title="Google Map"
+                  width="100%"
+                  height="100%"
+                  loading="lazy"
+                  style={{ border: 0 }}
+                  src={`https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_KEY}&q=${selected?.neighborhood.lat},${selected?.neighborhood.lng}&zoom=14`}
+                  data-testid="google-map-iframe"
                 />
-                {/* Region labels */}
-                <text x="30" y="55" fontSize="3" fill="hsl(var(--muted-foreground))" opacity="0.4" textAnchor="middle">Lagos</text>
-                <text x="48" y="35" fontSize="3" fill="hsl(var(--muted-foreground))" opacity="0.4" textAnchor="middle">Abuja</text>
-                <text x="55" y="60" fontSize="3" fill="hsl(var(--muted-foreground))" opacity="0.4" textAnchor="middle">Enugu</text>
-                <text x="60" y="70" fontSize="3" fill="hsl(var(--muted-foreground))" opacity="0.4" textAnchor="middle">PH</text>
-                <text x="35" y="65" fontSize="3" fill="hsl(var(--muted-foreground))" opacity="0.4" textAnchor="middle">Ibadan</text>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-[450px] bg-muted/30 rounded-lg">
+                <MapPin className="h-10 w-10 text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground text-center px-4">
+                  Set <code className="text-xs bg-muted px-1 py-0.5 rounded">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> in your .env file to enable Google Maps
+                </p>
+              </div>
+            )}
 
-                {/* Neighborhood pins */}
-                {data.map((d) => {
-                  const pos = project(d.neighborhood.lat, d.neighborhood.lng);
-                  const color = getStatusColor(d);
-                  return (
-                    <g key={d.neighborhood.id}>
-                      <circle cx={pos.x} cy={pos.y} r="2.5" fill={color} opacity="0.3" className="animate-pulse-soft" />
-                      <circle cx={pos.x} cy={pos.y} r="1.5" fill={color} stroke="white" strokeWidth="0.3" />
-                      <text x={pos.x} y={pos.y - 3} fontSize="2" fill="hsl(var(--foreground))" textAnchor="middle" opacity="0.8">
-                        {d.neighborhood.name}
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
-            </div>
-            {/* Legend */}
-            <div className="flex items-center gap-4 mt-3 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <div className="h-2.5 w-2.5 rounded-full bg-green-500" />
-                <span className="text-[10px] text-muted-foreground">Stable</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-                <span className="text-[10px] text-muted-foreground">Warning</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="h-2.5 w-2.5 rounded-full bg-red-500" />
-                <span className="text-[10px] text-muted-foreground">Critical</span>
-              </div>
+            {/* Category filters */}
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              {CATEGORY_FILTERS.map((cat) => (
+                <Button
+                  key={cat.key}
+                  size="sm"
+                  variant={activeCategory === cat.key ? "default" : "outline"}
+                  onClick={() => setActiveCategory(cat.key)}
+                  className="h-7 text-[10px] gap-1 px-2"
+                  data-testid={`btn-category-${cat.key}`}
+                >
+                  <span>{cat.icon}</span>
+                  {cat.label}
+                </Button>
+              ))}
             </div>
           </CardContent>
         </Card>
 
-        {/* Neighborhood list */}
+        {/* Sidebar: neighborhood info */}
         <Card className="border-border">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-display flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-primary" />
-              Locations
+              <Navigation className="h-4 w-4 text-primary" />
+              {selected?.neighborhood.name}
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {data.map((d) => {
-                const color = getStatusColor(d);
-                const snap = d.snapshot;
-                return (
-                  <div key={d.neighborhood.id} className="flex items-center gap-2.5 rounded-md bg-muted/30 p-2.5 animate-fade-in">
-                    <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{d.neighborhood.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{d.neighborhood.region} · {d.recentTruths.length} truths</p>
-                    </div>
-                    {snap && (
-                      <div className="flex items-center gap-1 shrink-0">
-                        {(["power", "fuel", "traffic"] as const).map(cat => {
-                          const val = cat === "power" ? snap.powerStatus : cat === "fuel" ? snap.fuelStatus : snap.trafficLevel;
-                          const cfg = statusConfig[val] || { color: "text-muted-foreground", label: val };
-                          const Icon = categoryIcons[cat] || Zap;
-                          return <Icon key={cat} className={`h-3 w-3 ${cfg.color}`} />;
-                        })}
-                        <Shield className={`h-3 w-3 ${snap.safetyIndex < 65 ? "text-red-500" : snap.safetyIndex < 75 ? "text-amber-500" : "text-green-500"}`} />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+          <CardContent className="space-y-3">
+            {selected?.snapshot && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-md bg-muted/30 p-2">
+                  <p className="text-[10px] text-muted-foreground">Power</p>
+                  <p className="text-xs font-medium capitalize">{selected.snapshot.powerStatus}</p>
+                </div>
+                <div className="rounded-md bg-muted/30 p-2">
+                  <p className="text-[10px] text-muted-foreground">Fuel</p>
+                  <p className="text-xs font-medium capitalize">{selected.snapshot.fuelStatus}</p>
+                </div>
+                <div className="rounded-md bg-muted/30 p-2">
+                  <p className="text-[10px] text-muted-foreground">Traffic</p>
+                  <p className="text-xs font-medium capitalize">{selected.snapshot.trafficLevel}</p>
+                </div>
+                <div className="rounded-md bg-muted/30 p-2">
+                  <p className="text-[10px] text-muted-foreground">Safety</p>
+                  <p className="text-xs font-medium">{selected.snapshot.safetyIndex}%</p>
+                </div>
+              </div>
+            )}
+            <div className="text-xs text-muted-foreground">
+              <p>Region: {selected?.neighborhood.region}</p>
+              <p>Active Truths: {selected?.snapshot?.activeTruths ?? 0}</p>
+              <p>Recent Reports: {selected?.recentTruths.length ?? 0}</p>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* AI Analysis */}
+      {nearbyData?.aiAnalysis && (
+        <Card className="border-border border-purple-500/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-display flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-purple-500" />
+              AI Location Analysis
+              <Badge variant="outline" className="text-[8px] ml-1 border-purple-500/30 text-purple-500">
+                Kimi K3
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
+              {nearbyData.aiAnalysis}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Nearby places list */}
+      <Card className="border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-display flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-primary" />
+            Nearby Places
+            {nearbyData?.total != null && (
+              <Badge variant="outline" className="text-[9px] ml-1">
+                {nearbyData.total}
+              </Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {nearbyLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : nearbyData?.places?.length > 0 ? (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {nearbyData.places.map((place: NearbyPlace, idx: number) => (
+                <div
+                  key={`${place.id}-${idx}`}
+                  className="flex items-start gap-2.5 rounded-md bg-muted/30 p-2.5 hover:bg-muted/50 transition-colors"
+                  data-testid={`place-${place.id}`}
+                >
+                  <span className="text-lg shrink-0">{place.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-medium truncate">{place.name}</p>
+                      {place.openNow !== undefined && (
+                        <span className={`text-[8px] px-1 rounded ${place.openNow ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"}`}>
+                          {place.openNow ? "Open" : "Closed"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] text-muted-foreground">{place.category}</span>
+                      {place.distance != null && (
+                        <span className="text-[10px] text-muted-foreground">{(place.distance / 1000).toFixed(1)}km away</span>
+                      )}
+                    </div>
+                    {place.vicinity && (
+                      <p className="text-[10px] text-muted-foreground truncate mt-0.5">{place.vicinity}</p>
+                    )}
+                    {place.rating != null && (
+                      <div className="flex items-center gap-0.5 mt-0.5">
+                        <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+                        <span className="text-[10px] text-muted-foreground">{place.rating}</span>
+                        {place.userRatingsTotal != null && (
+                          <span className="text-[9px] text-muted-foreground">({place.userRatingsTotal})</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {place.priceLevel != null && (
+                    <span className="text-[10px] text-muted-foreground shrink-0">
+                      {"₦".repeat(place.priceLevel)}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-8 text-center">
+              <MapPin className="h-6 w-6 text-muted-foreground mx-auto mb-1 opacity-50" />
+              <p className="text-xs text-muted-foreground">
+                {nearbyData?.configured === false
+                  ? "Google Maps API key not configured"
+                  : "No nearby places found. Select a neighborhood."}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

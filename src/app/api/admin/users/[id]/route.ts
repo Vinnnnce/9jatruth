@@ -1,3 +1,4 @@
+import { csrfCheck } from "@/lib/security";
 import { ensureDbInitialized } from "@/lib/db";
 import { updatePlatformUser } from "@/lib/neon-storage";
 import { isSuperAdmin } from "@/lib/admin-auth";
@@ -18,6 +19,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
+
   await ensureDbInitialized();
 
   const isAdmin = await isSuperAdmin();

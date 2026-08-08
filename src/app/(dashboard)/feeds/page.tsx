@@ -741,7 +741,7 @@ function AIVerificationSection({ truthId }: { truthId: number }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/truths/${truthId}/verify-ai`, { method: "POST" });
+      const res = await apiRequest("POST", `/api/truths/${truthId}/verify-ai`);
       if (!res.ok) throw new Error("Verification failed");
       const data = await res.json();
       setResult(data);

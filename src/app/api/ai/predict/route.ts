@@ -1,3 +1,4 @@
+import { csrfCheck } from "@/lib/security";
 import { ensureDbInitialized, getDb } from "@/lib/db";
 import { generatePrediction, type TruthForAnalysis } from "@/lib/ai-verification";
 import { z } from "zod";
@@ -13,6 +14,8 @@ const predictSchema = z.object({
  */
 export async function POST(request: Request) {
   await ensureDbInitialized();
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
 
   let body: any;
   try {

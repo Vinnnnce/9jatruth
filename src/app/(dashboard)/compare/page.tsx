@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Zap, Fuel, Car, Tag, Shield, GitCompare, ArrowRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Zap, Fuel, Car, Tag, Shield, GitCompare, ArrowRight, TrendingUp, TrendingDown, Minus, Sparkles, Loader2 } from "lucide-react";
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
 
 type DashboardData = {
@@ -238,6 +239,9 @@ export default function Compare() {
               </div>
             </CardContent>
           </Card>
+
+          {/* AI Side-by-Side Comparison */}
+          <AICompareSection neighborhoodA={parseInt(idA)} neighborhoodB={parseInt(idB)} nameA={a.neighborhood.name} nameB={b.neighborhood.name} />
         </>
       ) : (
         <Card className="border-border">
@@ -248,5 +252,92 @@ export default function Compare() {
         </Card>
       )}
     </div>
+  );
+}
+
+// ─── AI Compare Section ───
+
+function AICompareSection({ neighborhoodA, neighborhoodB, nameA, nameB }: {
+  neighborhoodA: number; neighborhoodB: number; nameA: string; nameB: string;
+}) {
+  const [analysis, setAnalysis] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<any[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleAnalyze = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiRequest("POST", "/api/compare/ai", {
+        neighborhoodA,
+        neighborhoodB,
+      });
+      if (!res.ok) throw new Error("Analysis failed");
+      const data = await res.json();
+      setAnalysis(data.aiAnalysis);
+      setMetrics(data.metrics);
+    } catch {
+      setError("Could not run AI comparison.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card className="border-border border-purple-500/20">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-display flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-purple-500" />
+          AI Side-by-Side Comparison
+          <Badge variant="outline" className="text-[8px] ml-1 border-purple-500/30 text-purple-500">
+            Kimi K3
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!analysis && !loading && !error && (
+          <div className="text-center py-4">
+            <p className="text-xs text-muted-foreground mb-3">
+              Run AI analysis to compare {nameA} vs {nameB} with live conditions, risk assessment, and recommendations.
+            </p>
+            <Button size="sm" onClick={handleAnalyze} className="gap-1" data-testid="btn-ai-compare">
+              <Sparkles className="h-3.5 w-3.5" />
+              Analyze with AI
+            </Button>
+          </div>
+        )}
+
+        {loading && (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="h-5 w-5 animate-spin text-purple-500" />
+            <span className="text-xs text-muted-foreground ml-2">Analyzing live conditions...</span>
+          </div>
+        )}
+
+        {error && (
+          <p className="text-xs text-red-500 text-center py-4">{error}</p>
+        )}
+
+        {metrics && (
+          <div className="grid grid-cols-5 gap-1.5">
+            {metrics.map((m, i) => (
+              <div key={i} className="rounded-md bg-muted/30 p-2 text-center">
+                <p className="text-[9px] text-muted-foreground uppercase">{m.metric}</p>
+                <p className={`text-[10px] font-medium mt-0.5 ${m.winner === "a" ? "text-green-500" : ""}`}>{String(m.a)}</p>
+                <ArrowRight className="h-2 w-2 text-muted-foreground mx-auto my-0.5" />
+                <p className={`text-[10px] font-medium ${m.winner === "b" ? "text-green-500" : ""}`}>{String(m.b)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {analysis && (
+          <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
+            {analysis}
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -271,10 +271,69 @@ export async function verifyTruth(truth: TruthForAnalysis): Promise<Verification
     explanationParts.push(`Detected potential red flags: ${contentAnalysis.redFlags.join(", ")}`);
   }
 
+  let explanation = explanationParts.join(". ") + ".";
+  let aiPowered = false;
+  let confidence = Math.min(100, Math.max(0, finalScore));
+
+  // ─── Kimi K3 AI Enhancement ───
+  // If Kimi K3 is configured, use it to enhance the verification
+  try {
+    const { isKimiConfigured, generateKimiText } = await import("@/lib/kimi");
+    if (isKimiConfigured()) {
+      const systemPrompt = `You are an AI truth verification analyst for Soke, a community truth-reporting platform. Analyze the following truth report for authenticity. Consider content specificity, source credibility, community signals, and temporal patterns. Provide a concise verdict (authentic/suspicious/unverified), a confidence score (0-100), and a brief explanation.`;
+
+      const userPrompt = `Analyze this truth report for authenticity:
+
+Content: "${truth.content}"
+Category: ${truth.category}
+Trust Score: ${truth.trustScore}
+Author Total Reports: ${truth.authorTotalReports ?? 0}
+Author Trust Score: ${truth.authorTrustScore ?? 50}
+Corroborations: ${truth.corroborationCount ?? 0}
+Disputes: ${truth.disputeCount ?? 0}
+Likes: ${truth.likeCount ?? 0}
+Comments: ${truth.commentCount ?? 0}
+Created: ${truth.createdAt}
+
+Respond in this format:
+Verdict: [authentic/suspicious/unverified]
+Confidence: [0-100]
+Explanation: [1-2 sentences]`;
+
+      const aiText = await generateKimiText(systemPrompt, userPrompt, {
+        temperature: 0.3,
+        maxOutputTokens: 256,
+      });
+
+      if (aiText) {
+        // Parse AI response
+        const verdictMatch = aiText.match(/verdict:\s*(authentic|suspicious|unverified)/i);
+        const confidenceMatch = aiText.match(/confidence:\s*(\d+)/i);
+        const explanationMatch = aiText.match(/explanation:\s*(.+)/i);
+
+        if (verdictMatch) {
+          verdict = verdictMatch[1].toLowerCase() as "authentic" | "suspicious" | "unverified";
+        }
+        if (confidenceMatch) {
+          // Blend AI confidence with heuristic (weighted average)
+          const aiConf = parseInt(confidenceMatch[1], 10);
+          confidence = Math.round(finalScore * 0.4 + aiConf * 0.6);
+        }
+        if (explanationMatch) {
+          explanation = explanationMatch[1].trim();
+        }
+        aiPowered = true;
+      }
+    }
+  } catch (err) {
+    console.error("[AI Verification] Kimi enhancement failed:", err);
+    // Fall back to heuristic results
+  }
+
   return {
     truthId: truth.id,
     verdict,
-    confidence: Math.min(100, Math.max(0, finalScore)),
+    confidence,
     score: finalScore,
     signals: {
       contentAnalysis,
@@ -282,8 +341,8 @@ export async function verifyTruth(truth: TruthForAnalysis): Promise<Verification
       communitySignals,
       temporalPattern,
     },
-    explanation: explanationParts.join(". ") + ".",
-    aiPowered: false,
+    explanation,
+    aiPowered,
     verifiedAt: new Date().toISOString(),
   };
 }

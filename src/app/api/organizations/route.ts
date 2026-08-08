@@ -1,3 +1,4 @@
+import { csrfCheck } from "@/lib/security";
 import { ensureDbInitialized } from "@/lib/db";
 import { getOrganizations, createOrganization } from "@/lib/neon-storage";
 import { validate, validationErrorResponse, getUserId, getClerkUserId } from "@/lib/api-helpers";
@@ -15,6 +16,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   await ensureDbInitialized();
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
   try {
     const body = await request.json();
     const parsed = validate(insertOrganizationSchema, body);

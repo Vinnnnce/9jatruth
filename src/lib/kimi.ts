@@ -29,7 +29,7 @@ export function getKimiModel(): string {
 export async function generateKimiText(
   systemPrompt: string,
   userPrompt: string,
-  options?: { temperature?: number; maxOutputTokens?: number; jsonMode?: boolean }
+  options?: { temperature?: number; maxOutputTokens?: number }
 ): Promise<string | null> {
   if (!isKimiConfigured()) return null;
 
@@ -50,7 +50,6 @@ export async function generateKimiText(
         ],
         temperature: options?.temperature ?? 0.7,
         max_tokens: options?.maxOutputTokens ?? 1024,
-        ...(options?.jsonMode ? { response_format: { type: "json_object" } } : {}),
       }),
     });
 
@@ -81,7 +80,6 @@ export async function generateKimiJson<T>(
 ): Promise<{ data: T; source: "kimi" | "fallback" }> {
   const raw = await generateKimiText(systemPrompt, userPrompt, {
     ...options,
-    jsonMode: true,
   });
 
   if (!raw) {

@@ -100,7 +100,7 @@ function useNavSections() {
       label: "Account",
       items: [
         { path: "/profile", label: "Profile", icon: User },
-        { path: "/organizations", label: "Organizations", icon: Building2 },
+        { path: "/organizations", label: "Business", icon: Building2 },
         { path: "/agency-auth", label: "Agency Login", icon: Shield },
         { path: "/account", label: "Account Settings", icon: Settings },
       ],
@@ -116,7 +116,7 @@ function useNavSections() {
         { path: "/user", label: "Portfolio", icon: User },
         // Show org dashboard only for org admins
         ...(dashboardType === "org"
-          ? [{ path: "/org", label: "Org Dashboard", icon: Building2 }]
+          ? [{ path: "/org", label: "Business Dashboard", icon: Building2 }]
           : []),
       ],
     },

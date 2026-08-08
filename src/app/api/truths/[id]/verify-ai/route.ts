@@ -1,6 +1,6 @@
 import { ensureDbInitialized, getDb } from "@/lib/db";
-import { getUserId } from "@/lib/api-helpers";
 import { verifyTruth, type TruthForAnalysis } from "@/lib/ai-verification";
+import { csrfCheck } from "@/lib/security";
 
 /**
  * POST /api/truths/[id]/verify-ai
@@ -10,6 +10,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
+
   await ensureDbInitialized();
   const { id } = await params;
   const truthId = parseInt(id, 10);
@@ -33,11 +36,11 @@ export async function POST(
       COALESCE(author_stats.trust_score, 50) as author_trust_score
     FROM micro_truths t
     LEFT JOIN organizations o ON t.organization_id = o.id
-    LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM truth_likes GROUP BY truth_id) like_counts ON like_counts.truth_id = t.id
-    LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM truth_shares GROUP BY truth_id) share_counts ON share_counts.truth_id = t.id
-    LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM truth_comments GROUP BY truth_id) comment_counts ON comment_counts.truth_id = t.id
-    LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM truth_verifications WHERE action = 'corroborate' GROUP BY truth_id) corr_counts ON corr_counts.truth_id = t.id
-    LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM truth_verifications WHERE action = 'dispute' GROUP BY truth_id) disp_counts ON disp_counts.truth_id = t.id
+    LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM feed_likes GROUP BY truth_id) like_counts ON like_counts.truth_id = t.id
+    LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM feed_shares GROUP BY truth_id) share_counts ON share_counts.truth_id = t.id
+    LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM feed_comments GROUP BY truth_id) comment_counts ON comment_counts.truth_id = t.id
+    LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM verifications WHERE action = 'corroborate' GROUP BY truth_id) corr_counts ON corr_counts.truth_id = t.id
+    LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM verifications WHERE action = 'dispute' GROUP BY truth_id) disp_counts ON disp_counts.truth_id = t.id
     LEFT JOIN (
       SELECT device_hash,
         COUNT(*) as total_reports,

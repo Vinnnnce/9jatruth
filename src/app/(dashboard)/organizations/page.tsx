@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * Partner Organizations page
+ * Partner Businesses page
  * 
- * Lists all partner agencies/organizations and provides
- * a form to register a new organization.
+ * Lists all partner agencies/businesses and provides
+ * a form to register a new business.
  */
 
 import { useState } from "react";
@@ -71,7 +71,7 @@ export default function Organizations() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations"] });
-      toast({ title: "Organization Registered", description: "Your organization is pending verification." });
+      toast({ title: "Business Registered", description: "Your business is pending verification." });
       setDialogOpen(false);
       setForm({ name: "", type: "", description: "", contactEmail: "", contactPhone: "", website: "", region: "", city: "" });
     },
@@ -89,30 +89,30 @@ export default function Organizations() {
     <div className="p-4 md:p-6 max-w-4xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-display font-700">Partner Organizations</h1>
+          <h1 className="text-xl font-display font-700">Partner Businesses</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Verified agencies and organizations contributing to community truth
+            Verified agencies and businesses contributing to community truth
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1">
-              <Plus className="h-4 w-4" /> Register Organization
+              <Plus className="h-4 w-4" /> Register Business
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Building2 className="h-5 w-5" /> Register Your Organization
+                <Building2 className="h-5 w-5" /> Register Your Business
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label htmlFor="name">Organization Name</Label>
+                <Label htmlFor="name">Business Name</Label>
                 <Input id="name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Eko Electricity Distribution" />
               </div>
               <div>
-                <Label htmlFor="type">Organization Type</Label>
+                <Label htmlFor="type">Business Type</Label>
                 <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
                   <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                   <SelectContent>
@@ -124,7 +124,7 @@ export default function Organizations() {
               </div>
               <div>
                 <Label htmlFor="description">Description</Label>
-                <Textarea id="description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Brief description of your organization..." rows={3} />
+                <Textarea id="description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Brief description of your business..." rows={3} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -151,7 +151,7 @@ export default function Organizations() {
                 <Input id="website" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://..." />
               </div>
               <Button type="submit" className="w-full" disabled={createMutation.isPending}>
-                {createMutation.isPending ? "Registering..." : "Register Organization"}
+                {createMutation.isPending ? "Registering..." : "Register Business"}
               </Button>
             </form>
           </DialogContent>
@@ -210,8 +210,8 @@ export default function Organizations() {
         <Card>
           <CardContent className="p-8 text-center text-muted-foreground">
             <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No partner organizations registered yet.</p>
-            <p className="text-xs mt-1">Be the first to register your organization.</p>
+            <p className="text-sm">No partner businesses registered yet.</p>
+            <p className="text-xs mt-1">Be the first to register your business.</p>
           </CardContent>
         </Card>
       )}
