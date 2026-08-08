@@ -33,6 +33,26 @@ import bcrypt from "bcryptjs";
 
 type SqlRow = Record<string, any>;
 
+// ─── Helpers ───
+
+/**
+ * Parse the badges column safely into an array.
+ * Handles: null, undefined, string (JSON), array, object.
+ */
+function parseBadges(raw: any): any[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 // ─── Haversine Distance Helpers ───
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -1158,7 +1178,7 @@ async function getOrCreateUserStats(deviceHash: string) {
       lastReportDate: r.last_report_date,
       totalReports: r.total_reports,
       totalVerifications: r.total_verifications,
-      badges: r.badges,
+      badges: parseBadges(r.badges),
       updatedAt: r.updated_at,
     };
   }

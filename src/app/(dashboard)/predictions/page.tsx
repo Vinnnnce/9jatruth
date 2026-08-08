@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,15 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
-  Zap, Fuel, Car, Tag, TrendingUp, TrendingDown, Minus, Brain, Clock, Cpu
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/components/hooks/use-toast";
+import {
+  Zap, Fuel, Car, Tag, TrendingUp, TrendingDown, Minus, Brain, Clock, Cpu, Sparkles, Loader2
 } from "lucide-react";
 
 type Prediction = {
@@ -171,6 +179,9 @@ export default function Predictions() {
         )}
       </div>
 
+      {/* AI Prediction Generator */}
+      <AIPredictionGenerator />
+
       <Card className="border-border bg-muted/30">
         <CardHeader>
           <CardTitle className="text-sm font-display">AI/ML Pipeline</CardTitle>
@@ -196,5 +207,121 @@ export default function Predictions() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+
+// ─── AI Prediction Generator ───
+
+function AIPredictionGenerator() {
+  const [category, setCategory] = useState<string>("");
+  const [result, setResult] = useState<any>(null);
+  const { toast } = useToast();
+
+  const predictMutation = useMutation({
+    mutationFn: async (cat: string) => {
+      const res = await apiRequest("POST", "/api/ai/predict", { category: cat });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setResult(data);
+      toast({ title: "AI prediction generated" });
+    },
+    onError: () => {
+      toast({ title: "Prediction failed", description: "Could not generate prediction.", variant: "destructive" });
+    },
+  });
+
+  const handleGenerate = () => {
+    if (!category) {
+      toast({ title: "Select a category first" });
+      return;
+    }
+    predictMutation.mutate(category);
+  };
+
+  const trendIcon = (trend: string) => {
+    if (trend === "up") return <TrendingUp className="h-4 w-4 text-green-500" />;
+    if (trend === "down") return <TrendingDown className="h-4 w-4 text-red-500" />;
+    return <Minus className="h-4 w-4 text-muted-foreground" />;
+  };
+
+  return (
+    <Card className="border-primary/20">
+      <CardHeader>
+        <CardTitle className="text-sm font-display flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          AI Prediction Generator
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-xs text-muted-foreground">
+          Generate AI-powered predictions based on recent community truth reports. The AI analyzes patterns in corroboration, trust scores, and report frequency to forecast conditions.
+        </p>
+
+        <div className="flex items-center gap-2">
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger className="h-9 text-sm flex-1">
+              <SelectValue placeholder="Select category to predict" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="power">Power</SelectItem>
+              <SelectItem value="fuel">Fuel</SelectItem>
+              <SelectItem value="traffic">Traffic</SelectItem>
+              <SelectItem value="prices">Prices</SelectItem>
+              <SelectItem value="safety">Safety</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            onClick={handleGenerate}
+            disabled={predictMutation.isPending || !category}
+            className="gap-2"
+          >
+            {predictMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
+            Generate
+          </Button>
+        </div>
+
+        {result && !predictMutation.isPending && (
+          <div className="rounded-md border bg-muted/30 p-4 space-y-3 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {trendIcon(result.trend)}
+                <Badge variant="secondary" className="text-xs capitalize">{result.category}</Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Confidence:</span>
+                <span className="text-sm font-mono font-bold">{result.confidence}%</span>
+              </div>
+            </div>
+
+            <Progress value={result.confidence} className="h-2" />
+
+            <p className="text-sm">{result.prediction}</p>
+
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <Clock className="h-2.5 w-2.5" />
+              Timeframe: {result.timeframe}
+            </div>
+
+            {result.signals && result.signals.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-[10px] font-medium uppercase text-muted-foreground">Signals</p>
+                {result.signals.map((sig: string, i: number) => (
+                  <div key={i} className="flex items-center gap-1.5 text-[10px]">
+                    <Brain className="h-2.5 w-2.5 text-primary" />
+                    <span>{sig}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

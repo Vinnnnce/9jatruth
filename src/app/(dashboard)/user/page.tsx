@@ -383,7 +383,7 @@ export default function PortfolioPage() {
 
                   <div>
                     <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">Achievements</p>
-                    {gamification.achievements && gamification.achievements.length > 0 ? (
+                    {Array.isArray(gamification.achievements) && gamification.achievements.length > 0 ? (
                       <div className="space-y-2" data-testid="list-achievements">
                         {gamification.achievements.map((ach) => (
                           <div key={ach.id} className="flex items-center gap-3 rounded-md bg-muted/30 p-2.5">

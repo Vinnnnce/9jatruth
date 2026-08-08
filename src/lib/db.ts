@@ -517,5 +517,18 @@ export async function ensureDbInitialized() {
   await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS skills TEXT[]`;
   await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS profile_completed BOOLEAN DEFAULT FALSE`;
 
+  // ─── AI Verifications Table ───
+  await sql`CREATE TABLE IF NOT EXISTS ai_verifications (
+    id SERIAL PRIMARY KEY,
+    truth_id INTEGER NOT NULL UNIQUE,
+    verdict TEXT NOT NULL DEFAULT 'unverified',
+    confidence INTEGER DEFAULT 0,
+    score INTEGER DEFAULT 0,
+    explanation TEXT,
+    signals JSONB DEFAULT '{}'::jsonb,
+    verified_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_ai_verifications_truth_id ON ai_verifications(truth_id)`;
+
   initialized = true;
 }

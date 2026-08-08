@@ -2,8 +2,10 @@
   "name": "Soke — Community Truth Network",
   "short_name": "Soke",
   "description": "Neighborhood truth reporting and predictive intelligence for Nigeria",
-  "start_url": "/",
+  "start_url": "/feeds",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#0a0a0a",
   "theme_color": "#0a0a0a",
   "orientation": "portrait-primary",
@@ -24,18 +26,23 @@
   "categories": ["news", "utilities", "social"],
   "shortcuts": [
     {
+      "name": "Feeds",
+      "url": "/feeds",
+      "description": "View community truth feeds"
+    },
+    {
       "name": "Submit Truth",
-      "url": "/#/submit",
+      "url": "/submit",
       "description": "Report a neighborhood truth"
     },
     {
-      "name": "Dashboard",
-      "url": "/#/dashboard",
-      "description": "View dashboard"
+      "name": "Portfolio",
+      "url": "/user",
+      "description": "View your portfolio"
     },
     {
       "name": "Alerts",
-      "url": "/#/alerts",
+      "url": "/alerts",
       "description": "View active alerts"
     }
   ]

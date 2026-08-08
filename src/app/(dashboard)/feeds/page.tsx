@@ -25,6 +25,7 @@ import {
 import {
   Info, Clock, ShieldCheck, CheckCircle2,
   ThumbsUp, ThumbsDown, MapPin, Newspaper,
+  Brain, Loader2, Sparkles,
 } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
 import { FeedFilterBar, DEFAULT_FILTERS, type FeedFilters } from "@/components/feed-filter-bar";
@@ -339,6 +340,9 @@ export default function FeedsPage() {
                                   })()}
                                 </div>
                               </div>
+
+                              {/* AI Verification Section */}
+                              <AIVerificationSection truthId={truth.id} />
                             </div>
                           </DialogContent>
                         </Dialog>
@@ -349,6 +353,125 @@ export default function FeedsPage() {
               </Card>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ─── AI Verification Section ───
+
+function AIVerificationSection({ truthId }: { truthId: number }) {
+  const [result, setResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleVerify = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/truths/${truthId}/verify-ai`, { method: "POST" });
+      if (!res.ok) throw new Error("Verification failed");
+      const data = await res.json();
+      setResult(data);
+    } catch (e) {
+      setError("Could not run AI verification. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verdictColor = (v: string) => {
+    if (v === "authentic") return "text-green-500";
+    if (v === "suspicious") return "text-red-500";
+    return "text-amber-500";
+  };
+
+  const verdictBg = (v: string) => {
+    if (v === "authentic") return "bg-green-500/10 border-green-500/20";
+    if (v === "suspicious") return "bg-red-500/10 border-red-500/20";
+    return "bg-amber-500/10 border-amber-500/20";
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium flex items-center gap-1">
+          <Brain className="h-3.5 w-3.5 text-primary" />
+          AI Authenticity Verification
+        </p>
+        {!result && !loading && (
+          <Button size="sm" variant="outline" onClick={handleVerify} className="h-7 text-xs gap-1">
+            <Sparkles className="h-3 w-3" />
+            Verify with AI
+          </Button>
+        )}
+      </div>
+
+      {loading && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Analyzing truth report...
+        </div>
+      )}
+
+      {error && (
+        <p className="text-xs text-red-500">{error}</p>
+      )}
+
+      {result && !loading && (
+        <div className={`rounded-md border p-3 space-y-2 ${verdictBg(result.verdict)}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              {result.verdict === "authentic" ? (
+                <ShieldCheck className="h-4 w-4 text-green-500" />
+              ) : result.verdict === "suspicious" ? (
+                <Brain className="h-4 w-4 text-red-500" />
+              ) : (
+                <Brain className="h-4 w-4 text-amber-500" />
+              )}
+              <span className={`text-sm font-medium capitalize ${verdictColor(result.verdict)}`}>
+                {result.verdict}
+              </span>
+            </div>
+            <span className={`text-xs font-mono font-bold ${verdictColor(result.verdict)}`}>
+              {result.confidence}% confidence
+            </span>
+          </div>
+
+          <p className="text-xs text-muted-foreground">{result.explanation}</p>
+
+          {/* Signal breakdown */}
+          <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+            <div className="flex items-center justify-between rounded bg-background/50 px-2 py-1">
+              <span className="text-muted-foreground">Content</span>
+              <span className="font-mono font-medium">{Math.round(result.signals.contentAnalysis.score)}%</span>
+            </div>
+            <div className="flex items-center justify-between rounded bg-background/50 px-2 py-1">
+              <span className="text-muted-foreground">Source</span>
+              <span className="font-mono font-medium">{Math.round(result.signals.sourceCredibility.score)}%</span>
+            </div>
+            <div className="flex items-center justify-between rounded bg-background/50 px-2 py-1">
+              <span className="text-muted-foreground">Community</span>
+              <span className="font-mono font-medium">{Math.round(result.signals.communitySignals.score)}%</span>
+            </div>
+            <div className="flex items-center justify-between rounded bg-background/50 px-2 py-1">
+              <span className="text-muted-foreground">Temporal</span>
+              <span className="font-mono font-medium">{Math.round(result.signals.temporalPattern.score)}%</span>
+            </div>
+          </div>
+
+          {result.signals.contentAnalysis.redFlags.length > 0 && (
+            <p className="text-[10px] text-red-500">
+              Red flags: {result.signals.contentAnalysis.redFlags.join(", ")}
+            </p>
+          )}
+
+          <Button size="sm" variant="ghost" onClick={handleVerify} className="h-6 text-[10px] gap-1">
+            <Sparkles className="h-2.5 w-2.5" />
+            Re-analyze
+          </Button>
         </div>
       )}
     </div>

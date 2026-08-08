@@ -54,6 +54,7 @@ import {
   Users,
   Briefcase,
   ShieldCheck,
+  Download,
 } from "lucide-react";
 
 type UserProfile = {
@@ -78,10 +79,10 @@ function useNavSections() {
     {
       label: "Main",
       items: [
+        { path: "/feeds", label: "Feeds", icon: Newspaper },
         { path: "/", label: "Portfolio", icon: LayoutDashboard },
         { path: "/search", label: "Search", icon: Search },
         { path: "/submit", label: "Submit Truth", icon: Send },
-        { path: "/feeds", label: "Feeds", icon: Newspaper },
         { path: "/activity", label: "Activity", icon: ActivityIcon },
       ],
     },
@@ -205,6 +206,21 @@ function AppSidebar() {
           <span>·</span>
           <Link href="/cookies" className="hover:underline">Cookies</Link>
         </div>
+        <a
+          href="/manifest.webmanifest"
+          download
+          className="mt-2 flex items-center gap-1.5 text-[10px] text-primary hover:underline group-data-[collapsible=icon]:hidden"
+          onClick={(e) => {
+            e.preventDefault();
+            if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+              const event = new Event("beforeinstallprompt");
+              window.dispatchEvent(event);
+            }
+          }}
+        >
+          <Download className="h-3 w-3" />
+          Download App
+        </a>
       </SidebarFooter>
     </Sidebar>
   );
