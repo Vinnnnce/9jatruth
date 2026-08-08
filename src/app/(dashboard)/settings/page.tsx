@@ -29,6 +29,8 @@ import {
   Smartphone,
 } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
+import { useUser } from "@/lib/use-user-safe";
+import { LogIn } from "lucide-react";
 
 type UserSettings = {
   notificationPreferences: { push: boolean; email: boolean; sms: boolean };
@@ -48,9 +50,12 @@ type UserSettings = {
 export default function AdvancedSettingsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isLoaded, isSignedIn } = useUser();
 
-  const { data: settings, isLoading } = useQuery<UserSettings>({
+  const { data: settings, isLoading, isError } = useQuery<UserSettings>({
     queryKey: ["/api/user/settings"],
+    enabled: isLoaded && !!isSignedIn,
+    retry: false,
   });
 
   const [saving, setSaving] = useState(false);
@@ -107,6 +112,47 @@ export default function AdvancedSettingsPage() {
       }
     );
   };
+
+  if (isLoaded && !isSignedIn) {
+    return (
+      <div className="p-6 max-w-3xl">
+        <Card>
+          <CardContent className="p-8 text-center space-y-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted mx-auto">
+              <LogIn className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold">Sign in to manage your settings</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                You need to be logged in to view and update your advanced settings.
+              </p>
+            </div>
+            <Button asChild>
+              <a href="/sign-in">Log In</a>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isError || (isLoaded && isSignedIn && !settings && !isLoading)) {
+    return (
+      <div className="p-6 max-w-3xl">
+        <Card>
+          <CardContent className="p-8 text-center space-y-3">
+            <p className="text-sm font-medium">Could not load settings</p>
+            <p className="text-xs text-muted-foreground">
+              There was an error fetching your settings. Please try again later.
+            </p>
+            <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/user/settings"] })}>
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (isLoading || !current) {
     return (
