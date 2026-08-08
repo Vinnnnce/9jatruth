@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
 import { useUser } from "@/lib/use-user-safe";
+import { FeedFilterBar, DEFAULT_FILTERS, type FeedFilters } from "@/components/feed-filter-bar";
+import { useLiveLocation } from "@/hooks/use-live-location";
 
 // ─── Types ───
 
@@ -81,18 +83,19 @@ type Suggestion = {
 
 // ─── Design tokens matching uploaded image ───
 
+// Theme-aware: background/card/text use CSS variables so they adapt to light/dark mode
 const COLORS = {
-  bg: "#0A0C0B",
-  card: "#121413",
-  tile: "#1A1D1B",
-  textPrimary: "#FFFFFF",
-  textSecondary: "#8E928F",
+  bg: "hsl(var(--background))",
+  card: "hsl(var(--card))",
+  tile: "hsl(var(--muted))",
+  textPrimary: "hsl(var(--foreground))",
+  textSecondary: "hsl(var(--muted-foreground))",
   green: "#22C55E",
   orange: "#F97316",
   red: "#EF4444",
   blue: "#3B82F6",
   purple: "#A855F7",
-  accent: "#6366F1",
+  accent: "hsl(var(--primary))",
 };
 
 const CATEGORY_META: Record<string, { icon: typeof Zap; color: string; dot: string; label: string }> = {
@@ -120,6 +123,12 @@ function statusColor(status: string): string {
   if (/off|outage|unavailable|down|gridlock|heavy|scarce/.test(s)) return COLORS.red;
   if (/unstable|moderate|scarce/.test(s)) return COLORS.orange;
   return COLORS.textSecondary;
+}
+
+function trustStatus(score: number): string {
+  if (score >= 70) return "verified";
+  if (score < 40) return "rejected";
+  return "pending";
 }
 
 function trendIcon(trend: string) {
@@ -150,6 +159,9 @@ export default function Feeds() {
   const { toast } = useToast();
   const { recordEvent } = useBrowsingTracker();
   const trackedRef = useRef<Set<number>>(new Set());
+  const { lat, lng, requestLocation } = useLiveLocation();
+  const [filters, setFilters] = useState<FeedFilters>(DEFAULT_FILTERS);
+  const [showNearby, setShowNearby] = useState(false);
 
   // Fetch feed snapshots (the new view-model API)
   const { data: feedData, isLoading } = useQuery<FeedSnapshot>({
@@ -171,6 +183,26 @@ export default function Feeds() {
     enabled: isLoaded && isSignedIn,
   });
 
+  // Fetch nearby truths when location is available
+  const { data: nearbyTruths, isLoading: nearbyLoading } = useQuery({
+    queryKey: ["/api/truths/nearby", filters, lat, lng],
+    queryFn: async () => {
+      if (!lat || !lng) return [];
+      const params = new URLSearchParams({
+        lat: String(lat),
+        lng: String(lng),
+        radiusKm: String(filters.radiusKm),
+        hoursBack: String(filters.hoursBack),
+      });
+      if (filters.category) params.set("category", filters.category);
+      if (filters.status) params.set("status", filters.status);
+      if (filters.minTrust > 0) params.set("minTrust", String(filters.minTrust));
+      const res = await apiRequest("GET", `/api/truths/nearby?${params.toString()}`);
+      return res.json();
+    },
+    enabled: isLoaded && !!lat && !!lng && showNearby,
+  });
+
   // Track feed view on mount
   useEffect(() => {
     if (isLoaded) {
@@ -180,7 +212,7 @@ export default function Feeds() {
 
   const verifyMutation = useMutation({
     mutationFn: (data: { truthId: number; action: string }) =>
-      apiRequest("POST", "/api/truths/verify", data),
+      apiRequest("POST", `/api/truths/${data.truthId}/verify`, { action: data.action }),
     onSuccess: () => {
       toast({ title: "Verification submitted" });
       queryClient.invalidateQueries({ queryKey: ["/api/truths"] });
@@ -238,6 +270,79 @@ export default function Feeds() {
             color={COLORS.purple}
           />
         </div>
+
+        {/* ─── Filter Bar ─── */}
+        <FeedFilterBar
+          filters={filters}
+          onFiltersChange={setFilters}
+          resultCount={showNearby && nearbyTruths ? (nearbyTruths as any[]).length : neighborhoods.length}
+        />
+
+        {/* ─── Nearby Toggle ─── */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowNearby(!showNearby)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              showNearby ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+            }`}
+          >
+            <MapPin className="h-3.5 w-3.5" />
+            {showNearby ? "Showing Nearby" : "Show Nearby Posts"}
+          </button>
+        </div>
+
+        {/* ─── Nearby Posts ─── */}
+        {showNearby && (
+          <div className="space-y-3">
+            {nearbyLoading ? (
+              <div className="rounded-2xl p-4 animate-pulse" style={{ background: COLORS.card }}>
+                <div className="h-4 w-3/4 bg-muted rounded mb-2" />
+                <div className="h-3 w-full bg-muted rounded" />
+              </div>
+            ) : nearbyTruths && (nearbyTruths as any[]).length > 0 ? (
+              (nearbyTruths as any[]).map((truth) => {
+                const catMeta = CATEGORY_META[truth.category] || CATEGORY_META.power;
+                const CatIcon = catMeta.icon;
+                return (
+                  <div
+                    key={truth.id}
+                    className="rounded-2xl p-4 space-y-2"
+                    style={{ background: COLORS.card, border: `1px solid ${COLORS.tile}` }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className={`h-6 w-6 rounded-md flex items-center justify-center ${catMeta.dot}`}>
+                        <CatIcon className="h-3 w-3 text-white" />
+                      </div>
+                      <span className="text-[10px] font-medium" style={{ color: COLORS.textSecondary }}>
+                        {catMeta.label}
+                      </span>
+                      <Badge className="text-[8px] px-1.5 py-0 ml-auto" style={{ background: `${statusColor(trustStatus(truth.trustScore))}20`, color: statusColor(trustStatus(truth.trustScore)) }}>
+                        {trustStatus(truth.trustScore)}
+                      </Badge>
+                    </div>
+                    <p className="text-xs leading-relaxed" style={{ color: COLORS.textPrimary }}>
+                      {truth.content}
+                    </p>
+                    <div className="flex items-center gap-2 text-[9px]" style={{ color: COLORS.textSecondary }}>
+                      <MapPin className="h-2.5 w-2.5" />
+                      <span>{truth.neighborhoodName || truth.stateName || "Nearby"}</span>
+                      <span>·</span>
+                      <Clock className="h-2.5 w-2.5" />
+                      <span>{timeAgo(truth.createdAt)}</span>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="rounded-2xl p-6 text-center" style={{ background: COLORS.card }}>
+                <MapPin className="h-8 w-8 mx-auto mb-2 opacity-30" style={{ color: COLORS.textSecondary }} />
+                <p className="text-xs" style={{ color: COLORS.textSecondary }}>
+                  {lat ? "No posts found nearby. Try expanding your radius." : "Enable location to see nearby posts."}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ─── Section Header ─── */}
         <div className="flex items-center justify-between pt-1">

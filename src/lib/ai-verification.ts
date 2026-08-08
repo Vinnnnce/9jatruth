@@ -366,7 +366,7 @@ export type AIPrediction = {
   aiPowered: boolean;
 };
 
-export function generatePrediction(input: PredictionInput): AIPrediction {
+export async function generatePrediction(input: PredictionInput): Promise<AIPrediction> {
   const { category, recentTruths } = input;
 
   if (recentTruths.length === 0) {
@@ -499,7 +499,7 @@ export function generatePrediction(input: PredictionInput): AIPrediction {
 
   const timeframe = recentCount > 3 ? "next 24 hours" : "next 48 hours";
 
-  return {
+  let result: AIPrediction = {
     category,
     prediction,
     confidence: Math.round(confidence),
@@ -508,4 +508,73 @@ export function generatePrediction(input: PredictionInput): AIPrediction {
     signals,
     aiPowered: false,
   };
+
+  // ─── Kimi K3 AI Enhancement for Predictions ───
+  try {
+    const { isKimiConfigured, generateKimiText } = await import("@/lib/kimi");
+    if (isKimiConfigured()) {
+      const systemPrompt = `You are an AI prediction analyst for Soke, a community truth-reporting platform in Nigeria. Based on recent community reports, generate a concise, actionable prediction for the category "${category}". Consider trends, sentiment, frequency, and trust scores. Provide a prediction statement, confidence level (0-100), trend (up/down/stable), and key signals.`;
+
+      const recentSummary = recentTruths.slice(0, 20).map((t) => ({
+        content: t.content,
+        trustScore: t.trustScore,
+        status: t.status,
+        createdAt: t.createdAt,
+        corroborationCount: t.corroborationCount,
+        disputeCount: t.disputeCount,
+      }));
+
+      const userPrompt = `Category: ${category}
+Neighborhood ID: ${input.neighborhoodId || "all areas"}
+Total recent reports: ${total}
+Reports in last 24h: ${recentCount}
+Positive sentiment ratio: ${(positiveRatio * 100).toFixed(0)}%
+Negative sentiment ratio: ${(negativeRatio * 100).toFixed(0)}%
+Average trust score: ${Math.round(avgTrust)}
+
+Recent reports summary:
+${JSON.stringify(recentSummary, null, 2)}
+
+Respond in this format:
+Prediction: [1-2 sentence prediction]
+Confidence: [0-100]
+Trend: [up/down/stable]
+Signals: [comma-separated key signals]`;
+
+      const aiText = await generateKimiText(systemPrompt, userPrompt, {
+        temperature: 0.4,
+        maxOutputTokens: 300,
+      });
+
+      if (aiText) {
+        const predMatch = aiText.match(/prediction:\s*(.+)/i);
+        const confMatch = aiText.match(/confidence:\s*(\d+)/i);
+        const trendMatch = aiText.match(/trend:\s*(up|down|stable)/i);
+        const signalsMatch = aiText.match(/signals:\s*(.+)/i);
+
+        if (predMatch) {
+          result.prediction = predMatch[1].trim();
+        }
+        if (confMatch) {
+          const aiConf = parseInt(confMatch[1], 10);
+          result.confidence = Math.round(result.confidence * 0.4 + aiConf * 0.6);
+        }
+        if (trendMatch) {
+          result.trend = trendMatch[1].toLowerCase() as "up" | "down" | "stable";
+        }
+        if (signalsMatch) {
+          const aiSignals = signalsMatch[1].split(",").map((s) => s.trim()).filter(Boolean);
+          if (aiSignals.length > 0) {
+            result.signals = [...new Set([...result.signals, ...aiSignals])].slice(0, 8);
+          }
+        }
+        result.aiPowered = true;
+      }
+    }
+  } catch (err) {
+    console.error("[AI Prediction] Kimi enhancement failed:", err);
+    // Fall back to heuristic results
+  }
+
+  return result;
 }

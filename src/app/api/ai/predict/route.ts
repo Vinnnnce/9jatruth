@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     commentCount: parseInt(r.comment_count) || 0,
   }));
 
-  const prediction = generatePrediction({
+  const prediction = await generatePrediction({
     category,
     neighborhoodId,
     recentTruths: truthsForAnalysis,

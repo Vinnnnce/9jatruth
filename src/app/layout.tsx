@@ -21,6 +21,21 @@ export const metadata: Metadata = {
   },
 };
 
+const themeInitScript = `
+(function() {
+  try {
+    var stored = localStorage.getItem('soke-theme');
+    var theme = stored || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.documentElement.style.colorScheme = 'dark';
+    } else {
+      document.documentElement.style.colorScheme = 'light';
+    }
+  } catch(e) {}
+})();
+`;
+
 export default function RootLayout({
   children,
 }: {
@@ -28,6 +43,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className={`${inter.variable} ${jetBrainsMono.variable} font-sans antialiased`}>
         <Providers>
           {children}

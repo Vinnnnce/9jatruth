@@ -440,3 +440,83 @@ model WeeklyUserReview {
   @@unique([weekStart, clerkUserId])
   @@map("weekly_user_reviews")
 }
+
+// ─── Post Reports ───
+
+model TruthReport {
+  id             Int       @id @default(autoincrement())
+  truthId        Int       @map("truth_id")
+  userHash       String    @map("user_hash")
+  reason         String
+  status         String    @default("pending")
+  resolvedBy     String?   @map("resolved_by")
+  resolutionNote String?   @map("resolution_note")
+  resolvedAt     DateTime? @map("resolved_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@unique([truthId, userHash])
+  @@map("truth_reports")
+}
+
+// ─── User Feedback ───
+
+model UserFeedback {
+  id            Int       @id @default(autoincrement())
+  clerkUserId   String?   @map("clerk_user_id")
+  userHash      String?   @map("user_hash")
+  type          String    @default("suggestion")
+  title         String
+  description   String
+  category      String    @default("general")
+  status        String    @default("open")
+  priority      String    @default("medium")
+  upvotes       Int       @default(0)
+  adminResponse String?   @map("admin_response")
+  respondedBy   String?   @map("responded_by")
+  respondedAt   DateTime? @map("responded_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @map("updated_at")
+
+  @@map("user_feedback")
+}
+
+model FeedbackUpvote {
+  id         Int      @id @default(autoincrement())
+  feedbackId Int      @map("feedback_id")
+  userHash   String   @map("user_hash")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([feedbackId, userHash])
+  @@map("feedback_upvotes")
+}
+
+// ─── Questionnaires ───
+
+model Questionnaire {
+  id            Int       @id @default(autoincrement())
+  clerkUserId   String    @map("clerk_user_id")
+  userHash      String    @map("user_hash")
+  title         String
+  description   String?
+  category      String    @default("general")
+  questions     Json      @default("[]")
+  status        String    @default("active")
+  responseCount Int       @default(0) @map("response_count")
+  expiresAt     DateTime? @map("expires_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @map("updated_at")
+
+  @@map("questionnaires")
+}
+
+model QuestionnaireResponse {
+  id              Int      @id @default(autoincrement())
+  questionnaireId Int      @map("questionnaire_id")
+  clerkUserId     String?  @map("clerk_user_id")
+  userHash        String   @map("user_hash")
+  answers         Json     @default("{}")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([questionnaireId, userHash])
+  @@map("questionnaire_responses")
+}

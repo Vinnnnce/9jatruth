@@ -28,6 +28,8 @@ import { useToast } from "@/components/hooks/use-toast";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableHeader,
@@ -536,6 +538,9 @@ export default function AdminDashboard() {
           </TabsTrigger>
           <TabsTrigger value="weekly-review" data-testid="tab-weekly-review">
             Weekly Review
+          </TabsTrigger>
+          <TabsTrigger value="create" data-testid="tab-create">
+            Create
           </TabsTrigger>
         </TabsList>
 
@@ -1425,6 +1430,13 @@ export default function AdminDashboard() {
         <TabsContent value="weekly-review" className="space-y-4">
           <WeeklyReviewTab />
         </TabsContent>
+
+        {/* --------------------------------------------------------------- */}
+        {/* Create - Admin content creation tools                             */}
+        {/* --------------------------------------------------------------- */}
+        <TabsContent value="create" className="space-y-4">
+          <CreateTab />
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -1783,6 +1795,244 @@ function ReviewStat({ label, value }: { label: string; value: number | string })
       <p className="text-sm font-display font-700 tabular-nums mt-0.5">
         {typeof value === "number" ? value.toLocaleString() : value}
       </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Create Tab - Admin content creation tools
+// ---------------------------------------------------------------------------
+
+function CreateTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [createType, setCreateType] = useState<string>("truth");
+  const [form, setForm] = useState({
+    category: "power",
+    content: "",
+    neighborhoodId: "",
+    title: "",
+    description: "",
+    type: "suggestion",
+  });
+
+  const createTruthMutation = useMutation({
+    mutationFn: async (data: { category: string; content: string; neighborhoodId?: number }) => {
+      const res = await apiRequest("POST", "/api/truths", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Truth created", description: "The post has been published." });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/truths"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/truths"] });
+      setForm({ ...form, content: "", neighborhoodId: "" });
+    },
+    onError: () => {
+      toast({ title: "Failed to create truth", variant: "destructive" });
+    },
+  });
+
+  const createFeedbackMutation = useMutation({
+    mutationFn: async (data: { type: string; title: string; description: string }) => {
+      const res = await apiRequest("POST", "/api/feedback", { ...data, category: "general" });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Feedback created", description: "The feedback entry has been published." });
+      setForm({ ...form, title: "", description: "" });
+    },
+    onError: () => {
+      toast({ title: "Failed to create feedback", variant: "destructive" });
+    },
+  });
+
+  const handleCreate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (createType === "truth") {
+      if (!form.content.trim()) {
+        toast({ title: "Content is required", variant: "destructive" });
+        return;
+      }
+      createTruthMutation.mutate({
+        category: form.category,
+        content: form.content,
+        neighborhoodId: form.neighborhoodId ? parseInt(form.neighborhoodId) : undefined,
+      });
+    } else if (createType === "feedback") {
+      if (!form.title.trim() || !form.description.trim()) {
+        toast({ title: "Title and description are required", variant: "destructive" });
+        return;
+      }
+      createFeedbackMutation.mutate({
+        type: form.type,
+        title: form.title,
+        description: form.description,
+      });
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-sm font-display font-700 mb-1">Create Content</h2>
+        <p className="text-xs text-muted-foreground">
+          Publish truths, feedback, and announcements directly from the admin dashboard
+        </p>
+      </div>
+
+      {/* Content Type Selector */}
+      <div className="flex gap-2 flex-wrap">
+        {[
+          { value: "truth", label: "Truth Report" },
+          { value: "feedback", label: "Feedback Entry" },
+        ].map((opt) => (
+          <Button
+            key={opt.value}
+            variant={createType === opt.value ? "default" : "outline"}
+            size="sm"
+            onClick={() => setCreateType(opt.value)}
+          >
+            {opt.label}
+          </Button>
+        ))}
+      </div>
+
+      {/* Create Form */}
+      <Card>
+        <CardContent className="p-4">
+          <form onSubmit={handleCreate} className="space-y-4">
+            {createType === "truth" && (
+              <>
+                <div>
+                  <Label className="text-sm">Category</Label>
+                  <Select
+                    value={form.category}
+                    onValueChange={(v) => setForm({ ...form, category: v })}
+                  >
+                    <SelectTrigger className="mt-1.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="power">Power</SelectItem>
+                      <SelectItem value="fuel">Fuel</SelectItem>
+                      <SelectItem value="traffic">Traffic</SelectItem>
+                      <SelectItem value="prices">Prices</SelectItem>
+                      <SelectItem value="safety">Safety</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-sm">Neighborhood ID (optional)</Label>
+                  <Input
+                    type="number"
+                    placeholder="e.g. 1"
+                    value={form.neighborhoodId}
+                    onChange={(e) => setForm({ ...form, neighborhoodId: e.target.value })}
+                    className="mt-1.5"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">Content</Label>
+                  <Textarea
+                    placeholder="Enter the truth report content..."
+                    value={form.content}
+                    onChange={(e) => setForm({ ...form, content: e.target.value })}
+                    className="mt-1.5 min-h-[120px]"
+                  />
+                </div>
+              </>
+            )}
+
+            {createType === "feedback" && (
+              <>
+                <div>
+                  <Label className="text-sm">Type</Label>
+                  <Select
+                    value={form.type}
+                    onValueChange={(v) => setForm({ ...form, type: v })}
+                  >
+                    <SelectTrigger className="mt-1.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="suggestion">Suggestion</SelectItem>
+                      <SelectItem value="bug">Bug Report</SelectItem>
+                      <SelectItem value="feature">Feature Request</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-sm">Title</Label>
+                  <Input
+                    placeholder="Brief title"
+                    value={form.title}
+                    onChange={(e) => setForm({ ...form, title: e.target.value })}
+                    className="mt-1.5"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">Description</Label>
+                  <Textarea
+                    placeholder="Detailed description"
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    className="mt-1.5 min-h-[120px]"
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="flex justify-end">
+              <Button
+                type="submit"
+                size="sm"
+                disabled={createTruthMutation.isPending || createFeedbackMutation.isPending}
+              >
+                {createTruthMutation.isPending || createFeedbackMutation.isPending
+                  ? "Creating..."
+                  : "Create & Publish"}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Newspaper className="h-4 w-4 text-primary" />
+              <span className="text-xs font-medium">Quick Truth</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Publish a verified truth report to the feed instantly
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              <span className="text-xs font-medium">Announcement</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Create a platform-wide announcement for all users
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Activity className="h-4 w-4 text-primary" />
+              <span className="text-xs font-medium">Status Update</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Post a system status update to the activity feed
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
