@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/components/hooks/use-toast";
 import {
-  Send, CheckCircle2, Info, MapPin, LocateFixed, Building2, Navigation, Coins, ShieldCheck,
+  Send, CheckCircle2, Info, MapPin, LocateFixed, Building2, Navigation, Coins, ShieldCheck, User,
 } from "lucide-react";
 import { useLiveLocation } from "@/hooks/use-live-location";
 import { useAgencyAuth } from "@/hooks/use-agency-auth";
@@ -33,6 +33,23 @@ const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerk
 
 const categories = CATEGORY_LIST;
 
+/** Parse the HTTP status code from an apiRequest error */
+function getErrorStatus(error: any): number | null {
+  if (error?.status) return error.status;
+  const msg = error?.message || String(error);
+  const match = msg.match(/^(\d{3}):/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+/** Extract the server message from an apiRequest error */
+function getErrorMessage(error: any): string {
+  const msg = error?.message || String(error);
+  // Format is "STATUS: message text"
+  const idx = msg.indexOf(":");
+  if (idx > 0) return msg.substring(idx + 1).trim();
+  return msg;
+}
+
 export default function SubmitTruth() {
   const [neighborhoodInput, setNeighborhoodInput] = useState<string>("");
   const [category, setCategory] = useState<string>("");
@@ -45,6 +62,7 @@ export default function SubmitTruth() {
   const { lat, lng, requestLocation, loading: locLoading } = useLiveLocation();
   const { auth, loading: authLoading } = useAgencyAuth();
   const isAgencyAuth = !!auth?.account;
+  const hasOrganization = !!auth?.organization;
   const { isSignedIn, isLoaded } = useUser();
 
   // Auto-detect user's real location via IP on mount
@@ -85,21 +103,37 @@ export default function SubmitTruth() {
       setCategory("");
       setContent("");
       setNeighborhoodInput("");
+      setPostAsOrg(false);
       queryClient.invalidateQueries({ queryKey: ["/api/truths"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["/api/rewards/balance"] });
     },
     onError: (error: any) => {
-      if (error?.status === 401) {
+      const status = getErrorStatus(error);
+      const serverMsg = getErrorMessage(error);
+
+      if (status === 401) {
         toast({
           title: "Sign in required",
-          description: "You need to sign in to submit a report.",
+          description: "You need to sign in to submit a report. Click Sign In at the top right.",
+          variant: "destructive",
+        });
+      } else if (status === 400) {
+        toast({
+          title: "Validation error",
+          description: serverMsg || "Please check your inputs and try again.",
+          variant: "destructive",
+        });
+      } else if (status === 403) {
+        toast({
+          title: "Not allowed",
+          description: serverMsg || "You do not have permission to perform this action.",
           variant: "destructive",
         });
       } else {
         toast({
           title: "Submission failed",
-          description: "Please check your inputs and try again.",
+          description: serverMsg || "Something went wrong. Please try again.",
           variant: "destructive",
         });
       }
@@ -245,21 +279,48 @@ export default function SubmitTruth() {
             </div>
           </div>
 
-          {/* Post as organization (safe access) */}
-          {!authLoading && isAgencyAuth && auth?.organization && (
-            <div className="flex items-center gap-3 rounded-md border border-primary/20 bg-primary/5 p-2.5">
-              <Checkbox
-                id="post-as-org"
-                checked={postAsOrg}
-                onCheckedChange={(checked) => setPostAsOrg(checked === true)}
-              />
-              <label htmlFor="post-as-org" className="flex items-center gap-2 text-xs cursor-pointer flex-1">
+          {/* Post as — always visible */}
+          <div className="rounded-md border border-border bg-muted/20 p-2.5 space-y-2">
+            <div className="flex items-center gap-2">
+              {postAsOrg && hasOrganization ? (
                 <Building2 className="h-3.5 w-3.5 text-primary" />
-                <span>Post as <strong>{auth.organization.name}</strong></span>
-                {auth.organization.verified === 1 && <VerifiedBadge showLabel />}
-              </label>
+              ) : (
+                <User className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+              <span className="text-xs font-medium">
+                {postAsOrg && hasOrganization
+                  ? `Posting as ${auth!.organization!.name}`
+                  : "Posting as individual"}
+              </span>
+              {postAsOrg && hasOrganization && auth!.organization!.verified === 1 && (
+                <VerifiedBadge showLabel />
+              )}
             </div>
-          )}
+
+            {hasOrganization ? (
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  id="post-as-org"
+                  checked={postAsOrg}
+                  onCheckedChange={(checked) => setPostAsOrg(checked === true)}
+                />
+                <label htmlFor="post-as-org" className="flex items-center gap-2 text-xs cursor-pointer flex-1">
+                  <Building2 className="h-3.5 w-3.5 text-primary" />
+                  <span>Post as <strong>{auth!.organization!.name}</strong></span>
+                  {auth!.organization!.verified === 1 && <VerifiedBadge showLabel />}
+                </label>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground pl-1">
+                <Info className="h-3 w-3" />
+                <span>
+                  {authLoading
+                    ? "Checking for organization account..."
+                    : "No organization linked. Register an agency account to post as an organization."}
+                </span>
+              </div>
+            )}
+          </div>
 
           {/* Submit row — credits and trust-scored badges inline */}
           <div className="flex items-center justify-between gap-2 pt-1">

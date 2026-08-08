@@ -31,10 +31,15 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   await ensureDbInitialized();
 
-  // Require authentication for submitting reports
+  // Require authentication for submitting reports (unless Clerk isn't configured)
   const clerkUserId = await getClerkUserId();
   if (!clerkUserId) {
-    return Response.json({ message: "Unauthorized — Please sign in to submit a report" }, { status: 401 });
+    // Check if Clerk is configured — if not, allow anonymous submission with IP-based userHash
+    const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
+    if (isClerkConfigured) {
+      return Response.json({ message: "Unauthorized — Please sign in to submit a report" }, { status: 401 });
+    }
   }
 
   // CSRF protection
@@ -51,18 +56,28 @@ export async function POST(request: Request) {
       if (name.length < 2) {
         return Response.json({ message: "Neighborhood name too short" }, { status: 400 });
       }
-      // Look up or create neighborhood by name
-      const { getDb } = await import("@/lib/db");
-      const sql = getDb();
-      const existing = (await sql`SELECT id FROM neighborhoods WHERE name ILIKE ${name} LIMIT 1`) as unknown as any[];
-      if (existing.length > 0) {
-        neighborhoodId = existing[0].id;
-      } else {
-        // Auto-create neighborhood from user input
-        const created = (await sql`INSERT INTO neighborhoods (name, region) VALUES (${name}, ${body.regionName || "Unknown"}) RETURNING id`) as unknown as any[];
-        neighborhoodId = created[0].id;
+      try {
+        // Look up or create neighborhood by name
+        const { getDb } = await import("@/lib/db");
+        const sql = getDb();
+        const existing = await sql`SELECT id FROM neighborhoods WHERE name ILIKE ${name} LIMIT 1` as unknown as any[];
+        if (existing.length > 0) {
+          neighborhoodId = (existing as any[])[0].id;
+        } else {
+          // Auto-create neighborhood from user input
+          const created = await sql`INSERT INTO neighborhoods (name, region) VALUES (${name}, ${body.regionName || "Unknown"}) RETURNING id` as unknown as any[];
+          neighborhoodId = (created as any[])[0].id;
+        }
+        body.neighborhoodId = neighborhoodId;
+      } catch (dbErr) {
+        console.error("Neighborhood resolution error:", dbErr);
+        return Response.json({ message: "Could not resolve neighborhood. Please try again." }, { status: 500 });
       }
-      body.neighborhoodId = neighborhoodId;
+    }
+
+    // If still no neighborhoodId, return error
+    if (!body.neighborhoodId) {
+      return Response.json({ message: "Please provide a neighborhood or area name" }, { status: 400 });
     }
 
     const parsed = validate(insertMicroTruthSchema, body);
