@@ -230,10 +230,10 @@ function TopBar() {
       <div className="flex items-center gap-2 md:gap-3">
         <SidebarTrigger className="md:hidden" />
         <SidebarTrigger className="hidden md:flex" />
-        <div className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <SokeLogo className="h-5 w-5 text-primary" />
           <span className="font-display font-700 text-sm tracking-tight">Soke</span>
-        </div>
+        </Link>
       </div>
       <div className="flex items-center gap-2 md:gap-3">
         <OfflineStatus />

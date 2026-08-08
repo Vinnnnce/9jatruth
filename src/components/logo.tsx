@@ -1,25 +1,15 @@
+import Image from "next/image";
+
 export function SokeLogo({ className = "h-8 w-8" }: { className?: string }) {
   return (
-    <svg
+    <Image
+      src="/logo.png"
+      alt="Soke Logo"
+      width={64}
+      height={64}
       className={className}
-      viewBox="0 0 32 32"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      aria-label="Soke Logo"
-    >
-      <circle cx="16" cy="16" r="3" fill="currentColor" stroke="none" />
-      <circle cx="16" cy="16" r="7" strokeOpacity="0.6" />
-      <circle cx="16" cy="16" r="12" strokeOpacity="0.3" />
-      <circle cx="16" cy="4" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="28" cy="16" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="16" cy="28" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="4" cy="16" r="1.5" fill="currentColor" stroke="none" />
-      <line x1="16" y1="7" x2="16" y2="13" strokeOpacity="0.4" />
-      <line x1="23" y1="16" x2="27" y2="16" strokeOpacity="0.4" />
-      <line x1="16" y1="19" x2="16" y2="25" strokeOpacity="0.4" />
-      <line x1="5" y1="16" x2="9" y2="16" strokeOpacity="0.4" />
-    </svg>
+      priority
+    />
   );
 }
 

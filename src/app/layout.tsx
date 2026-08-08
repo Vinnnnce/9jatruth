@@ -14,6 +14,11 @@ export const metadata: Metadata = {
   title: "Soke — Nigeria Digital Ecosystem",
   description: "Community-driven truth reporting platform for Nigeria",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({
