@@ -447,5 +447,62 @@ export async function ensureDbInitialized() {
   await sql`CREATE INDEX IF NOT EXISTS idx_notifications_user_hash ON notifications(user_hash)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(user_hash, read)`;
 
+  // Feed interactions: likes
+  await sql`CREATE TABLE IF NOT EXISTS feed_likes (
+    id SERIAL PRIMARY KEY,
+    truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE,
+    user_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(truth_id, user_hash)
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_feed_likes_truth ON feed_likes(truth_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_feed_likes_user ON feed_likes(user_hash)`;
+
+  // Feed interactions: comments
+  await sql`CREATE TABLE IF NOT EXISTS feed_comments (
+    id SERIAL PRIMARY KEY,
+    truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE,
+    user_hash TEXT NOT NULL,
+    content TEXT NOT NULL,
+    parent_comment_id INTEGER REFERENCES feed_comments(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_feed_comments_truth ON feed_comments(truth_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_feed_comments_user ON feed_comments(user_hash)`;
+
+  // Feed interactions: shares
+  await sql`CREATE TABLE IF NOT EXISTS feed_shares (
+    id SERIAL PRIMARY KEY,
+    truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE,
+    user_hash TEXT,
+    channel TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_feed_shares_truth ON feed_shares(truth_id)`;
+
+  // User subscriptions
+  await sql`CREATE TABLE IF NOT EXISTS user_subscriptions (
+    id SERIAL PRIMARY KEY,
+    subscriber_hash TEXT NOT NULL,
+    target_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(subscriber_hash, target_hash)
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_user_subscriptions_subscriber ON user_subscriptions(subscriber_hash)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_user_subscriptions_target ON user_subscriptions(target_hash)`;
+
+  // Location preferences on platform_users
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_neighborhood_id INTEGER`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_state_name TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_lga_name TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_community_name TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_region_name TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_lat DOUBLE PRECISION`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_lng DOUBLE PRECISION`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS location_source TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS location_updated_at TIMESTAMPTZ`;
+
   initialized = true;
 }

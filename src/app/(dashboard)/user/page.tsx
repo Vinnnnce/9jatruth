@@ -34,6 +34,8 @@ import {
   ShieldCheck,
   Clock,
 } from "lucide-react";
+import { UserAnalyticsCharts } from "@/components/user-analytics";
+import { LocationPreferences } from "@/components/location-preferences";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -180,6 +182,7 @@ export default function UserDashboard() {
           </CardContent>
         </Card>
       )}
+      <LocationPreferences />
 
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList data-testid="tabs-user">
@@ -234,6 +237,7 @@ export default function UserDashboard() {
               </CardContent>
             </Card>
           </div>
+          <UserAnalyticsCharts />
         </TabsContent>
 
         {/* ------------------------------------------------------------- */}

@@ -49,6 +49,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AdminAnalytics } from "@/components/admin-analytics";
 
 import {
   BarChart,
@@ -771,6 +772,9 @@ export default function AdminDashboard() {
               )}
             </CardContent>
           </Card>
+
+          {/* Extended Analytics */}
+          <AdminAnalytics />
         </TabsContent>
 
         {/* --------------------------------------------------------------- */}

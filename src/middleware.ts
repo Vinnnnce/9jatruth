@@ -33,6 +33,7 @@ const isAdminApiRoute = createRouteMatcher([
   "/api/track(.*)",
   "/api/models(.*)",
   "/api/truths/delete(.*)",
+  "/api/analytics/overview(.*)",
 ]);
 
 // Org-only API routes — require org admin auth
@@ -52,6 +53,9 @@ const isUserApiRoute = createRouteMatcher([
   "/api/sync(.*)",
   "/api/ingest(.*)",
   "/api/gamification(.*)",
+  "/api/user(.*)",
+  "/api/analytics/user(.*)",
+  "/api/users(.*)/subscribe",
 ]);
 
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);

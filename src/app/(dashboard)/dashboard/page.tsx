@@ -11,6 +11,8 @@ import {
   CheckCircle2, MapPin, Users, Newspaper,
 } from "lucide-react";
 import Link from "next/link";
+import { DashboardAnalytics } from "@/components/dashboard-analytics";
+import { LocationPreferences } from "@/components/location-preferences";
 
 type DashboardData = Array<{
   neighborhood: { id: number; name: string; region: string; lat: number; lng: number };
@@ -110,6 +112,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Summary cards */}
+      <LocationPreferences />
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -154,6 +157,9 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Analytics */}
+      <DashboardAnalytics />
 
       {/* Neighborhood cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

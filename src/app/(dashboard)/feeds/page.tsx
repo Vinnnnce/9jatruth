@@ -28,6 +28,8 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
 import { FeedFilterBar, DEFAULT_FILTERS, type FeedFilters } from "@/components/feed-filter-bar";
+import { FeedInteractions } from "@/components/feed-interactions";
+import { useUser } from "@/lib/use-user-safe";
 import { getCategoryConfig } from "@/lib/categories";
 
 type Truth = {
@@ -79,6 +81,18 @@ export default function FeedsPage() {
   const [filters, setFilters] = useState<FeedFilters>(DEFAULT_FILTERS);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isSignedIn } = useUser();
+
+  // Fetch current user's hash (for subscribe visibility)
+  const { data: me } = useQuery<{ userHash?: string } | null>({
+    queryKey: ["/api/auth/me"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/auth/me");
+      return res.json();
+    },
+    enabled: isSignedIn,
+  });
+  const currentUserHash = me?.userHash;
 
   // Fetch all truths (feeds)
   const { data: truths, isLoading } = useQuery<Truth[]>({
@@ -243,6 +257,10 @@ export default function FeedsPage() {
                           <ThumbsDown className="h-3 w-3 mr-1" />
                           Dispute
                         </Button>
+                        <FeedInteractions
+                          truth={truth}
+                          currentUserHash={currentUserHash}
+                        />
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button
