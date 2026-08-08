@@ -54,6 +54,8 @@ import {
   Briefcase,
   ShieldCheck,
   Download,
+  MessageSquare,
+  ClipboardList,
 } from "lucide-react";
 
 type UserProfile = {
@@ -81,6 +83,7 @@ function useNavSections() {
         { path: "/feeds", label: "Feeds", icon: Newspaper },
         { path: "/search", label: "Search", icon: Search },
         { path: "/submit", label: "Submit Truth", icon: Send },
+        { path: "/questionnaires", label: "Questionnaires", icon: ClipboardList },
         { path: "/activity", label: "Activity", icon: ActivityIcon },
       ],
     },
@@ -103,6 +106,7 @@ function useNavSections() {
         { path: "/organizations", label: "Business", icon: Building2 },
         { path: "/agency-auth", label: "Agency Login", icon: Shield },
         { path: "/account", label: "Account Settings", icon: Settings },
+        { path: "/settings", label: "Advanced Settings", icon: Settings },
       ],
     },
     {
@@ -126,7 +130,7 @@ function useNavSections() {
         { path: "/privacy", label: "Privacy Policy", icon: Shield },
         { path: "/terms", label: "Terms of Use", icon: FileText },
         { path: "/cookies", label: "Cookie Policy", icon: Cookie },
-        { path: "/operations", label: "Operations", icon: Activity },
+        { path: "/feedback", label: "Feedback", icon: MessageSquare },
       ],
     },
   ];
@@ -146,8 +150,8 @@ function AppSidebar() {
           href="/"
           onClick={() => {
             setOpenMobile(false);
-            // On desktop, collapse after navigation
-            if (window.innerWidth >= 768) setOpen(false);
+            // Only auto-collapse on mobile
+            if (window.innerWidth < 768) setOpen(false);
           }}
         >
           <div className="text-sidebar-foreground hover-elevate rounded-md p-1 -m-1 transition-colors">
@@ -174,8 +178,8 @@ function AppSidebar() {
                     tooltip={item.label}
                     onClick={() => {
                       setOpenMobile(false);
-                      // On desktop, collapse after navigation
-                      if (window.innerWidth >= 768) setOpen(false);
+                      // Only auto-collapse on mobile, keep open on desktop
+                      if (window.innerWidth < 768) setOpen(false);
                     }}
                   >
                     <Link href={item.path}>
@@ -284,12 +288,12 @@ function TopBar() {
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <SidebarProvider defaultOpen={false}>
+    <SidebarProvider defaultOpen={true}>
       <AppSidebar />
       <SidebarInset>
         <TopBar />
         <NewUserTour />
-        <main className="flex-1 overflow-y-auto scrollbar-thin">{children}</main>
+        <main className="flex-1 overflow-y-auto scrollbar-thin h-[calc(100svh-4rem)]">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );

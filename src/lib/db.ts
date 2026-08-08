@@ -613,5 +613,90 @@ export async function ensureDbInitialized() {
   await sql`CREATE INDEX IF NOT EXISTS idx_predictions_neighborhood ON predictions(neighborhood_id)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_predictions_created ON predictions(created_at DESC)`;
 
+  // ─── Truth Reports (post reporting) ───
+  await sql`CREATE TABLE IF NOT EXISTS truth_reports (
+    id SERIAL PRIMARY KEY,
+    truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE,
+    user_hash TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    resolved_by TEXT,
+    resolution_note TEXT,
+    resolved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(truth_id, user_hash)
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_truth_reports_truth ON truth_reports(truth_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_truth_reports_status ON truth_reports(status)`;
+
+  // ─── User Feedback (suggestions & bug reports) ───
+  await sql`CREATE TABLE IF NOT EXISTS user_feedback (
+    id SERIAL PRIMARY KEY,
+    clerk_user_id TEXT,
+    user_hash TEXT,
+    type TEXT NOT NULL DEFAULT 'suggestion',
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'general',
+    status TEXT NOT NULL DEFAULT 'open',
+    priority TEXT NOT NULL DEFAULT 'medium',
+    upvotes INTEGER NOT NULL DEFAULT 0,
+    admin_response TEXT,
+    responded_by TEXT,
+    responded_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_feedback_status ON user_feedback(status)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_feedback_type ON user_feedback(type)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_feedback_created ON user_feedback(created_at DESC)`;
+
+  // ─── Feedback Upvotes ───
+  await sql`CREATE TABLE IF NOT EXISTS feedback_upvotes (
+    id SERIAL PRIMARY KEY,
+    feedback_id INTEGER NOT NULL REFERENCES user_feedback(id) ON DELETE CASCADE,
+    user_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(feedback_id, user_hash)
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_feedback_upvotes_feedback ON feedback_upvotes(feedback_id)`;
+
+  // ─── Questionnaires ───
+  await sql`CREATE TABLE IF NOT EXISTS questionnaires (
+    id SERIAL PRIMARY KEY,
+    clerk_user_id TEXT NOT NULL,
+    user_hash TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    category TEXT DEFAULT 'general',
+    questions JSONB NOT NULL DEFAULT '[]'::jsonb,
+    status TEXT NOT NULL DEFAULT 'active',
+    response_count INTEGER NOT NULL DEFAULT 0,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_questionnaires_status ON questionnaires(status)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_questionnaires_created ON questionnaires(created_at DESC)`;
+
+  // ─── Questionnaire Responses ───
+  await sql`CREATE TABLE IF NOT EXISTS questionnaire_responses (
+    id SERIAL PRIMARY KEY,
+    questionnaire_id INTEGER NOT NULL REFERENCES questionnaires(id) ON DELETE CASCADE,
+    clerk_user_id TEXT,
+    user_hash TEXT NOT NULL,
+    answers JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(questionnaire_id, user_hash)
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_responses_questionnaire ON questionnaire_responses(questionnaire_id)`;
+
+  // ─── Advanced User Settings ───
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS notification_preferences JSONB DEFAULT '{"push": true, "email": false, "sms": false}'::jsonb`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS privacy_settings JSONB DEFAULT '{"profileVisible": true, "locationVisible": false, "activityVisible": true}'::jsonb`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS display_preferences JSONB DEFAULT '{"compactView": false, "autoPlay": false, "dataSaver": false}'::jsonb`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS language_preference TEXT DEFAULT 'en'`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS timezone TEXT`;
+
   initialized = true;
 }

@@ -4,10 +4,19 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Heart, Share2, UserPlus, UserCheck } from "lucide-react";
+import { Heart, Share2, UserPlus, UserCheck, Flag } from "lucide-react";
 import { useUser } from "@/lib/use-user-safe";
 import { useToast } from "@/components/hooks/use-toast";
 import { FeedComments } from "@/components/feed-comments";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 type Truth = {
   id: number;
@@ -37,6 +46,9 @@ export function FeedInteractions({
   const [likeCount, setLikeCount] = useState(0);
   const [subscribed, setSubscribed] = useState(false);
   const [shareCount, setShareCount] = useState(0);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportSubmitting, setReportSubmitting] = useState(false);
 
   const isOwnPost =
     currentUserHash && truth.userHash === currentUserHash;
@@ -185,6 +197,31 @@ export function FeedInteractions({
     }
   };
 
+  const handleReport = async () => {
+    if (!isLoaded) return;
+    if (!isSignedIn) {
+      toast({ title: "Sign in to report posts" });
+      return;
+    }
+    if (!reportReason.trim()) {
+      toast({ title: "Please provide a reason", variant: "destructive" });
+      return;
+    }
+    setReportSubmitting(true);
+    try {
+      await apiRequest("POST", `/api/truths/${truth.id}/report`, {
+        reason: reportReason.trim(),
+      });
+      toast({ title: "Report submitted", description: "Thank you. Our team will review this post." });
+      setReportOpen(false);
+      setReportReason("");
+    } catch {
+      toast({ title: "Failed to submit report", variant: "destructive" });
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
+
   return (
     <div className="flex items-center gap-0.5">
       {/* Like — icon only */}
@@ -254,6 +291,52 @@ export function FeedInteractions({
           )}
         </Button>
       )}
+      {/* Report — icon only */}
+      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+        <DialogTrigger asChild>
+          <Button
+            size="sm"
+            variant="ghost"
+            data-testid={`button-report-${truth.id}`}
+            className="h-8 w-8 p-0"
+            title="Report"
+            aria-label="Report"
+          >
+            <Flag className="h-4 w-4 text-muted-foreground" />
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Report this post</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="report-reason" className="text-sm">
+                Why are you reporting this post?
+              </Label>
+              <Textarea
+                id="report-reason"
+                placeholder="Describe the issue (spam, misinformation, harassment, etc.)"
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                className="mt-1.5 min-h-[100px]"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setReportOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleReport}
+                disabled={reportSubmitting}
+              >
+                {reportSubmitting ? "Submitting..." : "Submit Report"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
