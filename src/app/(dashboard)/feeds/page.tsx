@@ -29,6 +29,7 @@ import {
 import { useToast } from "@/components/hooks/use-toast";
 import { FeedFilterBar, DEFAULT_FILTERS, type FeedFilters } from "@/components/feed-filter-bar";
 import { FeedInteractions } from "@/components/feed-interactions";
+import { VerifiedBadge } from "@/components/verified-badge";
 import { useUser } from "@/lib/use-user-safe";
 import { getCategoryConfig } from "@/lib/categories";
 
@@ -47,6 +48,8 @@ type Truth = {
   neighborhoodName?: string;
   ipRegion?: string | null;
   locationSource?: string | null;
+  orgName?: string | null;
+  orgVerified?: boolean;
 };
 
 type Neighborhood = { id: number; name: string; region: string };
@@ -182,6 +185,9 @@ export default function FeedsPage() {
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <Badge variant="secondary" className="text-[10px]">{cat.label}</Badge>
+                          {truth.orgVerified && (
+                            <VerifiedBadge showLabel label={truth.orgName || "Verified Org"} />
+                          )}
                           {truth.status === "verified" && (
                             <Badge className="text-[10px] bg-green-500/10 text-green-500 border-green-500/20">
                               <ShieldCheck className="h-3 w-3 mr-1" />
@@ -220,43 +226,49 @@ export default function FeedsPage() {
                         </span>
                       </div>
 
-                      {/* Trust score */}
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 max-w-[120px]">
+                      {/* Trust score — user rating card */}
+                      <div className="flex items-center gap-2 rounded-md bg-muted/30 px-2 py-1.5">
+                        <ShieldCheck className={`h-3.5 w-3.5 ${trustColor(truth.trustScore)}`} />
+                        <div className="flex-1 max-w-[100px]">
                           <Progress
                             value={truth.trustScore}
                             className="h-1.5"
                           />
                         </div>
-                        <span className={`text-xs font-mono ${trustColor(truth.trustScore)}`}>
-                          {truth.trustScore}% trust
+                        <span className={`text-xs font-mono font-medium ${trustColor(truth.trustScore)}`}>
+                          {truth.trustScore}%
                         </span>
+                        <span className="text-[9px] text-muted-foreground uppercase">Trust</span>
                       </div>
 
-                      {/* Actions */}
-                      <div className="flex items-center gap-2 pt-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => verifyMutation.mutate({ truthId: truth.id, action: "corroborate" })}
-                          disabled={verifyMutation.isPending}
-                          data-testid={`button-corroborate-${truth.id}`}
-                          className="h-7 text-xs"
-                        >
-                          <ThumbsUp className="h-3 w-3 mr-1" />
-                          Corroborate
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => verifyMutation.mutate({ truthId: truth.id, action: "dispute" })}
-                          disabled={verifyMutation.isPending}
-                          data-testid={`button-dispute-${truth.id}`}
-                          className="h-7 text-xs"
-                        >
-                          <ThumbsDown className="h-3 w-3 mr-1" />
-                          Dispute
-                        </Button>
+                      {/* Actions — icon-only reactions within post borders */}
+                      <div className="flex items-center justify-between gap-1 pt-1 border-t mt-1">
+                        <div className="flex items-center gap-0.5">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => verifyMutation.mutate({ truthId: truth.id, action: "corroborate" })}
+                            disabled={verifyMutation.isPending}
+                            data-testid={`button-corroborate-${truth.id}`}
+                            className="h-8 px-2 text-xs"
+                            title="Corroborate"
+                          >
+                            <ThumbsUp className="h-3.5 w-3.5 text-green-500" />
+                            <span className="ml-1">Corroborate</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => verifyMutation.mutate({ truthId: truth.id, action: "dispute" })}
+                            disabled={verifyMutation.isPending}
+                            data-testid={`button-dispute-${truth.id}`}
+                            className="h-8 px-2 text-xs"
+                            title="Dispute"
+                          >
+                            <ThumbsDown className="h-3.5 w-3.5 text-red-500" />
+                            <span className="ml-1">Dispute</span>
+                          </Button>
+                        </div>
                         <FeedInteractions
                           truth={truth}
                           currentUserHash={currentUserHash}

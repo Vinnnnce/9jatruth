@@ -50,6 +50,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AdminAnalytics } from "@/components/admin-analytics";
+import { VerifiedBadge } from "@/components/verified-badge";
 
 import {
   BarChart,
@@ -1130,7 +1131,12 @@ export default function AdminDashboard() {
                         const active = org.active === undefined ? true : Boolean(org.active);
                         return (
                           <TableRow key={org.id} data-testid={`row-org-${org.id}`}>
-                            <TableCell className="font-medium">{org.name}</TableCell>
+                            <TableCell className="font-medium">
+                            <div className="flex items-center gap-1">
+                              {org.name}
+                              {verified && <VerifiedBadge />}
+                            </div>
+                          </TableCell>
                             <TableCell className="text-xs capitalize">{org.type ?? "—"}</TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                               {org.city ? `${org.city}${org.region ? `, ${org.region}` : ""}` : "—"}

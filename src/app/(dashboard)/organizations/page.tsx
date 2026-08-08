@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Building2, Globe, Mail, Phone, MapPin, CheckCircle2, Plus, Shield } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
+import { VerifiedBadge } from "@/components/verified-badge";
 
 type Organization = {
   id: number;
@@ -180,9 +181,7 @@ export default function Organizations() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm">{org.name}</span>
                         {org.verified === 1 && (
-                          <Badge className="text-[9px] gap-0.5 bg-green-500/15 text-green-600 dark:text-green-400 hover:bg-green-500/20">
-                            <CheckCircle2 className="h-2.5 w-2.5" /> Verified
-                          </Badge>
+                          <VerifiedBadge showLabel />
                         )}
                         <Badge variant="secondary" className={`text-[9px] ${typeCfg.color}`}>
                           {typeCfg.label}

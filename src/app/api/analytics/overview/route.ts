@@ -87,11 +87,11 @@ export async function GET(request: Request) {
     LIMIT 10
   `) as unknown as any[];
 
-  // Verification rate
+  // Verification rate (status: verified, rejected, pending)
   const verificationRate = (await sql`
     SELECT
       COUNT(CASE WHEN status = 'verified' THEN 1 END) as verified,
-      COUNT(CASE WHEN status = 'refuted' THEN 1 END) as refuted,
+      COUNT(CASE WHEN status = 'rejected' THEN 1 END) as rejected,
       COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
       COUNT(*) as total
     FROM micro_truths
@@ -113,6 +113,46 @@ export async function GET(request: Request) {
     ORDER BY date
   `) as unknown as any[];
 
+  // Trust score distribution
+  const trustScoreDistribution = (await sql`
+    SELECT
+      COUNT(CASE WHEN trust_score >= 80 THEN 1 END) as high,
+      COUNT(CASE WHEN trust_score >= 60 AND trust_score < 80 THEN 1 END) as medium_high,
+      COUNT(CASE WHEN trust_score >= 40 AND trust_score < 60 THEN 1 END) as medium,
+      COUNT(CASE WHEN trust_score >= 20 AND trust_score < 40 THEN 1 END) as low,
+      COUNT(CASE WHEN trust_score < 20 THEN 1 END) as very_low
+    FROM micro_truths
+  `) as unknown as any[];
+
+  // Truths by LGA (top 10)
+  const byLga = (await sql`
+    SELECT COALESCE(state_name, 'Unknown') as lga, COUNT(*) as count
+    FROM micro_truths
+    GROUP BY COALESCE(state_name, 'Unknown')
+    ORDER BY count DESC
+    LIMIT 10
+  `) as unknown as any[];
+
+  // Trust score trend (average trust per day, last 30 days)
+  const trustTrend = (await sql`
+    SELECT DATE(created_at) as date, ROUND(AVG(trust_score)) as avg_trust
+    FROM micro_truths
+    WHERE created_at > NOW() - INTERVAL '30 days'
+    GROUP BY DATE(created_at)
+    ORDER BY date
+  `) as unknown as any[];
+
+  // Engagement by type (total)
+  const engagementByType = (await sql`
+    SELECT 'likes' as type, COUNT(*) as count FROM feed_likes
+    UNION ALL
+    SELECT 'comments' as type, COUNT(*) as count FROM feed_comments
+    UNION ALL
+    SELECT 'shares' as type, COUNT(*) as count FROM feed_shares
+    UNION ALL
+    SELECT 'subscriptions' as type, COUNT(*) as count FROM user_subscriptions
+  `) as unknown as any[];
+
   return Response.json({
     totals: {
       truths: Number(totals[0].total_truths),
@@ -132,10 +172,20 @@ export async function GET(request: Request) {
     topContributors: topContributors.map((r) => ({ userHash: r.user_hash, count: Number(r.count) })),
     verificationRate: {
       verified: Number(verificationRate[0].verified),
-      refuted: Number(verificationRate[0].refuted),
+      rejected: Number(verificationRate[0].rejected),
       pending: Number(verificationRate[0].pending),
       total: Number(verificationRate[0].total),
     },
+    trustScoreDistribution: {
+      high: Number(trustScoreDistribution[0].high),
+      mediumHigh: Number(trustScoreDistribution[0].medium_high),
+      medium: Number(trustScoreDistribution[0].medium),
+      low: Number(trustScoreDistribution[0].low),
+      veryLow: Number(trustScoreDistribution[0].very_low),
+    },
+    byLga: byLga.map((r) => ({ lga: r.lga, count: Number(r.count) })),
+    trustTrend: trustTrend.map((r) => ({ date: r.date, avgTrust: Number(r.avg_trust) })),
+    engagementByType: engagementByType.map((r) => ({ type: r.type, count: Number(r.count) })),
     engagementTrend: engagementTrend.map((r) => ({ date: r.date, type: r.type, count: Number(r.count) })),
   });
 }

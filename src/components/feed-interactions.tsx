@@ -186,28 +186,29 @@ export function FeedInteractions({
   };
 
   return (
-    <>
-      {/* Like */}
+    <div className="flex items-center gap-0.5">
+      {/* Like — icon only */}
       <Button
         size="sm"
-        variant="outline"
+        variant="ghost"
         onClick={handleLike}
         disabled={likeMutation.isPending}
         data-testid={`button-like-${truth.id}`}
-        className="h-7 text-xs"
+        className="h-8 w-8 p-0"
+        title="Like"
+        aria-label="Like"
       >
         <Heart
-          className={`h-3 w-3 mr-1 ${liked ? "fill-red-500 text-red-500" : ""}`}
+          className={`h-4 w-4 ${liked ? "fill-red-500 text-red-500" : "text-muted-foreground"}`}
         />
-        Like
         {likeCount > 0 && (
-          <span className="ml-1 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-muted text-[10px] font-medium">
+          <span className="ml-0.5 text-[10px] font-medium text-muted-foreground">
             {likeCount}
           </span>
         )}
       </Button>
 
-      {/* Comment */}
+      {/* Comment — icon only */}
       <FeedComments
         truthId={truth.id}
         commentCount={0}
@@ -216,46 +217,43 @@ export function FeedInteractions({
         }}
       />
 
-      {/* Share */}
+      {/* Share — icon only */}
       <Button
         size="sm"
-        variant="outline"
+        variant="ghost"
         onClick={handleShare}
         data-testid={`button-share-${truth.id}`}
-        className="h-7 text-xs"
+        className="h-8 w-8 p-0"
+        title="Share"
+        aria-label="Share"
       >
-        <Share2 className="h-3 w-3 mr-1" />
-        Share
+        <Share2 className="h-4 w-4 text-muted-foreground" />
         {shareCount > 0 && (
-          <span className="ml-1 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-muted text-[10px] font-medium">
+          <span className="ml-0.5 text-[10px] font-medium text-muted-foreground">
             {shareCount}
           </span>
         )}
       </Button>
 
-      {/* Subscribe (only for other users' posts) */}
+      {/* Subscribe — icon only (only for other users' posts) */}
       {!isOwnPost && (
         <Button
           size="sm"
-          variant="outline"
+          variant="ghost"
           onClick={handleSubscribe}
           disabled={subscribeMutation.isPending}
           data-testid={`button-subscribe-${truth.id}`}
-          className="h-7 text-xs"
+          className="h-8 w-8 p-0"
+          title={subscribed ? "Subscribed" : "Subscribe"}
+          aria-label={subscribed ? "Subscribed" : "Subscribe"}
         >
           {subscribed ? (
-            <>
-              <UserCheck className="h-3 w-3 mr-1 text-green-500" />
-              Subscribed
-            </>
+            <UserCheck className="h-4 w-4 text-green-500" />
           ) : (
-            <>
-              <UserPlus className="h-3 w-3 mr-1" />
-              Subscribe
-            </>
+            <UserPlus className="h-4 w-4 text-muted-foreground" />
           )}
         </Button>
       )}
-    </>
+    </div>
   );
 }

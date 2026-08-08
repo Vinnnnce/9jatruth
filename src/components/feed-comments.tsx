@@ -98,14 +98,15 @@ export function FeedComments({
       <DialogTrigger asChild>
         <Button
           size="sm"
-          variant="outline"
-          className="h-7 text-xs"
+          variant="ghost"
+          className="h-8 w-8 p-0"
           data-testid={`button-comment-${truthId}`}
+          title="Comment"
+          aria-label="Comment"
         >
-          <MessageSquare className="h-3 w-3 mr-1" />
-          Comment
+          <MessageSquare className="h-4 w-4 text-muted-foreground" />
           {liveCount > 0 && (
-            <span className="ml-1 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-muted text-[10px] font-medium">
+            <span className="ml-0.5 text-[10px] font-medium text-muted-foreground">
               {liveCount}
             </span>
           )}

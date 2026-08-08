@@ -10,10 +10,12 @@ import { usePushNotifications } from "../hooks/use-push-notifications";
 import { Switch } from "@/components/ui/switch";
 import { Bell, BellOff } from "lucide-react";
 import { useState } from "react";
+import { useToast } from "@/components/hooks/use-toast";
 
 export function PushNotificationToggle() {
   const { supported, permission, subscribed, configured, subscribe, unsubscribe } = usePushNotifications();
   const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
 
   if (!supported) {
     return (
@@ -28,10 +30,32 @@ export function PushNotificationToggle() {
     setLoading(true);
     try {
       if (subscribed) {
-        await unsubscribe();
+        const ok = await unsubscribe();
+        if (ok) {
+          toast({ title: "Unsubscribed", description: "You will no longer receive push notifications." });
+        } else {
+          toast({ title: "Failed to unsubscribe", description: "Please try again later.", variant: "destructive" });
+        }
       } else {
-        await subscribe();
+        if (permission === "denied") {
+          toast({ title: "Notifications blocked", description: "Please enable notifications in your browser settings.", variant: "destructive" });
+          setLoading(false);
+          return;
+        }
+        if (!configured) {
+          toast({ title: "Not configured", description: "Push notifications are not set up on the server yet.", variant: "destructive" });
+          setLoading(false);
+          return;
+        }
+        const ok = await subscribe();
+        if (ok) {
+          toast({ title: "Subscribed!", description: "You will now receive push notifications for your areas." });
+        } else {
+          toast({ title: "Subscription failed", description: "Could not enable push notifications. Check your browser settings.", variant: "destructive" });
+        }
       }
+    } catch {
+      toast({ title: "Something went wrong", description: "Please try again later.", variant: "destructive" });
     } finally {
       setLoading(false);
     }

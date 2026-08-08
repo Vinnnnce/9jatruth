@@ -228,15 +228,19 @@ export async function getTruths(limit = 50, neighborhoodId?: number, category?: 
   const sql = getDb();
   let rows: SqlRow[];
   if (neighborhoodId && category) {
-    rows = (await sql`SELECT * FROM micro_truths WHERE neighborhood_id = ${neighborhoodId} AND category = ${category} ORDER BY created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id WHERE t.neighborhood_id = ${neighborhoodId} AND t.category = ${category} ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
   } else if (neighborhoodId) {
-    rows = (await sql`SELECT * FROM micro_truths WHERE neighborhood_id = ${neighborhoodId} ORDER BY created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id WHERE t.neighborhood_id = ${neighborhoodId} ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
   } else if (category) {
-    rows = (await sql`SELECT * FROM micro_truths WHERE category = ${category} ORDER BY created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id WHERE t.category = ${category} ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
   } else {
-    rows = (await sql`SELECT * FROM micro_truths ORDER BY created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
   }
-  return rows.map(mapTruth);
+  return rows.map((r) => ({
+    ...mapTruth(r),
+    orgName: r.org_name ?? null,
+    orgVerified: r.org_verified === 1 || r.org_verified === true,
+  })) as any;
 }
 
 export async function getTruthsNearby(

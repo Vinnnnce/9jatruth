@@ -79,8 +79,40 @@ export function hashIp(ip: string): string {
 }
 
 /**
+ * Check if an IP is private/local (RFC 1918 + loopback + link-local + IPv6).
+ */
+function isPrivateIp(ip: string): boolean {
+  const normalized = ip.trim().toLowerCase();
+  if (
+    normalized === "127.0.0.1" ||
+    normalized === "localhost" ||
+    normalized === "::1" ||
+    normalized === "::"
+  ) {
+    return true;
+  }
+  // Link-local
+  if (normalized.startsWith("169.254.")) return true;
+  // IPv6 link-local
+  if (normalized.startsWith("fe80:")) return true;
+  // IPv6 unique-local
+  if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true;
+  // IPv4 private ranges
+  if (normalized.startsWith("10.")) return true;
+  if (normalized.startsWith("192.168.")) return true;
+  // 172.16.0.0 – 172.31.255.255
+  if (normalized.startsWith("172.")) {
+    const parts = normalized.split(".");
+    const second = parseInt(parts[1], 10);
+    if (second >= 16 && second <= 31) return true;
+  }
+  return false;
+}
+
+/**
  * Get IP-based location info from a request (privacy-preserving).
- * Returns hashed IP and approximate region/city/coordinates via ipapi.co.
+ * Returns hashed IP and approximate region/city/coordinates.
+ * Uses ipapi.co as primary, ip-api.com as fallback.
  */
 export async function getIpLocation(request: Request): Promise<{
   ipHash: string | null;
@@ -91,19 +123,13 @@ export async function getIpLocation(request: Request): Promise<{
 }> {
   const ip = getClientIp(request);
 
-  if (
-    !ip ||
-    ip === "127.0.0.1" ||
-    ip === "localhost" ||
-    ip.startsWith("192.168.") ||
-    ip.startsWith("10.") ||
-    ip.startsWith("172.")
-  ) {
+  if (!ip || isPrivateIp(ip)) {
     return { ipHash: null, ipRegion: null, ipCity: null, ipLat: null, ipLng: null };
   }
 
   const ipHash = hashIp(ip);
 
+  // Primary: ipapi.co
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
@@ -113,21 +139,49 @@ export async function getIpLocation(request: Request): Promise<{
     });
     clearTimeout(timeout);
 
-    if (!response.ok) {
-      return { ipHash, ipRegion: null, ipCity: null, ipLat: null, ipLng: null };
+    if (response.ok) {
+      const data = (await response.json()) as any;
+      if (!data.error) {
+        return {
+          ipHash,
+          ipRegion: data.region || null,
+          ipCity: data.city || null,
+          ipLat: typeof data.latitude === "number" ? data.latitude : null,
+          ipLng: typeof data.longitude === "number" ? data.longitude : null,
+        };
+      }
     }
-
-    const data = (await response.json()) as any;
-    return {
-      ipHash,
-      ipRegion: data.region || null,
-      ipCity: data.city || null,
-      ipLat: typeof data.latitude === "number" ? data.latitude : null,
-      ipLng: typeof data.longitude === "number" ? data.longitude : null,
-    };
   } catch {
-    return { ipHash, ipRegion: null, ipCity: null, ipLat: null, ipLng: null };
+    // Fall through to fallback
   }
+
+  // Fallback: ip-api.com
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+
+    const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,regionName,city,lat,lon`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (response.ok) {
+      const data = (await response.json()) as any;
+      if (data.status === "success") {
+        return {
+          ipHash,
+          ipRegion: data.regionName || null,
+          ipCity: data.city || null,
+          ipLat: typeof data.lat === "number" ? data.lat : null,
+          ipLng: typeof data.lon === "number" ? data.lon : null,
+        };
+      }
+    }
+  } catch {
+    // Both providers failed
+  }
+
+  return { ipHash, ipRegion: null, ipCity: null, ipLat: null, ipLng: null };
 }
 
 /**
