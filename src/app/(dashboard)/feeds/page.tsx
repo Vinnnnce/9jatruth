@@ -487,12 +487,12 @@ function NeighborhoodSnapshotCard({
             <span className="text-[9px]" style={{ color: COLORS.textSecondary }}>
               {card.prediction.category} · {card.prediction.timeframe}
             </span>
-            {card.prediction.modelVersion.startsWith("gemini") && (
+            {card.prediction.modelVersion.startsWith("kimi") && (
               <Badge
                 className="text-[8px] px-1 py-0 rounded-full"
                 style={{ background: `${COLORS.accent}15`, color: COLORS.accent, border: "none" }}
               >
-                Gemini AI
+                Kimi K3 AI
               </Badge>
             )}
           </div>

@@ -28,7 +28,6 @@ import { NewUserTour } from "@/components/new-user-tour";
 const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
 import {
-  LayoutDashboard,
   Send,
   ListChecks,
   TrendingUp,
@@ -80,7 +79,6 @@ function useNavSections() {
       label: "Main",
       items: [
         { path: "/feeds", label: "Feeds", icon: Newspaper },
-        { path: "/", label: "Portfolio", icon: LayoutDashboard },
         { path: "/search", label: "Search", icon: Search },
         { path: "/submit", label: "Submit Truth", icon: Send },
         { path: "/activity", label: "Activity", icon: ActivityIcon },

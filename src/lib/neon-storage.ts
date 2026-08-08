@@ -1778,13 +1778,13 @@ export async function runAllPredictions() {
     }
   }
 
-  // ─── Gemini AI-enhanced predictions ───
-  // Uses Gemini to generate deeper, context-aware predictions per neighborhood.
-  // Falls back gracefully if GEMINI_API_KEY is not set.
-  const { isGeminiConfigured, getGeminiModel, generateGeminiJsonArray } = await import("@/lib/gemini");
+  // ─── Kimi K3 AI-enhanced predictions ───
+  // Uses Kimi K3 to generate deeper, context-aware predictions per neighborhood.
+  // Falls back gracefully if KIMI_API_KEY is not set.
+  const { isKimiConfigured, getKimiModel, generateKimiJsonArray } = await import("@/lib/kimi");
 
-  if (isGeminiConfigured()) {
-    const model = getGeminiModel();
+  if (isKimiConfigured()) {
+    const model = getKimiModel();
     const systemPrompt = `You are an AI analyst for Soke, a community truth-reporting platform for Nigerian neighborhoods. Analyze the provided neighborhood data and generate actionable predictions about infrastructure and safety conditions. Each prediction should include category, prediction text, confidence (0-100), timeframe, and trend (up/down/stable/risk).`;
 
     for (const neighborhood of allNeighborhoods) {
@@ -1815,14 +1815,14 @@ ${JSON.stringify(context, null, 2)}
 
 Format: [{"category":"power|fuel|traffic|prices|safety","prediction":"...","confidence":75,"timeframe":"next 6h","trend":"up|down|stable|risk"}]`;
 
-      const { data: aiResults, source } = await generateGeminiJsonArray<any>(
+      const { data: aiResults, source } = await generateKimiJsonArray<any>(
         systemPrompt,
         userPrompt,
         [],
         { temperature: 0.4, maxOutputTokens: 1024 }
       );
 
-      if (source === "gemini" && Array.isArray(aiResults)) {
+      if (source === "kimi" && Array.isArray(aiResults)) {
         for (const pred of aiResults.slice(0, 3)) {
           if (pred.prediction && pred.category) {
             await createPrediction({
@@ -1832,7 +1832,7 @@ Format: [{"category":"power|fuel|traffic|prices|safety","prediction":"...","conf
               confidence: Math.min(100, Math.max(0, Number(pred.confidence) || 60)),
               timeframe: String(pred.timeframe || "24h"),
               trend: String(pred.trend || "stable"),
-              modelVersion: `gemini:${model}`,
+              modelVersion: `kimi:${model}`,
             });
             aiPredictions++;
           }
@@ -2327,7 +2327,7 @@ export async function getUserBrowsingProfile(clerkUserId?: string | null, userHa
 
 /**
  * Generate AI-powered post suggestions for a user based on browsing patterns.
- * Uses a hybrid approach: heuristic scoring + optional Gemini explanation.
+ * Uses a hybrid approach: heuristic scoring + optional Kimi K3 explanation.
  */
 export async function generatePostSuggestions(opts: {
   clerkUserId?: string | null;
@@ -2415,11 +2415,11 @@ export async function generatePostSuggestions(opts: {
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
 
-  // Optional: Use Gemini to generate personalized recommendation text
-  const { isGeminiConfigured, generateGeminiJson } = await import("@/lib/gemini");
+  // Optional: Use Kimi K3 to generate personalized recommendation text
+  const { isKimiConfigured, generateKimiJson } = await import("@/lib/kimi");
   let sourceModel = "heuristic";
 
-  if (isGeminiConfigured() && topSuggestions.length > 0 && profile) {
+  if (isKimiConfigured() && topSuggestions.length > 0 && profile) {
     const systemPrompt = "You are a recommendation AI for Soke, a community truth platform. Given a user's browsing profile and candidate posts, enhance the recommendation reasons to be more personal and engaging. Keep reasons under 100 characters.";
 
     const userPrompt = `User profile: ${JSON.stringify({
@@ -2433,18 +2433,18 @@ ${JSON.stringify(topSuggestions.map(s => ({ id: s.truthId, category: s.category,
 
 Return a JSON array of objects with "id" (the truth id) and "reason" (personalized recommendation text).`;
 
-    const { data: geminiResults, source } = await generateGeminiJson<{ id: number; reason: string }[]>(
+    const { data: kimiResults, source } = await generateKimiJson<{ id: number; reason: string }[]>(
       systemPrompt, userPrompt, [], { temperature: 0.5, maxOutputTokens: 512 }
     );
 
-    if (source === "gemini" && Array.isArray(geminiResults)) {
-      for (const gr of geminiResults) {
+    if (source === "kimi" && Array.isArray(kimiResults)) {
+      for (const gr of kimiResults) {
         const match = topSuggestions.find(s => s.truthId === gr.id);
         if (match && gr.reason) {
           match.reason = gr.reason;
         }
       }
-      sourceModel = "gemini-enhanced";
+      sourceModel = "kimi-enhanced";
     }
   }
 
@@ -2545,7 +2545,7 @@ export async function getFeedSnapshots() {
 
 /**
  * Generate weekly user reviews for the admin dashboard.
- * Collects per-user activity metrics and optionally uses Gemini for summaries.
+ * Collects per-user activity metrics and optionally uses Kimi K3 for summaries.
  */
 export async function generateWeeklyReviews() {
   const sql = getDb();
@@ -2651,11 +2651,11 @@ export async function generateWeeklyReviews() {
     });
   }
 
-  // Optional: Use Gemini to generate AI summaries for top users
-  const { isGeminiConfigured, getGeminiModel, generateGeminiText } = await import("@/lib/gemini");
+  // Optional: Use Kimi K3 to generate AI summaries for top users
+  const { isKimiConfigured, getKimiModel, generateKimiText } = await import("@/lib/kimi");
 
-  if (isGeminiConfigured() && reviews.length > 0) {
-    const model = getGeminiModel();
+  if (isKimiConfigured() && reviews.length > 0) {
+    const model = getKimiModel();
     const systemPrompt = "You are an analytics AI for Soke, a community truth platform. Generate concise, insightful weekly review summaries for users. Keep each summary under 200 characters. Focus on engagement patterns and actionable insights.";
 
     for (const review of reviews.slice(0, 50)) {
@@ -2668,14 +2668,14 @@ ${JSON.stringify({
   recommendations: review.recommendations,
 }, null, 2)}`;
 
-      const aiSummary = await generateGeminiText(systemPrompt, userPrompt, {
+      const aiSummary = await generateKimiText(systemPrompt, userPrompt, {
         temperature: 0.4,
         maxOutputTokens: 256,
       });
 
       if (aiSummary) {
         review.aiSummary = aiSummary;
-        review.modelVersion = `gemini:${model}`;
+        review.modelVersion = `kimi:${model}`;
       }
     }
   }

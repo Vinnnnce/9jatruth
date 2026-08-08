@@ -1716,9 +1716,9 @@ function WeeklyReviewTab() {
                         {flag.replace(/_/g, " ")}
                       </Badge>
                     ))}
-                    {review.modelVersion?.startsWith("gemini") && (
+                    {review.modelVersion?.startsWith("kimi") && (
                       <Badge className="text-[8px] px-1 py-0 bg-indigo-500/10 text-indigo-500 border-none">
-                        Gemini AI
+                        Kimi K3 AI
                       </Badge>
                     )}
                   </div>
