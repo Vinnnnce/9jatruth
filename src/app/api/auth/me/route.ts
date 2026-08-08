@@ -3,8 +3,10 @@ import {
   getAgencyAccountByClerkId,
   getOrganization,
   getPlatformUserByClerkId,
+  upsertPlatformUser,
 } from "@/lib/neon-storage";
-import { getClerkUserId, getUserId } from "@/lib/api-helpers";
+import { getClerkUserId } from "@/lib/api-helpers";
+import { currentUser } from "@clerk/nextjs/server";
 import { createHash } from "crypto";
 
 export async function GET(request: Request) {
@@ -21,21 +23,43 @@ export async function GET(request: Request) {
   const account = await getAgencyAccountByClerkId(clerkUserId);
   if (!account || !account.active) {
     // Fall back to the platform_users record if no agency account exists.
-    const platformUser = await getPlatformUserByClerkId(clerkUserId);
+    let platformUser = await getPlatformUserByClerkId(clerkUserId);
+
+    // Lazily create a platform_users row if the Clerk webhook hasn't fired yet.
+    // This ensures new signups can use the app immediately.
     if (!platformUser) {
-      return Response.json({
-        account: null,
-        organization: null,
-        userHash,
-      });
+      try {
+        const clerkUser = await currentUser();
+        if (clerkUser) {
+          const email = clerkUser.emailAddresses?.find(
+            (e: any) => e.id === clerkUser.primaryEmailAddressId
+          )?.emailAddress || clerkUser.emailAddresses?.[0]?.emailAddress || "";
+          const firstName = clerkUser.firstName || "";
+          const lastName = clerkUser.lastName || "";
+          const displayName = (firstName || lastName ? `${firstName} ${lastName}`.trim() : clerkUser.username) || null;
+          const avatarUrl = clerkUser.imageUrl || null;
+
+          platformUser = await upsertPlatformUser({
+            clerkUserId,
+            email: email || clerkUserId,
+            displayName,
+            avatarUrl,
+          });
+        }
+      } catch {
+        // If lazy creation fails, continue without a platform_user row
+      }
     }
+
     return Response.json({
-      account: {
-        id: platformUser.id,
-        email: platformUser.email,
-        displayName: platformUser.display_name,
-        role: platformUser.role,
-      },
+      account: platformUser
+        ? {
+            id: platformUser.id,
+            email: platformUser.email,
+            displayName: platformUser.display_name,
+            role: platformUser.role,
+          }
+        : null,
       organization: null,
       userHash,
     });

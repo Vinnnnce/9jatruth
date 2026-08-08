@@ -18,10 +18,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/hooks/use-toast";
-import { Send, CheckCircle2, Info, MapPin, LocateFixed, Building2 } from "lucide-react";
+import { Send, CheckCircle2, Info, MapPin, LocateFixed, Building2, UserPlus, LogIn } from "lucide-react";
 import { useLiveLocation } from "@/hooks/use-live-location";
 import { useAgencyAuth } from "@/hooks/use-agency-auth";
 import { CATEGORY_LIST } from "@/lib/categories";
+import { useUser } from "@/lib/use-user-safe";
+import { SignedIn, SignedOut, SignInButton, SignUpButton } from "@clerk/nextjs";
 
 type Neighborhood = {
   id: number;
@@ -36,19 +38,19 @@ export default function SubmitTruth() {
   const [category, setCategory] = useState<string>("");
   const [content, setContent] = useState<string>("");
   const [postAsOrg, setPostAsOrg] = useState(false);
-  const [userHash] = useState(() => `dev_${Math.random().toString(36).substring(2, 6)}`);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { lat, lng, requestLocation, loading: locLoading } = useLiveLocation();
   const { auth, loading: authLoading } = useAgencyAuth();
   const isAgencyAuth = !!auth.account;
+  const { isSignedIn, isLoaded } = useUser();
 
   const { data: neighborhoods, isLoading } = useQuery<Neighborhood[]>({
     queryKey: ["/api/neighborhoods"],
   });
 
   const mutation = useMutation({
-    mutationFn: (data: { neighborhoodId: number; category: string; content: string; userHash: string; reportLat?: number; reportLng?: number; locationSource?: string }) => {
+    mutationFn: (data: { neighborhoodId: number; category: string; content: string; reportLat?: number; reportLng?: number; locationSource?: string }) => {
       const endpoint = postAsOrg && isAgencyAuth ? "/api/organizations/me/truths" : "/api/truths";
       return apiRequest("POST", endpoint, data);
     },
@@ -63,12 +65,20 @@ export default function SubmitTruth() {
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["/api/rewards/balance"] });
     },
-    onError: () => {
-      toast({
-        title: "Submission failed",
-        description: "Please check your inputs and try again.",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      if (error?.status === 401) {
+        toast({
+          title: "Sign in required",
+          description: "You need to sign in to submit a report.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Submission failed",
+          description: "Please check your inputs and try again.",
+          variant: "destructive",
+        });
+      }
     },
   });
 
@@ -93,10 +103,51 @@ export default function SubmitTruth() {
       neighborhoodId: parseInt(neighborhoodId),
       category,
       content: content.trim(),
-      userHash,
       ...(lat !== null && lng !== null ? { reportLat: lat, reportLng: lng, locationSource: "gps" as const } : {}),
     });
   };
+
+  // Show sign-up/sign-in CTA for unauthenticated users
+  if (isLoaded && !isSignedIn) {
+    return (
+      <div className="p-4 md:p-6 max-w-3xl space-y-6">
+        <div>
+          <h1 className="text-xl font-display font-700">Submit a Report</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Report real-time conditions in your neighborhood.
+          </p>
+        </div>
+        <Card className="border-border">
+          <CardContent className="p-8 md:p-12 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mx-auto mb-4">
+              <UserPlus className="h-8 w-8 text-primary" />
+            </div>
+            <h2 className="text-lg font-display font-700 mb-2">Sign up to post a report</h2>
+            <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
+              You can browse community feeds without an account, but you need to sign up to submit reports, verify truths, and earn rewards.
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <SignUpButton mode="modal">
+                <button className="text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 transition-colors px-6 py-2 rounded-md">
+                  Sign Up
+                </button>
+              </SignUpButton>
+              <SignInButton mode="modal">
+                <button className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-6 py-2 rounded-md border border-border hover:bg-muted">
+                  Log In
+                </button>
+              </SignInButton>
+            </div>
+            <div className="mt-6 pt-6 border-t border-border">
+              <a href="/feeds" className="text-xs text-primary hover:underline">
+                Browse community feeds →
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 max-w-3xl space-y-6">
@@ -199,7 +250,7 @@ export default function SubmitTruth() {
           <div className="flex items-center gap-2 rounded-md bg-muted/50 p-3">
             <Info className="h-4 w-4 text-muted-foreground shrink-0" />
             <p className="text-[11px] text-muted-foreground">
-              Your device hash: <span className="font-mono text-foreground">{userHash}</span>. Reports are pseudonymous and processed through the mesh network before reaching the cloud.
+              Your reports are pseudonymous and processed through the verification pipeline before reaching the community feed.
             </p>
           </div>
 
