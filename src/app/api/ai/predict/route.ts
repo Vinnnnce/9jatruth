@@ -43,11 +43,11 @@ export async function POST(request: Request) {
         COALESCE(share_counts.cnt, 0) as share_count,
         COALESCE(comment_counts.cnt, 0) as comment_count
       FROM micro_truths t
-      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM truth_likes GROUP BY truth_id) like_counts ON like_counts.truth_id = t.id
-      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM truth_shares GROUP BY truth_id) share_counts ON share_counts.truth_id = t.id
-      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM truth_comments GROUP BY truth_id) comment_counts ON comment_counts.truth_id = t.id
-      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM truth_verifications WHERE action = 'corroborate' GROUP BY truth_id) corr_counts ON corr_counts.truth_id = t.id
-      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM truth_verifications WHERE action = 'dispute' GROUP BY truth_id) disp_counts ON disp_counts.truth_id = t.id
+      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM feed_likes GROUP BY truth_id) like_counts ON like_counts.truth_id = t.id
+      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM feed_shares GROUP BY truth_id) share_counts ON share_counts.truth_id = t.id
+      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM feed_comments GROUP BY truth_id) comment_counts ON comment_counts.truth_id = t.id
+      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM verifications WHERE action = 'corroborate' GROUP BY truth_id) corr_counts ON corr_counts.truth_id = t.id
+      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM verifications WHERE action = 'dispute' GROUP BY truth_id) disp_counts ON disp_counts.truth_id = t.id
       WHERE t.category = ${category} AND t.neighborhood_id = ${neighborhoodId}
         AND t.created_at > NOW() - INTERVAL '7 days'
       ORDER BY t.created_at DESC
@@ -62,11 +62,11 @@ export async function POST(request: Request) {
         COALESCE(share_counts.cnt, 0) as share_count,
         COALESCE(comment_counts.cnt, 0) as comment_count
       FROM micro_truths t
-      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM truth_likes GROUP BY truth_id) like_counts ON like_counts.truth_id = t.id
-      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM truth_shares GROUP BY truth_id) share_counts ON share_counts.truth_id = t.id
-      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM truth_comments GROUP BY truth_id) comment_counts ON comment_counts.truth_id = t.id
-      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM truth_verifications WHERE action = 'corroborate' GROUP BY truth_id) corr_counts ON corr_counts.truth_id = t.id
-      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM truth_verifications WHERE action = 'dispute' GROUP BY truth_id) disp_counts ON disp_counts.truth_id = t.id
+      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM feed_likes GROUP BY truth_id) like_counts ON like_counts.truth_id = t.id
+      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM feed_shares GROUP BY truth_id) share_counts ON share_counts.truth_id = t.id
+      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM feed_comments GROUP BY truth_id) comment_counts ON comment_counts.truth_id = t.id
+      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM verifications WHERE action = 'corroborate' GROUP BY truth_id) corr_counts ON corr_counts.truth_id = t.id
+      LEFT JOIN (SELECT truth_id, COUNT(*) as cnt FROM verifications WHERE action = 'dispute' GROUP BY truth_id) disp_counts ON disp_counts.truth_id = t.id
       WHERE t.category = ${category}
         AND t.created_at > NOW() - INTERVAL '7 days'
       ORDER BY t.created_at DESC

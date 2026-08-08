@@ -44,18 +44,32 @@ const tooltipStyle = {
 };
 
 export default function Compare() {
-  const { data, isLoading } = useQuery<DashboardData[]>({
+  const { data, isLoading, isError } = useQuery<DashboardData[]>({
     queryKey: ["/api/dashboard"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/dashboard");
       return res.json();
     },
+    retry: 1,
   });
 
   const [idA, setIdA] = useState<string>("");
   const [idB, setIdB] = useState<string>("");
 
-  if (isLoading || !data) {
+  if (isError) {
+    return (
+      <div className="p-4 md:p-6 max-w-4xl space-y-6">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <GitCompare className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Failed to load comparison data. Will retry...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isLoading || !data || data.length === 0) {
     return (
       <div className="p-4 md:p-6 max-w-4xl space-y-6">
         <Skeleton className="h-8 w-48" />

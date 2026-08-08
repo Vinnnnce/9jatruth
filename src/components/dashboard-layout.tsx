@@ -54,6 +54,9 @@ import {
   Briefcase,
   ShieldCheck,
   Download,
+  SlidersHorizontal,
+  MessageSquare,
+  ClipboardList,
 } from "lucide-react";
 
 type UserProfile = {
@@ -103,6 +106,9 @@ function useNavSections() {
         { path: "/organizations", label: "Business", icon: Building2 },
         { path: "/agency-auth", label: "Agency Login", icon: Shield },
         { path: "/account", label: "Account Settings", icon: Settings },
+        { path: "/advanced-settings", label: "Advanced Settings", icon: SlidersHorizontal },
+        { path: "/feedback", label: "Feedback", icon: MessageSquare },
+        { path: "/questionnaire", label: "Questionnaire", icon: ClipboardList },
       ],
     },
     {

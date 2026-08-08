@@ -54,7 +54,7 @@ function timeAgo(dateStr: string): string {
 export default function Predictions() {
   const [categoryFilter, setCategoryFilter] = useState<string>("");
 
-  const { data: predictions, isLoading } = useQuery<Prediction[]>({
+  const { data: predictions, isLoading, isError } = useQuery<Prediction[]>({
     queryKey: ["/api/predictions", categoryFilter],
     queryFn: async ({ queryKey }) => {
       const [, cat] = queryKey as [string, string];
@@ -62,6 +62,7 @@ export default function Predictions() {
       const res = await apiRequest("GET", url);
       return res.json();
     },
+    retry: 1,
   });
 
   const { data: neighborhoods } = useQuery<Neighborhood[]>({
@@ -74,6 +75,19 @@ export default function Predictions() {
   const filteredPredictions = categoryFilter
     ? predictions?.filter((p) => p.category === categoryFilter)
     : predictions;
+
+  if (isError) {
+    return (
+      <div className="p-4 md:p-6 max-w-5xl space-y-6">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <Brain className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Failed to load predictions. Will retry...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 max-w-5xl space-y-6">

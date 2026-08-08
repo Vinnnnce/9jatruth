@@ -151,14 +151,36 @@ export default function Feeds() {
   const { recordEvent } = useBrowsingTracker();
   const trackedRef = useRef<Set<number>>(new Set());
 
-  // Fetch feed snapshots (the new view-model API)
+  // Geo filters for feeds
+  const [geoFilter, setGeoFilter] = useState({
+    country: "",
+    region: "",
+    state: "",
+    lga: "",
+  });
+
+  // Fetch geo hierarchy for filter dropdowns
+  const { data: geoHierarchy } = useQuery<{ regions: string[]; states: string[]; lgas: string[] }>({
+    queryKey: ["/api/geo/hierarchy"],
+  });
+
+  // Fetch feed snapshots with auto-refresh every 5 seconds
   const { data: feedData, isLoading } = useQuery<FeedSnapshot>({
-    queryKey: ["/api/feed/snapshots"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/feed/snapshots");
+    queryKey: ["/api/feed/snapshots", geoFilter],
+    queryFn: async ({ queryKey }) => {
+      const [, filter] = queryKey as [string, typeof geoFilter];
+      const params = new URLSearchParams();
+      if (filter.region) params.set("region", filter.region);
+      if (filter.state) params.set("state", filter.state);
+      if (filter.lga) params.set("lga", filter.lga);
+      const qs = params.toString();
+      const url = qs ? `/api/feed/snapshots?${qs}` : "/api/feed/snapshots";
+      const res = await apiRequest("GET", url);
       return res.json();
     },
     enabled: isLoaded,
+    refetchInterval: 5000, // Auto-refresh every 5 seconds
+    refetchOnWindowFocus: true,
   });
 
   // Fetch AI suggestions
@@ -204,7 +226,15 @@ export default function Feeds() {
   const summary = feedData?.summary;
   const neighborhoods = feedData?.neighborhoods ?? [];
   const suggestions = suggestionsData?.suggestions ?? [];
+  const hasNearbyFeeds = neighborhoods.length > 0;
 
+  // Build a fallback feed from all available truths if no nearby feeds
+  const allReports = neighborhoods.length > 0
+    ? neighborhoods.flatMap(n => n.recentReports || [])
+    : [];
+
+  // If no nearby feeds, show a message and other available posts
+  const showFallback = !hasNearbyFeeds;
   return (
     <div
       className="min-h-screen pb-8"
@@ -239,10 +269,63 @@ export default function Feeds() {
           />
         </div>
 
+        {/* ─── Geo Filters ─── */}
+        <div className="rounded-xl p-3 space-y-2" style={{ background: COLORS.card }}>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-medium uppercase" style={{ color: COLORS.textSecondary }}>Filter by Location</span>
+            {(geoFilter.region || geoFilter.state || geoFilter.lga) && (
+              <button
+                onClick={() => setGeoFilter({ country: "", region: "", state: "", lga: "" })}
+                className="text-[10px] text-blue-400 hover:underline"
+              >Clear</button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              value={geoFilter.region}
+              onChange={(e) => setGeoFilter(f => ({ ...f, region: e.target.value, state: "", lga: "" }))}
+              className="h-8 rounded-md text-xs px-2 outline-none"
+              style={{ background: COLORS.tile, color: COLORS.textPrimary, border: `1px solid ${COLORS.textSecondary}30` }}
+            >
+              <option value="">All Regions</option>
+              {(geoHierarchy?.regions || []).map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <select
+              value={geoFilter.state}
+              onChange={(e) => setGeoFilter(f => ({ ...f, state: e.target.value, lga: "" }))}
+              className="h-8 rounded-md text-xs px-2 outline-none"
+              style={{ background: COLORS.tile, color: COLORS.textPrimary, border: `1px solid ${COLORS.textSecondary}30` }}
+            >
+              <option value="">All States</option>
+              {(geoHierarchy?.states || []).map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select
+              value={geoFilter.lga}
+              onChange={(e) => setGeoFilter(f => ({ ...f, lga: e.target.value }))}
+              className="h-8 rounded-md text-xs px-2 outline-none col-span-2"
+              style={{ background: COLORS.tile, color: COLORS.textPrimary, border: `1px solid ${COLORS.textSecondary}30` }}
+            >
+              <option value="">All L.G.A</option>
+              {(geoHierarchy?.lgas || []).map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* ─── Auto-refresh indicator ─── */}
+        <div className="flex items-center justify-center gap-1.5">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75 animate-ping" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+          </span>
+          <span className="text-[10px] font-medium" style={{ color: COLORS.textSecondary }}>
+            Auto-refreshing every 5s · Live
+          </span>
+        </div>
+
         {/* ─── Section Header ─── */}
         <div className="flex items-center justify-between pt-1">
           <h2 className="text-sm font-semibold" style={{ color: COLORS.textPrimary }}>
-            Neighborhood Snapshots
+            {hasNearbyFeeds ? "Neighborhood Snapshots" : "Other Posts"}
           </h2>
           <div className="flex items-center gap-1.5">
             <span className="relative flex h-2 w-2">
@@ -254,6 +337,17 @@ export default function Feeds() {
             </span>
           </div>
         </div>
+
+        {/* ─── Fallback: No nearby feeds ─── */}
+        {showFallback && (
+          <div className="rounded-xl p-4 text-center" style={{ background: COLORS.card }}>
+            <Newspaper className="h-6 w-6 mx-auto mb-2" style={{ color: COLORS.textSecondary }} />
+            <p className="text-sm font-medium" style={{ color: COLORS.textPrimary }}>No feeds nearby</p>
+            <p className="text-xs mt-1" style={{ color: COLORS.textSecondary }}>
+              Showing other posts from across the platform
+            </p>
+          </div>
+        )}
 
         {/* ─── AI Suggestions (if available) ─── */}
         {suggestions.length > 0 && (

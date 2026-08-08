@@ -26,7 +26,11 @@ const isPublicRoute = createRouteMatcher([
   "/api/organizations(.*)",
   "/api/push/vapid-key(.*)",
   "/api/ai/feed-predictions(.*)",  // GET is public (feed display), POST is rate-limited
+  "/api/feed(.*)",  // Feed snapshots and suggestions are public
+  "/api/maps(.*)",  // Maps nearby is public
   "/api/ai/time-series(.*)",  // Historical data is public
+  "/api/feedback(.*)",  // POST is public (anyone can submit feedback)
+  "/api/questionnaire(.*)",  // POST is public (anyone can submit questionnaire)
 ]);
 
 // Admin-only API routes — require super admin email

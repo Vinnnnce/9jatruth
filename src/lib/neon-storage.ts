@@ -2575,12 +2575,28 @@ Return a JSON array of objects with "id" (the truth id) and "reason" (personaliz
  * Get the feed snapshots view-model — the data shape needed for the
  * redesigned feed page matching the uploaded design.
  */
-export async function getFeedSnapshots() {
+export async function getFeedSnapshots(region?: string, state?: string, lga?: string) {
   const sql = getDb();
 
-  const neighborhoods = (await sql`SELECT * FROM neighborhoods ORDER BY name`) as unknown as SqlRow[];
+  // Build neighborhood query with optional geo filters
+  const neighborhoods = (region || state || lga)
+    ? (await sql`SELECT * FROM neighborhoods WHERE 
+        (${region ?? null}::text IS NULL OR region = ${region ?? null})
+        AND (${state ?? null}::text IS NULL OR state = ${state ?? null})
+        AND (${lga ?? null}::text IS NULL OR lga = ${lga ?? null})
+        ORDER BY name`) as unknown as SqlRow[]
+    : (await sql`SELECT * FROM neighborhoods ORDER BY name`) as unknown as SqlRow[];
   const snapshots = (await sql`SELECT * FROM snapshots`) as unknown as SqlRow[];
-  const truths = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE t.status != 'rejected' ORDER BY t.created_at DESC LIMIT 200`) as unknown as SqlRow[];
+  
+  // Fetch all truths (for both filtered and fallback display)
+  const allTruths = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE t.status != 'rejected' ORDER BY t.created_at DESC LIMIT 200`) as unknown as SqlRow[];
+  
+  // If geo filter is applied and we have matching neighborhoods, filter truths to those neighborhoods
+  // If no neighborhoods match, fall back to showing all truths (other posts)
+  const neighborhoodIds = new Set(neighborhoods.map(n => n.id));
+  const truths = (region || state || lga) && neighborhoodIds.size > 0
+    ? allTruths.filter(t => neighborhoodIds.has(t.neighborhood_id))
+    : allTruths;
   const predictions = (await sql`SELECT * FROM predictions WHERE (expires_at IS NULL OR expires_at > NOW()) ORDER BY created_at DESC LIMIT 50`) as unknown as SqlRow[];
 
   // Summary stats

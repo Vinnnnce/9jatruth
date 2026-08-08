@@ -85,6 +85,7 @@ import {
   Zap,
   Loader2,
   Sparkles,
+  MessageSquare,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -536,6 +537,9 @@ export default function AdminDashboard() {
           </TabsTrigger>
           <TabsTrigger value="weekly-review" data-testid="tab-weekly-review">
             Weekly Review
+          </TabsTrigger>
+          <TabsTrigger value="feedback" data-testid="tab-feedback">
+            Feedback & Questionnaires
           </TabsTrigger>
         </TabsList>
 
@@ -1425,6 +1429,13 @@ export default function AdminDashboard() {
         <TabsContent value="weekly-review" className="space-y-4">
           <WeeklyReviewTab />
         </TabsContent>
+
+        {/* --------------------------------------------------------------- */}
+        {/* Feedback & Questionnaires                                       */}
+        {/* --------------------------------------------------------------- */}
+        <TabsContent value="feedback" className="space-y-4">
+          <FeedbackTab />
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -1783,6 +1794,125 @@ function ReviewStat({ label, value }: { label: string; value: number | string })
       <p className="text-sm font-display font-700 tabular-nums mt-0.5">
         {typeof value === "number" ? value.toLocaleString() : value}
       </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Feedback & Questionnaire Tab
+// ---------------------------------------------------------------------------
+
+type FeedbackEntry = {
+  id: number;
+  email: string | null;
+  display_name: string | null;
+  category: string;
+  subject: string;
+  message: string;
+  rating: number;
+  page_url: string | null;
+  status: string;
+  admin_response: string | null;
+  created_at: string;
+};
+
+type QuestionnaireEntry = {
+  id: number;
+  email: string | null;
+  display_name: string | null;
+  questionnaire_type: string;
+  responses: Record<string, any>;
+  status: string;
+  admin_notes: string | null;
+  created_at: string;
+};
+
+function FeedbackTab() {
+  const { data: feedback, isLoading: fbLoading } = useQuery<FeedbackEntry[]>({
+    queryKey: ["/api/feedback"],
+  });
+  const { data: questionnaires, isLoading: qLoading } = useQuery<QuestionnaireEntry[]>({
+    queryKey: ["/api/questionnaire"],
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Feedback */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-display flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-primary" />
+            User Feedback
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {fbLoading ? (
+            <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20" />)}</div>
+          ) : feedback && feedback.length > 0 ? (
+            <div className="space-y-3">
+              {feedback.map((fb) => (
+                <div key={fb.id} className="rounded-md bg-muted/30 p-3 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-[9px] capitalize">{fb.category}</Badge>
+                      {fb.rating > 0 && (
+                        <span className="text-[10px] text-amber-500">{"★".repeat(fb.rating)}</span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">{timeAgo(fb.created_at)}</span>
+                  </div>
+                  <p className="text-xs font-medium">{fb.subject}</p>
+                  <p className="text-xs text-muted-foreground line-clamp-3">{fb.message}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    From: {fb.display_name || fb.email || "Anonymous"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState icon={MessageSquare} message="No feedback received yet." />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Questionnaires */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-display flex items-center gap-2">
+            <Newspaper className="h-4 w-4 text-primary" />
+            Questionnaire Responses
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {qLoading ? (
+            <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20" />)}</div>
+          ) : questionnaires && questionnaires.length > 0 ? (
+            <div className="space-y-3">
+              {questionnaires.map((qr) => (
+                <div key={qr.id} className="rounded-md bg-muted/30 p-3 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="text-[9px]">{qr.questionnaire_type}</Badge>
+                    <span className="text-[10px] text-muted-foreground">{timeAgo(qr.created_at)}</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    From: {qr.display_name || qr.email || "Anonymous"}
+                  </p>
+                  <div className="mt-1 space-y-1">
+                    {Object.entries(qr.responses || {}).slice(0, 3).map(([key, val]) => (
+                      <div key={key} className="text-[10px]">
+                        <span className="text-muted-foreground">{key.replace(/_/g, " ")}: </span>
+                        <span>{String(val)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState icon={Newspaper} message="No questionnaire responses yet." />
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -56,12 +56,13 @@ const statusColors: Record<string, string> = {
 };
 
 export default function GeoMap() {
-  const { data, isLoading } = useQuery<DashboardData[]>({
+  const { data, isLoading, isError } = useQuery<DashboardData[]>({
     queryKey: ["/api/dashboard"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/dashboard");
       return res.json();
     },
+    retry: 1,
   });
 
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<DashboardData | null>(null);
@@ -87,7 +88,20 @@ export default function GeoMap() {
     setSelectedPlace(null);
   }, []);
 
-  if (isLoading || !data) {
+  if (isError) {
+    return (
+      <div className="p-4 md:p-6 max-w-5xl space-y-6">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <MapPin className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Failed to load map data. Will retry...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isLoading || !data || data.length === 0) {
     return (
       <div className="p-4 md:p-6 max-w-5xl space-y-6">
         <Skeleton className="h-8 w-48" />

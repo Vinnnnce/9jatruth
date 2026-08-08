@@ -613,5 +613,44 @@ export async function ensureDbInitialized() {
   await sql`CREATE INDEX IF NOT EXISTS idx_predictions_neighborhood ON predictions(neighborhood_id)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_predictions_created ON predictions(created_at DESC)`;
 
+  // ─── User Feedback ───
+  await sql`CREATE TABLE IF NOT EXISTS user_feedback (
+    id SERIAL PRIMARY KEY,
+    clerk_user_id TEXT,
+    user_hash TEXT,
+    email TEXT,
+    display_name TEXT,
+    category TEXT NOT NULL DEFAULT 'general',
+    subject TEXT NOT NULL,
+    message TEXT NOT NULL,
+    rating INTEGER DEFAULT 0,
+    page_url TEXT,
+    user_agent TEXT,
+    ip_hash TEXT,
+    status TEXT NOT NULL DEFAULT 'new',
+    admin_response TEXT,
+    responded_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_feedback_status ON user_feedback(status)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_feedback_created ON user_feedback(created_at DESC)`;
+
+  // ─── Questionnaire Responses ───
+  await sql`CREATE TABLE IF NOT EXISTS questionnaire_responses (
+    id SERIAL PRIMARY KEY,
+    clerk_user_id TEXT,
+    user_hash TEXT,
+    email TEXT,
+    display_name TEXT,
+    questionnaire_type TEXT NOT NULL DEFAULT 'general',
+    responses JSONB NOT NULL DEFAULT '{}'::jsonb,
+    ip_hash TEXT,
+    status TEXT NOT NULL DEFAULT 'new',
+    admin_notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_questionnaire_status ON questionnaire_responses(status)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_questionnaire_created ON questionnaire_responses(created_at DESC)`;
+
   initialized = true;
 }

@@ -39,13 +39,27 @@ const tooltipStyle = {
 };
 
 export default function Trends() {
-  const { data, isLoading } = useQuery<TrendsData>({
+  const { data, isLoading, isError } = useQuery<TrendsData>({
     queryKey: ["/api/trends"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/trends");
       return res.json();
     },
+    retry: 1,
   });
+
+  if (isError) {
+    return (
+      <div className="p-6 space-y-6">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <BarChart3 className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Failed to load trends data. Will retry...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (isLoading || !data) {
     return (

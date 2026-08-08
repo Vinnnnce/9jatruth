@@ -41,13 +41,27 @@ function timeAgo(dateStr: string) {
 }
 
 export default function Alerts() {
-  const { data, isLoading } = useQuery<Alert[]>({
+  const { data, isLoading, isError } = useQuery<Alert[]>({
     queryKey: ["/api/alerts"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/alerts");
       return res.json();
     },
+    retry: 1,
   });
+
+  if (isError) {
+    return (
+      <div className="p-4 md:p-6 max-w-4xl space-y-6">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Failed to load alerts. Will retry...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (isLoading || !data) {
     return (
