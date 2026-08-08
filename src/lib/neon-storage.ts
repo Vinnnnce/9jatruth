@@ -1734,8 +1734,9 @@ export async function runAllPredictions() {
 
   let outagePredictions = 0;
   let patternPredictions = 0;
+  let aiPredictions = 0;
 
-  // Outage predictions
+  // Outage predictions (heuristic)
   for (const neighborhood of allNeighborhoods) {
     const snapshot = allSnapshots.find((s) => s.neighborhoodId === neighborhood.id);
     if (!snapshot) continue;
@@ -1756,7 +1757,7 @@ export async function runAllPredictions() {
     }
   }
 
-  // Pattern predictions
+  // Pattern predictions (heuristic)
   for (const neighborhood of allNeighborhoods) {
     const neighborhoodTruths = allTruths.filter((t) => t.neighborhoodId === neighborhood.id);
     for (const category of TRUTH_CATEGORIES) {
@@ -1777,7 +1778,70 @@ export async function runAllPredictions() {
     }
   }
 
-  return { outagePredictions, patternPredictions, total: outagePredictions + patternPredictions };
+  // ─── Gemini AI-enhanced predictions ───
+  // Uses Gemini to generate deeper, context-aware predictions per neighborhood.
+  // Falls back gracefully if GEMINI_API_KEY is not set.
+  const { isGeminiConfigured, getGeminiModel, generateGeminiJsonArray } = await import("@/lib/gemini");
+
+  if (isGeminiConfigured()) {
+    const model = getGeminiModel();
+    const systemPrompt = `You are an AI analyst for Soke, a community truth-reporting platform for Nigerian neighborhoods. Analyze the provided neighborhood data and generate actionable predictions about infrastructure and safety conditions. Each prediction should include category, prediction text, confidence (0-100), timeframe, and trend (up/down/stable/risk).`;
+
+    for (const neighborhood of allNeighborhoods) {
+      const snapshot = allSnapshots.find((s) => s.neighborhoodId === neighborhood.id);
+      const neighborhoodTruths = allTruths
+        .filter((t) => t.neighborhoodId === neighborhood.id)
+        .slice(0, 20)
+        .map(t => ({ category: t.category, content: t.content, trustScore: t.trustScore, createdAt: t.createdAt }));
+
+      if (neighborhoodTruths.length === 0) continue;
+
+      const context = {
+        neighborhood: neighborhood.name,
+        region: neighborhood.region,
+        snapshot: snapshot ? {
+          powerStatus: snapshot.powerStatus,
+          fuelStatus: snapshot.fuelStatus,
+          trafficLevel: snapshot.trafficLevel,
+          priceIndex: snapshot.priceIndex,
+          safetyIndex: snapshot.safetyIndex,
+          activeTruths: snapshot.activeTruths,
+        } : null,
+        recentTruths: neighborhoodTruths,
+      };
+
+      const userPrompt = `Analyze this neighborhood data and generate 1-3 predictions as a JSON array:
+${JSON.stringify(context, null, 2)}
+
+Format: [{"category":"power|fuel|traffic|prices|safety","prediction":"...","confidence":75,"timeframe":"next 6h","trend":"up|down|stable|risk"}]`;
+
+      const { data: aiResults, source } = await generateGeminiJsonArray<any>(
+        systemPrompt,
+        userPrompt,
+        [],
+        { temperature: 0.4, maxOutputTokens: 1024 }
+      );
+
+      if (source === "gemini" && Array.isArray(aiResults)) {
+        for (const pred of aiResults.slice(0, 3)) {
+          if (pred.prediction && pred.category) {
+            await createPrediction({
+              category: String(pred.category),
+              neighborhoodId: neighborhood.id,
+              prediction: String(pred.prediction),
+              confidence: Math.min(100, Math.max(0, Number(pred.confidence) || 60)),
+              timeframe: String(pred.timeframe || "24h"),
+              trend: String(pred.trend || "stable"),
+              modelVersion: `gemini:${model}`,
+            });
+            aiPredictions++;
+          }
+        }
+      }
+    }
+  }
+
+  return { outagePredictions, patternPredictions, aiPredictions, total: outagePredictions + patternPredictions + aiPredictions };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2169,6 +2233,527 @@ export async function deleteAllTruths() {
   await sql`DELETE FROM micro_truths`;
   await sql`DELETE FROM verifications`;
   return { success: true };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Browsing Events, Post Suggestions, Feed Snapshots, Weekly Reviews
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Record a user browsing event for AI suggestion tracking.
+ */
+export async function recordBrowsingEvent(data: {
+  clerkUserId?: string | null;
+  userHash?: string | null;
+  eventType: string;
+  truthId?: number | null;
+  neighborhoodId?: number | null;
+  category?: string | null;
+  path?: string | null;
+  metadata?: Record<string, any> | null;
+  dwellMs?: number;
+}) {
+  const sql = getDb();
+  await sql`
+    INSERT INTO user_browsing_events
+      (clerk_user_id, user_hash, event_type, truth_id, neighborhood_id, category, path, metadata, dwell_ms)
+    VALUES
+      (${data.clerkUserId ?? null}, ${data.userHash ?? null}, ${data.eventType},
+       ${data.truthId ?? null}, ${data.neighborhoodId ?? null}, ${data.category ?? null},
+       ${data.path ?? null}, ${JSON.stringify(data.metadata ?? {})}::jsonb, ${data.dwellMs ?? 0})
+  `;
+}
+
+/**
+ * Get the browsing profile for a user — top categories, neighborhoods, etc.
+ */
+export async function getUserBrowsingProfile(clerkUserId?: string | null, userHash?: string | null) {
+  const sql = getDb();
+  if (!clerkUserId && !userHash) return null;
+
+  // Top categories
+  const topCategories = (await sql`
+    SELECT category, COUNT(*) as count
+    FROM user_browsing_events
+    WHERE ${clerkUserId ? sql`clerk_user_id = ${clerkUserId}` : sql`user_hash = ${userHash}`}
+      AND category IS NOT NULL
+    GROUP BY category
+    ORDER BY count DESC
+    LIMIT 5
+  `) as unknown as SqlRow[];
+
+  // Top neighborhoods
+  const topNeighborhoods = (await sql`
+    SELECT neighborhood_id, COUNT(*) as count
+    FROM user_browsing_events
+    WHERE ${clerkUserId ? sql`clerk_user_id = ${clerkUserId}` : sql`user_hash = ${userHash}`}
+      AND neighborhood_id IS NOT NULL
+    GROUP BY neighborhood_id
+    ORDER BY count DESC
+    LIMIT 5
+  `) as unknown as SqlRow[];
+
+  // Total events
+  const totalRow = (await sql`
+    SELECT COUNT(*) as count FROM user_browsing_events
+    WHERE ${clerkUserId ? sql`clerk_user_id = ${clerkUserId}` : sql`user_hash = ${userHash}`}
+  `) as unknown as SqlRow[];
+
+  // Liked truths
+  const likedTruths = (await sql`
+    SELECT DISTINCT truth_id FROM feed_likes
+    WHERE user_hash = ${userHash ?? clerkUserId ?? ''}
+  `) as unknown as SqlRow[];
+
+  // Most viewed truths
+  const viewedTruths = (await sql`
+    SELECT truth_id, COUNT(*) as views
+    FROM user_browsing_events
+    WHERE ${clerkUserId ? sql`clerk_user_id = ${clerkUserId}` : sql`user_hash = ${userHash}`}
+      AND event_type = 'post_detail_open' AND truth_id IS NOT NULL
+    GROUP BY truth_id
+    ORDER BY views DESC
+    LIMIT 10
+  `) as unknown as SqlRow[];
+
+  return {
+    totalEvents: Number(totalRow[0]?.count ?? 0),
+    topCategories: topCategories.map(r => ({ category: r.category, count: Number(r.count) })),
+    topNeighborhoods: topNeighborhoods.map(r => ({ neighborhoodId: r.neighborhood_id, count: Number(r.count) })),
+    likedTruthIds: likedTruths.map(r => r.truth_id),
+    viewedTruthIds: viewedTruths.map(r => ({ truthId: r.truth_id, views: Number(r.views) })),
+  };
+}
+
+/**
+ * Generate AI-powered post suggestions for a user based on browsing patterns.
+ * Uses a hybrid approach: heuristic scoring + optional Gemini explanation.
+ */
+export async function generatePostSuggestions(opts: {
+  clerkUserId?: string | null;
+  userHash?: string | null;
+  limit?: number;
+}) {
+  const sql = getDb();
+  const limit = opts.limit ?? 5;
+
+  // Get user's browsing profile
+  const profile = await getUserBrowsingProfile(opts.clerkUserId, opts.userHash);
+
+  // Get candidate truths (recent, not already viewed)
+  const candidateRows = (await sql`
+    SELECT t.*, n.name as neighborhood_name, n.region as neighborhood_region
+    FROM micro_truths t
+    LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id
+    WHERE t.status != 'rejected'
+    ORDER BY t.created_at DESC
+    LIMIT 100
+  `) as unknown as SqlRow[];
+
+  if (candidateRows.length === 0) return [];
+
+  // Heuristic scoring
+  const viewedSet = new Set(profile?.viewedTruthIds?.map(v => v.truthId) ?? []);
+  const likedSet = new Set(profile?.likedTruthIds ?? []);
+  const topCatSet = new Set(profile?.topCategories?.map(c => c.category) ?? []);
+  const topNeighborhoodSet = new Set(profile?.topNeighborhoods?.map(n => n.neighborhoodId) ?? []);
+
+  const scored = candidateRows.map(r => {
+    let score = 0.3; // base score
+    const reasons: string[] = [];
+
+    // Category match
+    if (topCatSet.has(r.category)) {
+      score += 0.25;
+      reasons.push(`matches your interest in ${r.category}`);
+    }
+
+    // Neighborhood match
+    if (topNeighborhoodSet.has(r.neighborhood_id)) {
+      score += 0.2;
+      reasons.push("from a neighborhood you follow");
+    }
+
+    // Trust score boost
+    if (r.trust_score >= 70) {
+      score += 0.15;
+      reasons.push("high community trust");
+    }
+
+    // Recency boost (within last 6 hours)
+    const ageHours = (Date.now() - new Date(r.created_at).getTime()) / 3600000;
+    if (ageHours < 6) {
+      score += 0.1;
+      reasons.push("recently reported");
+    }
+
+    // Penalize already-viewed
+    if (viewedSet.has(r.id)) {
+      score -= 0.2;
+    }
+
+    // Don't suggest liked posts again
+    if (likedSet.has(r.id)) {
+      score -= 0.3;
+    }
+
+    return {
+      truthId: r.id,
+      neighborhoodId: r.neighborhood_id,
+      category: r.category,
+      content: r.content,
+      neighborhoodName: r.neighborhood_name,
+      trustScore: r.trust_score,
+      createdAt: r.created_at,
+      score: Math.max(0, Math.min(1, score)),
+      reason: reasons.join("; ") || "trending in your area",
+    };
+  });
+
+  // Sort by score and take top N
+  const topSuggestions = scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+
+  // Optional: Use Gemini to generate personalized recommendation text
+  const { isGeminiConfigured, generateGeminiJson } = await import("@/lib/gemini");
+  let sourceModel = "heuristic";
+
+  if (isGeminiConfigured() && topSuggestions.length > 0 && profile) {
+    const systemPrompt = "You are a recommendation AI for Soke, a community truth platform. Given a user's browsing profile and candidate posts, enhance the recommendation reasons to be more personal and engaging. Keep reasons under 100 characters.";
+
+    const userPrompt = `User profile: ${JSON.stringify({
+      topCategories: profile.topCategories,
+      topNeighborhoods: profile.topNeighborhoods,
+      totalEvents: profile.totalEvents,
+    })}
+
+Candidate posts:
+${JSON.stringify(topSuggestions.map(s => ({ id: s.truthId, category: s.category, content: s.content.slice(0, 80), neighborhood: s.neighborhoodName })))}
+
+Return a JSON array of objects with "id" (the truth id) and "reason" (personalized recommendation text).`;
+
+    const { data: geminiResults, source } = await generateGeminiJson<{ id: number; reason: string }[]>(
+      systemPrompt, userPrompt, [], { temperature: 0.5, maxOutputTokens: 512 }
+    );
+
+    if (source === "gemini" && Array.isArray(geminiResults)) {
+      for (const gr of geminiResults) {
+        const match = topSuggestions.find(s => s.truthId === gr.id);
+        if (match && gr.reason) {
+          match.reason = gr.reason;
+        }
+      }
+      sourceModel = "gemini-enhanced";
+    }
+  }
+
+  // Store suggestions in DB
+  for (const s of topSuggestions) {
+    await sql`
+      INSERT INTO post_suggestions
+        (clerk_user_id, user_hash, truth_id, score, reason, source_model, expires_at)
+      VALUES
+        (${opts.clerkUserId ?? null}, ${opts.userHash ?? null}, ${s.truthId},
+         ${s.score}, ${s.reason}, ${sourceModel}, NOW() + INTERVAL '24 hours')
+    `;
+  }
+
+  return topSuggestions;
+}
+
+/**
+ * Get the feed snapshots view-model — the data shape needed for the
+ * redesigned feed page matching the uploaded design.
+ */
+export async function getFeedSnapshots() {
+  const sql = getDb();
+
+  const neighborhoods = (await sql`SELECT * FROM neighborhoods ORDER BY name`) as unknown as SqlRow[];
+  const snapshots = (await sql`SELECT * FROM snapshots`) as unknown as SqlRow[];
+  const truths = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE t.status != 'rejected' ORDER BY t.created_at DESC LIMIT 200`) as unknown as SqlRow[];
+  const predictions = (await sql`SELECT * FROM predictions ORDER BY created_at DESC LIMIT 50`) as unknown as SqlRow[];
+
+  // Summary stats
+  const activeTruths = truths.length;
+  const neighborhoodCount = neighborhoods.length;
+
+  const snapshotsWithSafety = snapshots.filter(s => s.safety_index != null);
+  const avgSafety = snapshotsWithSafety.length > 0
+    ? Math.round(snapshotsWithSafety.reduce((sum, s) => sum + Number(s.safety_index), 0) / snapshotsWithSafety.length)
+    : 70;
+
+  const snapshotsWithPrice = snapshots.filter(s => s.price_index != null);
+  const avgPrice = snapshotsWithPrice.length > 0
+    ? Math.round(snapshotsWithPrice.reduce((sum, s) => sum + Number(s.price_index), 0) / snapshotsWithPrice.length)
+    : 100;
+
+  // Mesh nodes = active device profiles
+  const meshNodesRow = (await sql`SELECT COUNT(*) as count FROM device_profiles`) as unknown as SqlRow[];
+  const meshNodes = Number(meshNodesRow[0]?.count ?? 0);
+
+  // Build per-neighborhood snapshot cards
+  const neighborhoodCards = neighborhoods.map(n => {
+    const snap = snapshots.find(s => s.neighborhood_id === n.id);
+    const nTruths = truths.filter(t => t.neighborhood_id === n.id);
+    const nPredictions = predictions.filter(p => p.neighborhood_id === n.id);
+    const latestPrediction = nPredictions[0];
+
+    return {
+      id: n.id,
+      name: n.name,
+      region: n.region,
+      truthCount: nTruths.length,
+      metrics: {
+        power: snap?.power_status || "unknown",
+        fuel: snap?.fuel_status || "unknown",
+        traffic: snap?.traffic_level || "unknown",
+        prices: snap?.price_index ?? 100,
+        safety: snap?.safety_index ?? 70,
+      },
+      prediction: latestPrediction ? {
+        category: latestPrediction.category,
+        text: latestPrediction.prediction,
+        confidence: latestPrediction.confidence,
+        timeframe: latestPrediction.timeframe,
+        trend: latestPrediction.trend,
+        modelVersion: latestPrediction.model_version,
+      } : null,
+      recentReports: nTruths.slice(0, 5).map(t => ({
+        id: t.id,
+        category: t.category,
+        content: t.content,
+        trustScore: t.trust_score,
+        createdAt: t.created_at,
+        neighborhoodName: t.neighborhood_name,
+      })),
+      updatedAt: snap?.updated_at || nTruths[0]?.created_at || null,
+    };
+  });
+
+  return {
+    summary: {
+      activeTruths,
+      neighborhoods: neighborhoodCount,
+      avgSafetyIndex: avgSafety,
+      avgPriceIndex: avgPrice,
+      meshNodes,
+    },
+    neighborhoods: neighborhoodCards,
+  };
+}
+
+/**
+ * Generate weekly user reviews for the admin dashboard.
+ * Collects per-user activity metrics and optionally uses Gemini for summaries.
+ */
+export async function generateWeeklyReviews() {
+  const sql = getDb();
+
+  // Calculate week range
+  const now = new Date();
+  const weekEnd = now.toISOString().split("T")[0];
+  const weekStart = new Date(now.getTime() - 7 * 86400000).toISOString().split("T")[0];
+
+  // Get all platform users
+  const users = (await sql`SELECT * FROM platform_users ORDER BY created_at DESC`) as unknown as SqlRow[];
+
+  const reviews: any[] = [];
+
+  for (const user of users) {
+    const clerkId = user.clerk_user_id;
+
+    // Browsing events this week
+    const browsingRow = (await sql`
+      SELECT
+        COUNT(*) as total_events,
+        COUNT(DISTINCT category) as categories_viewed,
+        COUNT(DISTINCT neighborhood_id) as neighborhoods_viewed
+      FROM user_browsing_events
+      WHERE clerk_user_id = ${clerkId}
+        AND created_at >= ${weekStart}
+    `) as unknown as SqlRow[];
+
+    // Truths submitted this week
+    const truthsRow = (await sql`
+      SELECT COUNT(*) as count FROM micro_truths
+      WHERE user_hash = ${user.clerk_user_id} OR user_hash = ${user.email}
+        AND created_at >= ${weekStart}
+    `) as unknown as SqlRow[];
+
+    // Verifications this week
+    const verificationsRow = (await sql`
+      SELECT COUNT(*) as count FROM verifications
+      WHERE user_hash = ${clerkId}
+        AND created_at >= ${weekStart}
+    `) as unknown as SqlRow[];
+
+    // Likes this week
+    const likesRow = (await sql`
+      SELECT COUNT(*) as count FROM feed_likes
+      WHERE user_hash = ${clerkId}
+        AND created_at >= ${weekStart}
+    `) as unknown as SqlRow[];
+
+    // Top categories
+    const topCats = (await sql`
+      SELECT category, COUNT(*) as count
+      FROM user_browsing_events
+      WHERE clerk_user_id = ${clerkId} AND category IS NOT NULL
+        AND created_at >= ${weekStart}
+      GROUP BY category ORDER BY count DESC LIMIT 3
+    `) as unknown as SqlRow[];
+
+    const metrics = {
+      browsingEvents: Number(browsingRow[0]?.total_events ?? 0),
+      categoriesViewed: Number(browsingRow[0]?.categories_viewed ?? 0),
+      neighborhoodsViewed: Number(browsingRow[0]?.neighborhoods_viewed ?? 0),
+      truthsSubmitted: Number(truthsRow[0]?.count ?? 0),
+      verifications: Number(verificationsRow[0]?.count ?? 0),
+      likes: Number(likesRow[0]?.count ?? 0),
+      topCategories: topCats.map(c => ({ category: c.category, count: Number(c.count) })),
+    };
+
+    // Determine risk flags
+    const riskFlags: string[] = [];
+    if (metrics.browsingEvents === 0) riskFlags.push("inactive");
+    if (metrics.browsingEvents > 0 && metrics.truthsSubmitted === 0) riskFlags.push("lurker");
+    if (metrics.truthsSubmitted > 5) riskFlags.push("high_contributor");
+    if (metrics.verifications > 10) riskFlags.push("active_verifier");
+
+    // Heuristic summary
+    const summary = `${user.display_name || user.email || "User"} had ${metrics.browsingEvents} browsing events, submitted ${metrics.truthsSubmitted} truths, and made ${metrics.verifications} verifications this week.`;
+
+    // Build recommendation
+    const recommendations: string[] = [];
+    if (metrics.browsingEvents === 0) recommendations.push("Consider re-engagement campaign");
+    if (metrics.truthsSubmitted > 5) recommendations.push("Recognize as top contributor");
+    if (metrics.verifications > 10) recommendations.push("Nominate for verifier badge");
+    if (metrics.browsingEvents > 20 && metrics.truthsSubmitted === 0) recommendations.push("Encourage first submission");
+
+    reviews.push({
+      weekStart,
+      weekEnd,
+      clerkUserId: clerkId,
+      userHash: clerkId,
+      email: user.email,
+      displayName: user.display_name,
+      metrics,
+      summary,
+      recommendations,
+      riskFlags,
+      aiSummary: null as string | null,
+      modelVersion: "heuristic",
+    });
+  }
+
+  // Optional: Use Gemini to generate AI summaries for top users
+  const { isGeminiConfigured, getGeminiModel, generateGeminiText } = await import("@/lib/gemini");
+
+  if (isGeminiConfigured() && reviews.length > 0) {
+    const model = getGeminiModel();
+    const systemPrompt = "You are an analytics AI for Soke, a community truth platform. Generate concise, insightful weekly review summaries for users. Keep each summary under 200 characters. Focus on engagement patterns and actionable insights.";
+
+    for (const review of reviews.slice(0, 50)) {
+      const userPrompt = `Generate a weekly review summary for this user:
+${JSON.stringify({
+  name: review.displayName,
+  email: review.email,
+  metrics: review.metrics,
+  riskFlags: review.riskFlags,
+  recommendations: review.recommendations,
+}, null, 2)}`;
+
+      const aiSummary = await generateGeminiText(systemPrompt, userPrompt, {
+        temperature: 0.4,
+        maxOutputTokens: 256,
+      });
+
+      if (aiSummary) {
+        review.aiSummary = aiSummary;
+        review.modelVersion = `gemini:${model}`;
+      }
+    }
+  }
+
+  // Store reviews (upsert)
+  for (const review of reviews) {
+    await sql`
+      INSERT INTO weekly_user_reviews
+        (week_start, week_end, clerk_user_id, user_hash, email, display_name,
+         metrics, summary, recommendations, risk_flags, ai_summary, model_version)
+      VALUES
+        (${review.weekStart}, ${review.weekEnd}, ${review.clerkUserId}, ${review.userHash},
+         ${review.email}, ${review.displayName},
+         ${JSON.stringify(review.metrics)}::jsonb, ${review.summary},
+         ${JSON.stringify(review.recommendations)}::jsonb, ${JSON.stringify(review.riskFlags)}::jsonb,
+         ${review.aiSummary}, ${review.modelVersion})
+      ON CONFLICT (week_start, clerk_user_id)
+      DO UPDATE SET
+        metrics = EXCLUDED.metrics,
+        summary = EXCLUDED.summary,
+        recommendations = EXCLUDED.recommendations,
+        risk_flags = EXCLUDED.risk_flags,
+        ai_summary = EXCLUDED.ai_summary,
+        model_version = EXCLUDED.model_version,
+        generated_at = NOW()
+    `;
+  }
+
+  return { generated: reviews.length, weekStart, weekEnd };
+}
+
+/**
+ * Get stored weekly reviews for admin dashboard.
+ */
+export async function getWeeklyReviews(weekStart?: string) {
+  const sql = getDb();
+
+  let rows: SqlRow[];
+  if (weekStart) {
+    rows = (await sql`
+      SELECT * FROM weekly_user_reviews
+      WHERE week_start = ${weekStart}
+      ORDER BY generated_at DESC
+    `) as unknown as SqlRow[];
+  } else {
+    // Get latest week
+    const latestWeek = (await sql`
+      SELECT DISTINCT week_start FROM weekly_user_reviews
+      ORDER BY week_start DESC LIMIT 1
+    `) as unknown as SqlRow[];
+
+    if (latestWeek.length === 0) return { weekStart: null, weekEnd: null, reviews: [] };
+
+    const ws = latestWeek[0].week_start;
+    rows = (await sql`
+      SELECT * FROM weekly_user_reviews
+      WHERE week_start = ${ws}
+      ORDER BY generated_at DESC
+    `) as unknown as SqlRow[];
+  }
+
+  const reviews = rows.map(r => ({
+    id: r.id,
+    weekStart: r.week_start,
+    weekEnd: r.week_end,
+    clerkUserId: r.clerk_user_id,
+    email: r.email,
+    displayName: r.display_name,
+    metrics: typeof r.metrics === "string" ? JSON.parse(r.metrics) : r.metrics,
+    summary: r.summary,
+    recommendations: typeof r.recommendations === "string" ? JSON.parse(r.recommendations) : r.recommendations,
+    riskFlags: typeof r.risk_flags === "string" ? JSON.parse(r.risk_flags) : r.risk_flags,
+    aiSummary: r.ai_summary,
+    modelVersion: r.model_version,
+    generatedAt: r.generated_at,
+  }));
+
+  return {
+    weekStart: reviews[0]?.weekStart ?? null,
+    weekEnd: reviews[0]?.weekEnd ?? null,
+    reviews,
+  };
 }
 
 // Re-export commonly used constants

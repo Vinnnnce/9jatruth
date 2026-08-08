@@ -20,7 +20,7 @@
  *   - GET /api/health          → system health
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { isSuperAdminProfile, getDashboardType } from "@/lib/admin-auth-client";
@@ -83,6 +83,8 @@ import {
   Cpu,
   Network,
   Zap,
+  Loader2,
+  Sparkles,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -531,6 +533,9 @@ export default function AdminDashboard() {
           </TabsTrigger>
           <TabsTrigger value="settings" data-testid="tab-settings">
             Settings
+          </TabsTrigger>
+          <TabsTrigger value="weekly-review" data-testid="tab-weekly-review">
+            Weekly Review
           </TabsTrigger>
         </TabsList>
 
@@ -1413,6 +1418,13 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* --------------------------------------------------------------- */}
+        {/* Weekly Review — AI-powered user activity summaries             */}
+        {/* --------------------------------------------------------------- */}
+        <TabsContent value="weekly-review" className="space-y-4">
+          <WeeklyReviewTab />
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -1537,6 +1549,240 @@ function EmptyState({ icon: Icon, message }: { icon: typeof Users; message: stri
     <div className="p-8 text-center text-muted-foreground">
       <Icon className="h-8 w-8 mx-auto mb-2 opacity-50" />
       <p className="text-sm">{message}</p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Weekly Review Tab — AI-powered user activity summaries
+// ---------------------------------------------------------------------------
+
+type WeeklyReview = {
+  id: number;
+  weekStart: string;
+  weekEnd: string;
+  clerkUserId: string;
+  email: string;
+  displayName: string;
+  metrics: {
+    browsingEvents: number;
+    categoriesViewed: number;
+    neighborhoodsViewed: number;
+    truthsSubmitted: number;
+    verifications: number;
+    likes: number;
+    topCategories: { category: string; count: number }[];
+  };
+  summary: string;
+  recommendations: string[];
+  riskFlags: string[];
+  aiSummary: string | null;
+  modelVersion: string;
+  generatedAt: string;
+};
+
+function WeeklyReviewTab() {
+  const [reviews, setReviews] = useState<WeeklyReview[]>([]);
+  const [weekStart, setWeekStart] = useState<string | null>(null);
+  const [weekEnd, setWeekEnd] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const { toast } = useToast();
+
+  const fetchReviews = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await apiRequest("GET", "/api/admin/weekly-review");
+      const data = await res.json();
+      setReviews(data.reviews || []);
+      setWeekStart(data.weekStart);
+      setWeekEnd(data.weekEnd);
+    } catch {
+      toast({ title: "Failed to load weekly reviews", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const res = await apiRequest("POST", "/api/admin/weekly-review/generate", {});
+      const data = await res.json();
+      toast({ title: `Generated ${data.generated} weekly reviews` });
+      fetchReviews();
+    } catch {
+      toast({ title: "Failed to generate reviews", variant: "destructive" });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Aggregate stats
+  const totalBrowsing = reviews.reduce((s, r) => s + (r.metrics?.browsingEvents ?? 0), 0);
+  const totalTruths = reviews.reduce((s, r) => s + (r.metrics?.truthsSubmitted ?? 0), 0);
+  const totalVerifications = reviews.reduce((s, r) => s + (r.metrics?.verifications ?? 0), 0);
+  const totalLikes = reviews.reduce((s, r) => s + (r.metrics?.likes ?? 0), 0);
+  const inactiveUsers = reviews.filter(r => r.riskFlags?.includes("inactive")).length;
+  const topContributors = reviews.filter(r => r.riskFlags?.includes("high_contributor")).length;
+
+  return (
+    <div className="space-y-6">
+      {/* Header + Generate button */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-display font-700">Weekly User Review</h3>
+          {weekStart && weekEnd && (
+            <p className="text-xs text-muted-foreground">
+              {weekStart} to {weekEnd}
+            </p>
+          )}
+        </div>
+        <Button
+          size="sm"
+          onClick={handleGenerate}
+          disabled={generating}
+          className="text-xs gap-1.5"
+          data-testid="btn-generate-reviews"
+        >
+          {generating ? (
+            <><Loader2 className="h-3 w-3 animate-spin" /> Generating...</>
+          ) : (
+            <><Sparkles className="h-3 w-3" /> Generate Weekly Review</>
+          )}
+        </Button>
+      </div>
+
+      {/* Aggregate stat cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard icon={Users} iconColor="text-blue-500" label="Total Users" value={reviews.length} testId="stat-weekly-users" />
+        <StatCard icon={Activity} iconColor="text-green-500" label="Browsing Events" value={totalBrowsing} testId="stat-weekly-browsing" />
+        <StatCard icon={Newspaper} iconColor="text-amber-500" label="Truths Submitted" value={totalTruths} testId="stat-weekly-truths" />
+        <StatCard icon={TrendingUp} iconColor="text-purple-500" label="Top Contributors" value={topContributors} testId="stat-weekly-contributors" />
+      </div>
+
+      {/* Secondary stats */}
+      <Card className="border-border">
+        <CardContent className="p-4 space-y-2">
+          <SecondaryStat label="Total Verifications" value={totalVerifications} />
+          <SecondaryStat label="Total Likes" value={totalLikes} />
+          <SecondaryStat label="Inactive Users" value={inactiveUsers} />
+        </CardContent>
+      </Card>
+
+      {/* User reviews table */}
+      {loading ? (
+        <div className="space-y-2">
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className="h-24" />
+          ))}
+        </div>
+      ) : reviews.length === 0 ? (
+        <EmptyState icon={Users} message="No weekly reviews yet. Click 'Generate Weekly Review' to create AI-powered summaries." />
+      ) : (
+        <div className="space-y-3">
+          {reviews.map((review, idx) => (
+            <Card key={review.id || idx} className="border-border">
+              <CardContent className="p-4 space-y-3">
+                {/* User header */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="text-xs">
+                        {(review.displayName || review.email || "U")[0]?.toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="text-xs font-medium">{review.displayName || review.email}</p>
+                      <p className="text-[10px] text-muted-foreground">{review.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {review.riskFlags?.map((flag) => (
+                      <Badge
+                        key={flag}
+                        variant="outline"
+                        className={`text-[9px] px-1.5 py-0 ${
+                          flag === "inactive" ? "border-red-500/30 text-red-500" :
+                          flag === "high_contributor" ? "border-green-500/30 text-green-500" :
+                          flag === "active_verifier" ? "border-blue-500/30 text-blue-500" :
+                          "border-amber-500/30 text-amber-500"
+                        }`}
+                      >
+                        {flag.replace(/_/g, " ")}
+                      </Badge>
+                    ))}
+                    {review.modelVersion?.startsWith("gemini") && (
+                      <Badge className="text-[8px] px-1 py-0 bg-indigo-500/10 text-indigo-500 border-none">
+                        Gemini AI
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {/* Metrics grid */}
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-center">
+                  <ReviewStat label="Events" value={review.metrics?.browsingEvents ?? 0} />
+                  <ReviewStat label="Truths" value={review.metrics?.truthsSubmitted ?? 0} />
+                  <ReviewStat label="Verifs" value={review.metrics?.verifications ?? 0} />
+                  <ReviewStat label="Likes" value={review.metrics?.likes ?? 0} />
+                  <ReviewStat label="Cats" value={review.metrics?.categoriesViewed ?? 0} />
+                  <ReviewStat label="Areas" value={review.metrics?.neighborhoodsViewed ?? 0} />
+                </div>
+
+                {/* AI Summary or heuristic summary */}
+                {review.aiSummary ? (
+                  <div className="rounded-md bg-indigo-500/5 border border-indigo-500/20 p-2.5">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Sparkles className="h-3 w-3 text-indigo-500" />
+                      <span className="text-[10px] font-medium text-indigo-500">AI Summary</span>
+                    </div>
+                    <p className="text-xs text-foreground">{review.aiSummary}</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{review.summary}</p>
+                )}
+
+                {/* Recommendations */}
+                {review.recommendations?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {review.recommendations.map((rec, i) => (
+                      <Badge key={i} variant="secondary" className="text-[9px]">
+                        {rec}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+
+                {/* Top categories */}
+                {review.metrics?.topCategories?.length > 0 && (
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                    <span>Top categories:</span>
+                    {review.metrics.topCategories.map((c) => (
+                      <span key={c.category} className="font-medium">{c.category} ({c.count})</span>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReviewStat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded-md bg-muted/30 p-2 text-center">
+      <p className="text-[9px] text-muted-foreground uppercase">{label}</p>
+      <p className="text-sm font-display font-700 tabular-nums mt-0.5">
+        {typeof value === "number" ? value.toLocaleString() : value}
+      </p>
     </div>
   );
 }

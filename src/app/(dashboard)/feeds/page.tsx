@@ -1,12 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
@@ -16,43 +14,93 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  Info, Clock, ShieldCheck, CheckCircle2,
+  Clock, ShieldCheck,
   ThumbsUp, ThumbsDown, MapPin, Newspaper,
-  Brain, Loader2, Sparkles, Zap, Fuel, Car, Tag, TrendingUp, TrendingDown, Minus,
+  Brain, Loader2, Sparkles, Zap, Fuel, Car, Tag,
+  TrendingUp, TrendingDown, Minus,
+  Building2, Gauge,
 } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
-import { FeedFilterBar, DEFAULT_FILTERS, type FeedFilters } from "@/components/feed-filter-bar";
-import { FeedInteractions } from "@/components/feed-interactions";
-import { VerifiedBadge } from "@/components/verified-badge";
 import { useUser } from "@/lib/use-user-safe";
 
-type Truth = {
+// ─── Types ───
+
+type FeedSnapshot = {
+  summary: {
+    activeTruths: number;
+    neighborhoods: number;
+    avgSafetyIndex: number;
+    avgPriceIndex: number;
+    meshNodes: number;
+  };
+  neighborhoods: NeighborhoodCard[];
+};
+
+type NeighborhoodCard = {
   id: number;
+  name: string;
+  region: string;
+  truthCount: number;
+  metrics: {
+    power: string;
+    fuel: string;
+    traffic: string;
+    prices: number;
+    safety: number;
+  };
+  prediction: {
+    category: string;
+    text: string;
+    confidence: number;
+    timeframe: string;
+    trend: string;
+    modelVersion: string;
+  } | null;
+  recentReports: {
+    id: number;
+    category: string;
+    content: string;
+    trustScore: number;
+    createdAt: string;
+    neighborhoodName: string;
+  }[];
+  updatedAt: string | null;
+};
+
+type Suggestion = {
+  truthId: number;
   neighborhoodId: number;
   category: string;
   content: string;
+  neighborhoodName: string;
   trustScore: number;
-  decayFactor: number;
-  verificationChain: string;
-  userHash: string;
-  status: string;
   createdAt: string;
-  distanceKm?: number;
-  neighborhoodName?: string;
-  ipRegion?: string | null;
-  locationSource?: string | null;
-  orgName?: string | null;
-  orgVerified?: boolean;
+  score: number;
+  reason: string;
 };
 
-type Neighborhood = { id: number; name: string; region: string };
+// ─── Design tokens matching uploaded image ───
+
+const COLORS = {
+  bg: "#0A0C0B",
+  card: "#121413",
+  tile: "#1A1D1B",
+  textPrimary: "#FFFFFF",
+  textSecondary: "#8E928F",
+  green: "#22C55E",
+  orange: "#F97316",
+  red: "#EF4444",
+  blue: "#3B82F6",
+  purple: "#A855F7",
+  accent: "#6366F1",
+};
 
 const CATEGORY_META: Record<string, { icon: typeof Zap; color: string; dot: string; label: string }> = {
-  power:    { icon: Zap,   color: "text-orange-500", dot: "bg-orange-500", label: "Power" },
-  fuel:     { icon: Fuel,  color: "text-orange-500", dot: "bg-orange-500", label: "Fuel" },
-  traffic:  { icon: Car,   color: "text-blue-500",   dot: "bg-blue-500",   label: "Traffic" },
-  prices:   { icon: Tag,   color: "text-purple-500", dot: "bg-purple-500", label: "Prices" },
-  safety:   { icon: ShieldCheck, color: "text-green-500", dot: "bg-green-500", label: "Safety" },
+  power:    { icon: Zap,   color: "text-orange-400", dot: "bg-orange-500", label: "Power" },
+  fuel:     { icon: Fuel,  color: "text-orange-400", dot: "bg-orange-500", label: "Fuel" },
+  traffic:  { icon: Car,   color: "text-blue-400",   dot: "bg-blue-500",   label: "Traffic" },
+  prices:   { icon: Tag,   color: "text-purple-400", dot: "bg-purple-500", label: "Prices" },
+  safety:   { icon: ShieldCheck, color: "text-green-400", dot: "bg-green-500", label: "Safety" },
 };
 
 function timeAgo(dateStr: string): string {
@@ -66,72 +114,73 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-function trustColor(score: number): string {
-  if (score >= 70) return "text-green-500";
-  if (score >= 40) return "text-amber-500";
-  return "text-red-500";
+function statusColor(status: string): string {
+  const s = status.toLowerCase();
+  if (/on|available|clear|free|flowing|stable|low/.test(s)) return COLORS.green;
+  if (/off|outage|unavailable|down|gridlock|heavy|scarce/.test(s)) return COLORS.red;
+  if (/unstable|moderate|scarce/.test(s)) return COLORS.orange;
+  return COLORS.textSecondary;
 }
 
-function getCategoryStatus(truths: Truth[], category: string): { status: string; score: number; color: string } {
-  const catTruths = truths.filter(t => t.category === category);
-  if (catTruths.length === 0) return { status: "No data", score: 0, color: "text-muted-foreground" };
-
-  const avgTrust = catTruths.reduce((s, t) => s + t.trustScore, 0) / catTruths.length;
-  const recent = catTruths[0];
-  const content = recent.content.toLowerCase();
-
-  // Category-specific status
-  if (category === "power" || category === "fuel") {
-    if (/restored|available|on\b|normal|stable/.test(content)) return { status: "On", score: Math.round(avgTrust), color: "text-green-500" };
-    if (/off|outage|unavailable|down|scarcity|shortage/.test(content)) return { status: "Off", score: Math.round(avgTrust), color: "text-red-500" };
-    return { status: "Unstable", score: Math.round(avgTrust), color: "text-amber-500" };
-  }
-  if (category === "traffic") {
-    if (/free|flowing|clear|smooth/.test(content)) return { status: "Clear", score: Math.round(avgTrust), color: "text-green-500" };
-    if (/heavy|congest|jam|block/.test(content)) return { status: "Heavy", score: Math.round(avgTrust), color: "text-red-500" };
-    return { status: "Moderate", score: Math.round(avgTrust), color: "text-blue-500" };
-  }
-  if (category === "prices") return { status: String(Math.round(avgTrust)), score: Math.round(avgTrust), color: "text-white" };
-  if (category === "safety") return { status: String(Math.round(avgTrust)), score: Math.round(avgTrust), color: "text-white" };
-
-  return { status: "—", score: Math.round(avgTrust), color: "text-muted-foreground" };
+function trendIcon(trend: string) {
+  if (trend === "up" || trend === "risk") return <TrendingUp className="h-3 w-3" style={{ color: trend === "risk" ? COLORS.red : COLORS.orange }} />;
+  if (trend === "down") return <TrendingDown className="h-3 w-3" style={{ color: COLORS.green }} />;
+  return <Minus className="h-3 w-3" style={{ color: COLORS.textSecondary }} />;
 }
+
+// ─── Browsing event tracker hook ───
+
+function useBrowsingTracker() {
+  const recordEvent = useCallback(async (eventType: string, data?: Record<string, any>) => {
+    try {
+      await fetch("/api/user/browsing-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventType, ...data }),
+      });
+    } catch {
+      // silently fail — tracking is non-critical
+    }
+  }, []);
+
+  return { recordEvent };
+}
+
+// ─── Main Component ───
 
 export default function Feeds() {
-  const [filters, setFilters] = useState<FeedFilters>(DEFAULT_FILTERS);
-  const [currentUserHash, setCurrentUserHash] = useState<string | null>(null);
   const { isLoaded, isSignedIn } = useUser();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { recordEvent } = useBrowsingTracker();
+  const trackedRef = useRef<Set<number>>(new Set());
 
-  const queryParams = new URLSearchParams();
-  if (filters.category) queryParams.set("category", filters.category);
-  queryParams.set("limit", "50");
-
-  const { data: truths, isLoading } = useQuery<Truth[]>({
-    queryKey: ["/api/truths", filters.category],
+  // Fetch feed snapshots (the new view-model API)
+  const { data: feedData, isLoading } = useQuery<FeedSnapshot>({
+    queryKey: ["/api/feed/snapshots"],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/truths?${queryParams.toString()}`);
+      const res = await apiRequest("GET", "/api/feed/snapshots");
       return res.json();
     },
     enabled: isLoaded,
   });
 
-  // Detect user location for area header
-  const [userArea, setUserArea] = useState<{ city: string; region: string } | null>(null);
+  // Fetch AI suggestions
+  const { data: suggestionsData } = useQuery<{ suggestions: Suggestion[] }>({
+    queryKey: ["/api/feed/suggestions"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/feed/suggestions?limit=5");
+      return res.json();
+    },
+    enabled: isLoaded && isSignedIn,
+  });
+
+  // Track feed view on mount
   useEffect(() => {
-    fetch("/api/geo/nearby")
-      .then(res => res.json())
-      .then(data => {
-        if (data.userLocation) {
-          setUserArea({
-            city: data.userLocation.city || "Your Area",
-            region: data.userLocation.region || "",
-          });
-        }
-      })
-      .catch(() => {});
-  }, []);
+    if (isLoaded) {
+      recordEvent("feed_view", { path: "/feeds" });
+    }
+  }, [isLoaded, recordEvent]);
 
   const verifyMutation = useMutation({
     mutationFn: (data: { truthId: number; action: string }) =>
@@ -145,205 +194,551 @@ export default function Feeds() {
     },
   });
 
-  // Derive area name from truths or user location
-  const areaName = userArea?.city || truths?.[0]?.neighborhoodName || truths?.[0]?.ipRegion || "Your Area";
-  const areaRegion = userArea?.region || "";
-  const truthCount = truths?.length || 0;
-
-  // Status grid data
-  const categories = ["power", "fuel", "traffic", "prices", "safety"];
-  const statusGrid = categories.map(cat => ({
-    category: cat,
-    ...getCategoryStatus(truths || [], cat),
-  }));
-
-  // Filtered truths for recent reports
-  const recentTruths = truths?.slice(0, 20) || [];
-
   if (isLoading) {
     return (
-      <div className="p-4 md:p-6 max-w-2xl space-y-4">
-        <Skeleton className="h-32 rounded-2xl" />
-        <Skeleton className="h-24 rounded-2xl" />
-        <Skeleton className="h-48 rounded-2xl" />
+      <div className="min-h-screen p-4 md:p-6 max-w-[440px] mx-auto space-y-4" style={{ background: COLORS.bg }}>
+        <div className="h-24 rounded-2xl animate-pulse" style={{ background: COLORS.card }} />
+        <div className="h-8 rounded-lg animate-pulse" style={{ background: COLORS.card }} />
+        <div className="h-[400px] rounded-2xl animate-pulse" style={{ background: COLORS.card }} />
+        <div className="h-[400px] rounded-2xl animate-pulse" style={{ background: COLORS.card }} />
       </div>
     );
   }
 
+  const summary = feedData?.summary;
+  const neighborhoods = feedData?.neighborhoods ?? [];
+  const suggestions = suggestionsData?.suggestions ?? [];
+
   return (
-    <div className="p-4 md:p-6 max-w-2xl space-y-4">
-      {/* ─── Main Card (matches uploaded design) ─── */}
-      <div className="rounded-2xl bg-card border border-border p-5 space-y-5">
-        {/* Header: Area name + truth count badge */}
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">{areaName}</h1>
-            <p className="text-sm text-muted-foreground">{areaRegion || "Nigeria"}</p>
+    <div
+      className="min-h-screen pb-8"
+      style={{ background: COLORS.bg, color: COLORS.textPrimary }}
+    >
+      <div className="max-w-[440px] mx-auto px-4 pt-4 space-y-4">
+        {/* ─── Summary Grid (2×2) ─── */}
+        <div className="grid grid-cols-2 gap-2.5">
+          <SummaryCard
+            icon={Newspaper}
+            label="Active Truths"
+            value={summary?.activeTruths ?? 0}
+            color={COLORS.green}
+          />
+          <SummaryCard
+            icon={Building2}
+            label="Neighborhoods"
+            value={summary?.neighborhoods ?? 0}
+            color={COLORS.blue}
+          />
+          <SummaryCard
+            icon={ShieldCheck}
+            label="Avg Safety Index"
+            value={summary?.avgSafetyIndex ?? 0}
+            color={COLORS.green}
+          />
+          <SummaryCard
+            icon={Gauge}
+            label="Avg Price Index"
+            value={summary?.avgPriceIndex ?? 0}
+            color={COLORS.purple}
+          />
+        </div>
+
+        {/* ─── Section Header ─── */}
+        <div className="flex items-center justify-between pt-1">
+          <h2 className="text-sm font-semibold" style={{ color: COLORS.textPrimary }}>
+            Neighborhood Snapshots
+          </h2>
+          <div className="flex items-center gap-1.5">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75 animate-ping" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+            </span>
+            <span className="text-[10px] font-medium" style={{ color: COLORS.textSecondary }}>
+              Live · {summary?.meshNodes ?? 0} mesh nodes
+            </span>
           </div>
-          <Badge variant="outline" className="text-xs px-3 py-1 rounded-full">
-            {truthCount} {truthCount === 1 ? "truth" : "truths"}
-          </Badge>
         </div>
 
-        {/* Status Grid */}
-        <div className="grid grid-cols-3 gap-2.5">
-          {/* Top row: Power, Fuel, Traffic */}
-          {statusGrid.slice(0, 3).map(({ category, status, color }) => {
-            const meta = CATEGORY_META[category];
-            const Icon = meta.icon;
-            return (
-              <div key={category} className="rounded-xl bg-muted/40 p-3 space-y-1.5 overflow-hidden">
-                <Icon className={`h-4 w-4 ${meta.color}`} />
-                <p className="text-[10px] uppercase tracking-normal text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">{meta.label}</p>
-                <div className="flex items-center gap-1.5">
-                  <span className={`h-1.5 w-1.5 rounded-full ${
-                    status === "On" || status === "Clear" ? "bg-green-500" :
-                    status === "Off" || status === "Heavy" ? "bg-red-500" :
-                    status === "Moderate" || status === "Unstable" ? "bg-amber-500" :
-                    "bg-muted-foreground"
-                  }`} />
-                  <span className={`text-xs font-medium ${color}`}>{status}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Bottom row: Prices, Safety — centered, 2 cols */}
-        <div className="grid grid-cols-2 gap-2.5 max-w-[66%] mx-auto">
-          {statusGrid.slice(3).map(({ category, status, color }) => {
-            const meta = CATEGORY_META[category];
-            const Icon = meta.icon;
-            return (
-              <div key={category} className="rounded-xl bg-muted/40 p-3 space-y-1.5 overflow-hidden">
-                <Icon className={`h-4 w-4 ${meta.color}`} />
-                <p className="text-[10px] uppercase tracking-normal text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">{meta.label}</p>
-                <p className={`text-lg font-bold ${color}`}>{status}</p>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Recent Reports */}
-        <div className="space-y-2">
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Recent Reports</p>
-
-          {recentTruths.length === 0 ? (
-            <div className="text-center py-6">
-              <Newspaper className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-xs text-muted-foreground">No reports yet. Be the first to share a truth.</p>
+        {/* ─── AI Suggestions (if available) ─── */}
+        {suggestions.length > 0 && (
+          <div
+            className="rounded-2xl p-4 space-y-3"
+            style={{ background: COLORS.card, border: `1px solid ${COLORS.tile}` }}
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5" style={{ color: COLORS.accent }} />
+              <span className="text-xs font-medium" style={{ color: COLORS.textPrimary }}>
+                Suggested for You
+              </span>
+              <Badge
+                className="text-[9px] px-1.5 py-0 rounded-full"
+                style={{ background: `${COLORS.accent}20`, color: COLORS.accent, border: "none" }}
+              >
+                AI
+              </Badge>
             </div>
-          ) : (
-            <div className="space-y-1">
-              {recentTruths.map((truth) => {
-                const meta = CATEGORY_META[truth.category] || CATEGORY_META.safety;
+            <div className="space-y-2">
+              {suggestions.slice(0, 3).map((s) => {
+                const meta = CATEGORY_META[s.category] || CATEGORY_META.safety;
                 const Icon = meta.icon;
                 return (
-                  <div key={truth.id} className="group">
-                    {/* Report row — matches uploaded design */}
-                    <div className="flex items-center gap-2.5 py-2 px-1 rounded-lg hover:bg-muted/30 transition-colors">
-                      <Icon className={`h-3.5 w-3.5 ${meta.color} shrink-0`} />
-                      <p className="text-xs text-foreground truncate flex-1">{truth.content}</p>
-                      <span className="text-[10px] text-muted-foreground shrink-0">{timeAgo(truth.createdAt)}</span>
-                    </div>
-
-                    {/* Expanded details on hover/click — Dialog */}
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <button className="w-full text-left opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-primary pl-6 pb-1">
-                          View details →
-                        </button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-md">
-                        <DialogHeader>
-                          <DialogTitle className="flex items-center gap-2 text-sm">
-                            <Icon className={`h-4 w-4 ${meta.color}`} />
-                            {meta.label} Report
-                            {truth.orgVerified && <VerifiedBadge showLabel label={truth.orgName || "Verified"} />}
-                          </DialogTitle>
-                        </DialogHeader>
-
-                        <div className="space-y-3">
-                          {/* Full content */}
-                          <p className="text-sm text-foreground">{truth.content}</p>
-
-                          {/* Meta */}
-                          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <MapPin className="h-2.5 w-2.5" />
-                              {truth.neighborhoodName || truth.ipRegion || "Unknown"}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-2.5 w-2.5" />
-                              {timeAgo(truth.createdAt)}
-                            </span>
-                          </div>
-
-                          {/* Trust score card */}
-                          <div className="flex items-center gap-2 rounded-md bg-muted/30 px-2 py-1.5">
-                            <ShieldCheck className={`h-3.5 w-3.5 ${trustColor(truth.trustScore)}`} />
-                            <div className="flex-1 max-w-[100px]">
-                              <Progress value={truth.trustScore} className="h-1.5" />
-                            </div>
-                            <span className={`text-xs font-mono font-medium ${trustColor(truth.trustScore)}`}>
-                              {truth.trustScore}%
-                            </span>
-                            <span className="text-[9px] text-muted-foreground uppercase">Trust</span>
-                          </div>
-
-                          {/* AI Verification Section */}
-                          <AIVerificationSection truthId={truth.id} />
-
-                          {/* Actions — icon-only */}
-                          <div className="flex items-center gap-0.5 pt-2 border-t">
-                            <Button
-                              size="sm" variant="ghost"
-                              onClick={() => verifyMutation.mutate({ truthId: truth.id, action: "corroborate" })}
-                              disabled={verifyMutation.isPending}
-                              className="h-8 w-8 p-0"
-                              title="Corroborate" aria-label="Corroborate"
-                            >
-                              <ThumbsUp className="h-4 w-4 text-green-500" />
-                            </Button>
-                            <Button
-                              size="sm" variant="ghost"
-                              onClick={() => verifyMutation.mutate({ truthId: truth.id, action: "dispute" })}
-                              disabled={verifyMutation.isPending}
-                              className="h-8 w-8 p-0"
-                              title="Dispute" aria-label="Dispute"
-                            >
-                              <ThumbsDown className="h-4 w-4 text-red-500" />
-                            </Button>
-                            <FeedInteractions truth={truth} currentUserHash={currentUserHash} />
-                          </div>
+                  <Dialog key={s.truthId}>
+                    <DialogTrigger asChild>
+                      <button
+                        className="w-full flex items-center gap-2.5 py-2 px-2 rounded-lg hover:bg-white/5 transition-colors text-left"
+                        onClick={() => recordEvent("suggestion_click", { truthId: s.truthId })}
+                      >
+                        <Icon className={`h-3.5 w-3.5 ${meta.color} shrink-0`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs truncate" style={{ color: COLORS.textPrimary }}>
+                            {s.content}
+                          </p>
+                          <p className="text-[9px]" style={{ color: COLORS.textSecondary }}>
+                            {s.reason}
+                          </p>
                         </div>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
+                        <span className="text-[9px] shrink-0" style={{ color: COLORS.textSecondary }}>
+                          {timeAgo(s.createdAt)}
+                        </span>
+                      </button>
+                    </DialogTrigger>
+                    <SuggestionDialog
+                      suggestion={s}
+                      onVerify={(action) => verifyMutation.mutate({ truthId: s.truthId, action })}
+                      isPending={verifyMutation.isPending}
+                    />
+                  </Dialog>
                 );
               })}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Updated timestamp */}
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground pt-1">
-          <Clock className="h-2.5 w-2.5" />
-          Updated {truths && truths.length > 0 ? timeAgo(truths[0].createdAt) : "just now"}
-        </div>
+        {/* ─── Neighborhood Snapshot Cards ─── */}
+        {neighborhoods.length === 0 ? (
+          <div
+            className="rounded-2xl p-8 text-center"
+            style={{ background: COLORS.card }}
+          >
+            <Newspaper className="h-8 w-8 mx-auto mb-2 opacity-30" style={{ color: COLORS.textSecondary }} />
+            <p className="text-xs" style={{ color: COLORS.textSecondary }}>
+              No neighborhood data yet. Be the first to share a truth.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {neighborhoods.map((nb) => (
+              <NeighborhoodSnapshotCard
+                key={nb.id}
+                card={nb}
+                onTrackView={(id) => {
+                  if (!trackedRef.current.has(id)) {
+                    trackedRef.current.add(id);
+                    recordEvent("snapshot_view", { neighborhoodId: nb.id });
+                  }
+                }}
+                onVerify={(truthId, action) => verifyMutation.mutate({ truthId, action })}
+                isVerifyPending={verifyMutation.isPending}
+              />
+            ))}
+          </div>
+        )}
       </div>
-
-      {/* Filter bar */}
-      <FeedFilterBar
-        filters={filters}
-        onFiltersChange={setFilters}
-        resultCount={truthCount}
-      />
     </div>
   );
 }
 
-// ─── AI Verification Section (inline on each post) ───
+// ─── Summary Card (2×2 grid item) ───
+
+function SummaryCard({
+  icon: Icon,
+  label,
+  value,
+  color,
+}: {
+  icon: typeof Zap;
+  label: string;
+  value: number | string;
+  color: string;
+}) {
+  return (
+    <div
+      className="rounded-2xl p-4 space-y-2"
+      style={{ background: COLORS.card }}
+    >
+      <Icon className="h-4 w-4" style={{ color }} />
+      <div>
+        <p className="text-xl font-bold" style={{ color: COLORS.textPrimary }}>
+          {typeof value === "number" ? value.toLocaleString() : value}
+        </p>
+        <p className="text-[10px] uppercase tracking-normal" style={{ color: COLORS.textSecondary }}>
+          {label}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Neighborhood Snapshot Card ───
+
+function NeighborhoodSnapshotCard({
+  card,
+  onTrackView,
+  onVerify,
+  isVerifyPending,
+}: {
+  card: NeighborhoodCard;
+  onTrackView: (id: number) => void;
+  onVerify: (truthId: number, action: string) => void;
+  isVerifyPending: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  // IntersectionObserver for tracking card views
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !isVisible) {
+          setIsVisible(true);
+          onTrackView(card.id);
+        }
+      },
+      { threshold: 0.5 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [card.id, isVisible, onTrackView]);
+
+  const metrics = [
+    { key: "power", label: "Power", value: card.metrics.power, icon: Zap, category: "power" },
+    { key: "fuel", label: "Fuel", value: card.metrics.fuel, icon: Fuel, category: "fuel" },
+    { key: "traffic", label: "Traffic", value: card.metrics.traffic, icon: Car, category: "traffic" },
+    { key: "prices", label: "Prices", value: card.metrics.prices, icon: Tag, category: "prices" },
+    { key: "safety", label: "Safety", value: card.metrics.safety, icon: ShieldCheck, category: "safety" },
+  ];
+
+  return (
+    <div
+      ref={ref}
+      className="rounded-2xl p-5 space-y-4"
+      style={{ background: COLORS.card }}
+    >
+      {/* ─── Header ─── */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h3 className="text-lg font-bold" style={{ color: COLORS.textPrimary }}>
+            {card.name}
+          </h3>
+          <p className="text-xs" style={{ color: COLORS.textSecondary }}>
+            {card.region}
+          </p>
+        </div>
+        <Badge
+          className="text-[10px] px-2.5 py-0.5 rounded-full"
+          style={{ background: COLORS.tile, color: COLORS.textPrimary, border: "none" }}
+        >
+          {card.truthCount} truths
+        </Badge>
+      </div>
+
+      {/* ─── Metrics Grid (3 top, 2 bottom) ─── */}
+      <div className="grid grid-cols-3 gap-2">
+        {metrics.slice(0, 3).map((m) => (
+          <MetricTile key={m.key} metric={m} />
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-2 max-w-[66%] mx-auto">
+        {metrics.slice(3).map((m) => (
+          <MetricTile key={m.key} metric={m} />
+        ))}
+      </div>
+
+      {/* ─── AI Prediction Box ─── */}
+      {card.prediction && (
+        <div
+          className="rounded-xl p-3 space-y-2"
+          style={{
+            background: `${COLORS.tile}`,
+            border: `1px solid ${COLORS.accent}30`,
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Brain className="h-3.5 w-3.5" style={{ color: COLORS.accent }} />
+              <span className="text-[10px] font-medium uppercase tracking-wide" style={{ color: COLORS.textSecondary }}>
+                AI Prediction
+              </span>
+              {trendIcon(card.prediction.trend)}
+            </div>
+            <Badge
+              className="text-[9px] px-1.5 py-0 rounded-full"
+              style={{
+                background: card.prediction.confidence >= 75 ? `${COLORS.green}20` : card.prediction.confidence >= 50 ? `${COLORS.orange}20` : `${COLORS.red}20`,
+                color: card.prediction.confidence >= 75 ? COLORS.green : card.prediction.confidence >= 50 ? COLORS.orange : COLORS.red,
+                border: "none",
+              }}
+            >
+              {card.prediction.confidence}% confidence
+            </Badge>
+          </div>
+          <p className="text-xs" style={{ color: COLORS.textPrimary }}>
+            {card.prediction.text}
+          </p>
+          <div className="flex items-center gap-2">
+            <span className="text-[9px]" style={{ color: COLORS.textSecondary }}>
+              {card.prediction.category} · {card.prediction.timeframe}
+            </span>
+            {card.prediction.modelVersion.startsWith("gemini") && (
+              <Badge
+                className="text-[8px] px-1 py-0 rounded-full"
+                style={{ background: `${COLORS.accent}15`, color: COLORS.accent, border: "none" }}
+              >
+                Gemini AI
+              </Badge>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Recent Reports ─── */}
+      <div className="space-y-1.5">
+        <p className="text-[10px] uppercase tracking-wide font-medium" style={{ color: COLORS.textSecondary }}>
+          Recent Reports
+        </p>
+        {card.recentReports.length === 0 ? (
+          <p className="text-[10px] py-2" style={{ color: COLORS.textSecondary }}>
+            No reports yet
+          </p>
+        ) : (
+          <div className="space-y-0.5">
+            {card.recentReports.map((report) => {
+              const meta = CATEGORY_META[report.category] || CATEGORY_META.safety;
+              const Icon = meta.icon;
+              return (
+                <Dialog key={report.id}>
+                  <DialogTrigger asChild>
+                    <button className="group w-full">
+                      <div
+                        className="flex items-center gap-2.5 py-2 px-1 rounded-lg hover:bg-white/5 transition-colors"
+                        onClick={() => {
+                          // Track post detail open
+                          fetch("/api/user/browsing-events", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              eventType: "post_detail_open",
+                              truthId: report.id,
+                              neighborhoodId: card.id,
+                              category: report.category,
+                            }),
+                          }).catch(() => {});
+                        }}
+                      >
+                        <Icon className={`h-3.5 w-3.5 ${meta.color} shrink-0`} />
+                        <p className="text-xs truncate flex-1 text-left" style={{ color: COLORS.textPrimary }}>
+                          {report.content}
+                        </p>
+                        <span className="text-[10px] shrink-0" style={{ color: COLORS.textSecondary }}>
+                          {timeAgo(report.createdAt)}
+                        </span>
+                      </div>
+                    </button>
+                  </DialogTrigger>
+                  <ReportDialog
+                    report={report}
+                    neighborhoodName={card.name}
+                    onVerify={(action) => onVerify(report.id, action)}
+                    isPending={isVerifyPending}
+                  />
+                </Dialog>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ─── Footer ─── */}
+      <div className="flex items-center gap-1.5 pt-1">
+        <Clock className="h-2.5 w-2.5" style={{ color: COLORS.textSecondary }} />
+        <span className="text-[10px]" style={{ color: COLORS.textSecondary }}>
+          Updated {card.updatedAt ? timeAgo(card.updatedAt) : "just now"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Metric Tile ───
+
+function MetricTile({ metric }: { metric: { label: string; value: string | number; icon: typeof Zap; category: string } }) {
+  const Icon = metric.icon;
+  const meta = CATEGORY_META[metric.category];
+  const color = meta?.color || "text-gray-400";
+
+  const isNumeric = typeof metric.value === "number";
+  const statusStr = String(metric.value);
+  const dotColor = statusColor(statusStr);
+
+  return (
+    <div
+      className="rounded-xl p-2.5 space-y-1 overflow-hidden"
+      style={{ background: COLORS.tile }}
+    >
+      <Icon className={`h-3.5 w-3.5 ${color}`} />
+      <p className="text-[9px] uppercase tracking-normal whitespace-nowrap overflow-hidden text-ellipsis" style={{ color: COLORS.textSecondary }}>
+        {metric.label}
+      </p>
+      <div className="flex items-center gap-1">
+        {!isNumeric && (
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: dotColor }} />
+        )}
+        <span className="text-[11px] font-medium" style={{ color: COLORS.textPrimary }}>
+          {isNumeric ? metric.value : statusStr}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Report Dialog (post detail) ───
+
+function ReportDialog({
+  report,
+  neighborhoodName,
+  onVerify,
+  isPending,
+}: {
+  report: NeighborhoodCard["recentReports"][0];
+  neighborhoodName: string;
+  onVerify: (action: string) => void;
+  isPending: boolean;
+}) {
+  const meta = CATEGORY_META[report.category] || CATEGORY_META.safety;
+  const Icon = meta.icon;
+
+  return (
+    <DialogContent className="max-w-md" style={{ background: COLORS.card, border: `1px solid ${COLORS.tile}` }}>
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2 text-sm">
+          <Icon className={`h-4 w-4 ${meta.color}`} />
+          {meta.label} Report
+        </DialogTitle>
+      </DialogHeader>
+      <div className="space-y-3">
+        <p className="text-sm" style={{ color: COLORS.textPrimary }}>{report.content}</p>
+        <div className="flex items-center gap-3 text-[10px]" style={{ color: COLORS.textSecondary }}>
+          <span className="flex items-center gap-1">
+            <MapPin className="h-2.5 w-2.5" />
+            {neighborhoodName}
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock className="h-2.5 w-2.5" />
+            {timeAgo(report.createdAt)}
+          </span>
+        </div>
+        {/* Trust score */}
+        <div className="flex items-center gap-2 rounded-md px-2 py-1.5" style={{ background: COLORS.tile }}>
+          <ShieldCheck className="h-3.5 w-3.5" style={{ color: report.trustScore >= 70 ? COLORS.green : report.trustScore >= 40 ? COLORS.orange : COLORS.red }} />
+          <div className="flex-1 max-w-[100px]">
+            <Progress value={report.trustScore} className="h-1.5" />
+          </div>
+          <span className="text-xs font-mono font-medium" style={{ color: report.trustScore >= 70 ? COLORS.green : report.trustScore >= 40 ? COLORS.orange : COLORS.red }}>
+            {report.trustScore}%
+          </span>
+          <span className="text-[9px] uppercase" style={{ color: COLORS.textSecondary }}>Trust</span>
+        </div>
+        {/* AI Verification Section */}
+        <AIVerificationSection truthId={report.id} />
+        {/* Actions */}
+        <div className="flex items-center gap-0.5 pt-2" style={{ borderTop: `1px solid ${COLORS.tile}` }}>
+          <Button
+            size="sm" variant="ghost"
+            onClick={() => onVerify("corroborate")}
+            disabled={isPending}
+            className="h-8 w-8 p-0"
+            title="Corroborate" aria-label="Corroborate"
+          >
+            <ThumbsUp className="h-4 w-4" style={{ color: COLORS.green }} />
+          </Button>
+          <Button
+            size="sm" variant="ghost"
+            onClick={() => onVerify("dispute")}
+            disabled={isPending}
+            className="h-8 w-8 p-0"
+            title="Dispute" aria-label="Dispute"
+          >
+            <ThumbsDown className="h-4 w-4" style={{ color: COLORS.red }} />
+          </Button>
+        </div>
+      </div>
+    </DialogContent>
+  );
+}
+
+// ─── Suggestion Dialog ───
+
+function SuggestionDialog({
+  suggestion,
+  onVerify,
+}: {
+  suggestion: Suggestion;
+  onVerify: (action: string) => void;
+  isPending: boolean;
+}) {
+  const meta = CATEGORY_META[suggestion.category] || CATEGORY_META.safety;
+  const Icon = meta.icon;
+
+  return (
+    <DialogContent className="max-w-md" style={{ background: COLORS.card, border: `1px solid ${COLORS.tile}` }}>
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2 text-sm">
+          <Sparkles className="h-4 w-4" style={{ color: COLORS.accent }} />
+          AI Suggestion
+        </DialogTitle>
+      </DialogHeader>
+      <div className="space-y-3">
+        <p className="text-sm" style={{ color: COLORS.textPrimary }}>{suggestion.content}</p>
+        <div className="flex items-center gap-2 rounded-md px-2 py-1.5" style={{ background: `${COLORS.accent}15` }}>
+          <Brain className="h-3.5 w-3.5" style={{ color: COLORS.accent }} />
+          <p className="text-[10px]" style={{ color: COLORS.textSecondary }}>{suggestion.reason}</p>
+        </div>
+        <div className="flex items-center gap-3 text-[10px]" style={{ color: COLORS.textSecondary }}>
+          <span className="flex items-center gap-1">
+            <MapPin className="h-2.5 w-2.5" />
+            {suggestion.neighborhoodName}
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock className="h-2.5 w-2.5" />
+            {timeAgo(suggestion.createdAt)}
+          </span>
+        </div>
+        <div className="flex items-center gap-0.5 pt-2" style={{ borderTop: `1px solid ${COLORS.tile}` }}>
+          <Button
+            size="sm" variant="ghost"
+            onClick={() => onVerify("corroborate")}
+            className="h-8 w-8 p-0"
+            title="Corroborate"
+          >
+            <ThumbsUp className="h-4 w-4" style={{ color: COLORS.green }} />
+          </Button>
+          <Button
+            size="sm" variant="ghost"
+            onClick={() => onVerify("dispute")}
+            className="h-8 w-8 p-0"
+            title="Dispute"
+          >
+            <ThumbsDown className="h-4 w-4" style={{ color: COLORS.red }} />
+          </Button>
+        </div>
+      </div>
+    </DialogContent>
+  );
+}
+
+// ─── AI Verification Section (inline on each post dialog) ───
 
 function AIVerificationSection({ truthId }: { truthId: number }) {
   const [result, setResult] = useState<any>(null);
@@ -366,22 +761,16 @@ function AIVerificationSection({ truthId }: { truthId: number }) {
   };
 
   const verdictColor = (v: string) => {
-    if (v === "authentic") return "text-green-500";
-    if (v === "suspicious") return "text-red-500";
-    return "text-amber-500";
-  };
-
-  const verdictBg = (v: string) => {
-    if (v === "authentic") return "bg-green-500/10 border-green-500/20";
-    if (v === "suspicious") return "bg-red-500/10 border-red-500/20";
-    return "bg-amber-500/10 border-amber-500/20";
+    if (v === "authentic") return COLORS.green;
+    if (v === "suspicious") return COLORS.red;
+    return COLORS.orange;
   };
 
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium flex items-center gap-1">
-          <Brain className="h-3.5 w-3.5 text-primary" />
+          <Brain className="h-3.5 w-3.5" style={{ color: COLORS.accent }} />
           AI Authenticity Check
         </p>
         {!result && !loading && (
@@ -391,49 +780,37 @@ function AIVerificationSection({ truthId }: { truthId: number }) {
           </Button>
         )}
       </div>
-
       {loading && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
+        <div className="flex items-center gap-2 text-xs py-1" style={{ color: COLORS.textSecondary }}>
           <Loader2 className="h-3 w-3 animate-spin" />
           Analyzing...
         </div>
       )}
-
-      {error && <p className="text-xs text-red-500">{error}</p>}
-
+      {error && <p className="text-xs" style={{ color: COLORS.red }}>{error}</p>}
       {result && !loading && (
-        <div className={`rounded-md border p-2.5 space-y-2 ${verdictBg(result.verdict)}`}>
+        <div className="rounded-md border p-2.5 space-y-2" style={{ background: COLORS.tile, borderColor: `${verdictColor(result.verdict)}30` }}>
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-medium capitalize ${verdictColor(result.verdict)}`}>
+            <span className="text-xs font-medium capitalize" style={{ color: verdictColor(result.verdict) }}>
               {result.verdict}
             </span>
-            <span className={`text-xs font-mono font-bold ${verdictColor(result.verdict)}`}>
+            <span className="text-xs font-mono font-bold" style={{ color: verdictColor(result.verdict) }}>
               {result.confidence}%
             </span>
           </div>
-          <p className="text-[10px] text-muted-foreground">{result.explanation}</p>
-
-          {/* Signal bars */}
+          <p className="text-[10px]" style={{ color: COLORS.textSecondary }}>{result.explanation}</p>
           <div className="grid grid-cols-4 gap-1 text-[9px]">
             {[
-              { label: "Content", val: result.signals.contentAnalysis.score },
-              { label: "Source", val: result.signals.sourceCredibility.score },
-              { label: "Community", val: result.signals.communitySignals.score },
-              { label: "Time", val: result.signals.temporalPattern.score },
+              { label: "Content", val: result.signals?.contentAnalysis?.score ?? 0 },
+              { label: "Source", val: result.signals?.sourceCredibility?.score ?? 0 },
+              { label: "Community", val: result.signals?.communitySignals?.score ?? 0 },
+              { label: "Time", val: result.signals?.temporalPattern?.score ?? 0 },
             ].map((s) => (
-              <div key={s.label} className="rounded bg-background/50 px-1 py-0.5 text-center">
-                <p className="text-muted-foreground">{s.label}</p>
-                <p className="font-mono font-medium">{Math.round(s.val)}%</p>
+              <div key={s.label} className="rounded px-1 py-0.5 text-center" style={{ background: COLORS.card }}>
+                <p style={{ color: COLORS.textSecondary }}>{s.label}</p>
+                <p className="font-mono font-medium" style={{ color: COLORS.textPrimary }}>{Math.round(s.val)}%</p>
               </div>
             ))}
           </div>
-
-          {result.signals.contentAnalysis.redFlags?.length > 0 && (
-            <p className="text-[9px] text-red-500">
-              Flags: {result.signals.contentAnalysis.redFlags.join(", ")}
-            </p>
-          )}
-
           <Button size="sm" variant="ghost" onClick={handleVerify} className="h-5 text-[9px] gap-1">
             <Sparkles className="h-2 w-2" />
             Re-check

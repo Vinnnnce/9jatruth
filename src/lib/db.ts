@@ -530,5 +530,60 @@ export async function ensureDbInitialized() {
   )`;
   await sql`CREATE INDEX IF NOT EXISTS idx_ai_verifications_truth_id ON ai_verifications(truth_id)`;
 
+  // ─── User Browsing Events (behaviour tracking for AI suggestions) ───
+  await sql`CREATE TABLE IF NOT EXISTS user_browsing_events (
+    id SERIAL PRIMARY KEY,
+    clerk_user_id TEXT,
+    user_hash TEXT,
+    event_type TEXT NOT NULL,
+    truth_id INTEGER,
+    neighborhood_id INTEGER,
+    category TEXT,
+    path TEXT,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    dwell_ms INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_browsing_user ON user_browsing_events(clerk_user_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_browsing_hash ON user_browsing_events(user_hash)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_browsing_created ON user_browsing_events(created_at)`;
+
+  // ─── Post Suggestions (AI-generated recommendations) ───
+  await sql`CREATE TABLE IF NOT EXISTS post_suggestions (
+    id SERIAL PRIMARY KEY,
+    clerk_user_id TEXT,
+    user_hash TEXT,
+    truth_id INTEGER NOT NULL,
+    score DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+    reason TEXT,
+    source_model TEXT NOT NULL DEFAULT 'heuristic',
+    clicked INTEGER NOT NULL DEFAULT 0,
+    dismissed INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_suggestions_user ON post_suggestions(clerk_user_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_suggestions_hash ON post_suggestions(user_hash)`;
+
+  // ─── Weekly User Reviews (admin dashboard AI summaries) ───
+  await sql`CREATE TABLE IF NOT EXISTS weekly_user_reviews (
+    id SERIAL PRIMARY KEY,
+    week_start DATE NOT NULL,
+    week_end DATE NOT NULL,
+    clerk_user_id TEXT,
+    user_hash TEXT,
+    email TEXT,
+    display_name TEXT,
+    metrics JSONB DEFAULT '{}'::jsonb,
+    summary TEXT,
+    recommendations JSONB DEFAULT '[]'::jsonb,
+    risk_flags JSONB DEFAULT '[]'::jsonb,
+    ai_summary TEXT,
+    model_version TEXT DEFAULT 'heuristic',
+    generated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(week_start, clerk_user_id)
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_weekly_review_week ON weekly_user_reviews(week_start)`;
+
   initialized = true;
 }
