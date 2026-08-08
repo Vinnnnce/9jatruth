@@ -49,6 +49,9 @@ const isUserApiRoute = createRouteMatcher([
   "/api/rewards/redeem(.*)",
   "/api/push/subscribe(.*)",
   "/api/push/unsubscribe(.*)",
+  "/api/sync(.*)",
+  "/api/ingest(.*)",
+  "/api/gamification(.*)",
 ]);
 
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
