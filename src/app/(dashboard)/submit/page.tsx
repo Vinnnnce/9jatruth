@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/hooks/use-toast";
-import { Send, CheckCircle2, Info, MapPin, LocateFixed, Building2, UserPlus, LogIn } from "lucide-react";
+import { Send, CheckCircle2, Info, MapPin, LocateFixed, Building2, UserPlus, LogIn, Navigation } from "lucide-react";
 import { useLiveLocation } from "@/hooks/use-live-location";
 import { useAgencyAuth } from "@/hooks/use-agency-auth";
 import { CATEGORY_LIST } from "@/lib/categories";
@@ -38,6 +38,9 @@ export default function SubmitTruth() {
   const [category, setCategory] = useState<string>("");
   const [content, setContent] = useState<string>("");
   const [postAsOrg, setPostAsOrg] = useState(false);
+  const [detectedLocation, setDetectedLocation] = useState<{ lat: number | null; lng: number | null; region: string | null; city: string | null } | null>(null);
+  const [detectingLoc, setDetectingLoc] = useState(false);
+  const [manualOverride, setManualOverride] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { lat, lng, requestLocation, loading: locLoading } = useLiveLocation();
@@ -48,6 +51,47 @@ export default function SubmitTruth() {
   const { data: neighborhoods, isLoading } = useQuery<Neighborhood[]>({
     queryKey: ["/api/neighborhoods"],
   });
+
+  // Auto-detect user's real location via IP on mount
+  useEffect(() => {
+    if (detectedLocation) return;
+    setDetectingLoc(true);
+    fetch("/api/geo/nearby")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.userLocation) {
+          setDetectedLocation({
+            lat: data.userLocation.lat ?? null,
+            lng: data.userLocation.lng ?? null,
+            region: data.userLocation.region ?? null,
+            city: data.userLocation.city ?? null,
+          });
+          // Auto-select matching neighborhood based on detected region
+          if (data.userLocation.region && neighborhoods && !neighborhoodId) {
+            const match = neighborhoods.find(
+              (n) => n.region === data.userLocation.region || n.name === data.userLocation.city
+            );
+            if (match) {
+              setNeighborhoodId(String(match.id));
+            }
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => setDetectingLoc(false));
+  }, [neighborhoods, detectedLocation, neighborhoodId]);
+
+  // Also auto-select when neighborhoods load after location is detected
+  useEffect(() => {
+    if (detectedLocation?.region && neighborhoods && !neighborhoodId && !manualOverride) {
+      const match = neighborhoods.find(
+        (n) => n.region === detectedLocation.region || n.name === detectedLocation.city
+      );
+      if (match) {
+        setNeighborhoodId(String(match.id));
+      }
+    }
+  }, [neighborhoods, detectedLocation, neighborhoodId, manualOverride]);
 
   const mutation = useMutation({
     mutationFn: (data: { neighborhoodId: number; category: string; content: string; reportLat?: number; reportLng?: number; locationSource?: string }) => {
@@ -163,38 +207,60 @@ export default function SubmitTruth() {
           <CardTitle className="text-base font-display">New Report</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          {/* Live Location Capture */}
-          <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 shrink-0">
-              <MapPin className={`h-4 w-4 ${lat !== null ? "text-green-500" : "text-primary"}`} />
-            </div>
-            <div className="flex-1">
-              <div className="text-xs font-medium">Live Location</div>
-              <div className="text-[10px] text-muted-foreground">
-                {lat !== null && lng !== null
-                  ? `Captured: ${lat.toFixed(4)}, ${lng.toFixed(4)}`
-                  : "Attach your GPS location for better accuracy"}
+          {/* Location Detection — auto-detected with manual override */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 shrink-0">
+                <Navigation className={`h-4 w-4 ${detectingLoc ? "animate-spin text-primary" : detectedLocation?.lat ? "text-green-500" : "text-primary"}`} />
               </div>
+              <div className="flex-1">
+                <div className="text-xs font-medium">Your Location</div>
+                <div className="text-[10px] text-muted-foreground">
+                  {detectingLoc
+                    ? "Detecting your location..."
+                    : detectedLocation?.city && detectedLocation?.region
+                    ? `${detectedLocation.city}, ${detectedLocation.region}`
+                    : detectedLocation?.region
+                    ? detectedLocation.region
+                    : detectedLocation?.lat && detectedLocation?.lng
+                    ? `Lat: ${detectedLocation.lat.toFixed(4)}, Lng: ${detectedLocation.lng.toFixed(4)}`
+                    : "Location not detected — select manually"}
+                </div>
+              </div>
+              {/* GPS capture button */}
+              <Button
+                type="button"
+                variant={lat !== null ? "secondary" : "outline"}
+                size="sm"
+                onClick={requestLocation}
+                disabled={locLoading}
+                className="h-7 gap-1 text-[10px]"
+              >
+                <LocateFixed className={`h-3 w-3 ${locLoading ? "animate-spin" : ""}`} />
+                {lat !== null ? "GPS On" : locLoading ? "Locating..." : "GPS"}
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant={lat !== null ? "secondary" : "outline"}
-              size="sm"
-              onClick={requestLocation}
-              disabled={locLoading}
-              className="h-7 gap-1 text-[10px]"
-            >
-              <LocateFixed className={`h-3 w-3 ${locLoading ? "animate-spin" : ""}`} />
-              {lat !== null ? "Captured" : locLoading ? "Locating..." : "Capture"}
-            </Button>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Neighborhood — auto-filled from detected location, with manual override */}
             <div className="space-y-1.5">
-              <Label htmlFor="neighborhood" className="text-xs">Neighborhood</Label>
-              <Select value={neighborhoodId} onValueChange={setNeighborhoodId}>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="neighborhood" className="text-xs">Neighborhood / Area</Label>
+                {neighborhoodId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManualOverride(true);
+                      setNeighborhoodId("");
+                    }}
+                    className="text-[10px] text-primary hover:underline"
+                  >
+                    Change
+                  </button>
+                )}
+              </div>
+              <Select value={neighborhoodId} onValueChange={(v) => { setNeighborhoodId(v); setManualOverride(true); }}>
                 <SelectTrigger id="neighborhood" data-testid="select-neighborhood">
-                  <SelectValue placeholder="Select area" />
+                  <SelectValue placeholder={detectingLoc ? "Detecting..." : "Select your area"} />
                 </SelectTrigger>
                 <SelectContent>
                   {isLoading ? (
@@ -208,8 +274,16 @@ export default function SubmitTruth() {
                   )}
                 </SelectContent>
               </Select>
+              {detectedLocation && !manualOverride && neighborhoodId && (
+                <p className="text-[10px] text-green-500 flex items-center gap-1">
+                  <MapPin className="h-2.5 w-2.5" />
+                  Auto-detected from your location
+                </p>
+              )}
             </div>
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="category" className="text-xs">Category</Label>
               <Select value={category} onValueChange={setCategory}>

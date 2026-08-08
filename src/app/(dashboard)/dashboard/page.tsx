@@ -88,7 +88,7 @@ export default function DashboardPage() {
   if (!data || data.length === 0) {
     return (
       <div className="p-6">
-        <h1 className="text-xl font-bold mb-4">Dashboard</h1>
+        <h1 className="text-xl font-bold mb-4">Portfolio</h1>
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <MapPin className="h-12 w-12 text-muted-foreground/40 mb-4" />
@@ -105,7 +105,7 @@ export default function DashboardPage() {
   return (
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold" data-testid="text-dashboard-title">Dashboard</h1>
+        <h1 className="text-xl font-bold" data-testid="text-dashboard-title">Portfolio</h1>
         <Badge variant="outline" className="text-xs">
           {data.length} neighborhoods
         </Badge>

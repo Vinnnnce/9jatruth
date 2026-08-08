@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * User Dashboard
+ * Portfolio
  *
- * Personal dashboard for regular users: profile summary, personal stats,
- * recent truths, reward ledger, and gamification profile.
+ * Personal portfolio for regular users: profile summary, optional details,
+ * personal stats, recent truths, reward ledger, and gamification profile.
  */
 
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@/lib/use-user-safe";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -33,9 +34,28 @@ import {
   Star,
   ShieldCheck,
   Clock,
+  Briefcase,
+  Globe,
+  Phone,
+  Twitter,
+  Linkedin,
+  Calendar,
+  Save,
+  Loader2,
 } from "lucide-react";
 import { UserAnalyticsCharts } from "@/components/user-analytics";
 import { LocationPreferences } from "@/components/location-preferences";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/components/hooks/use-toast";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,6 +71,17 @@ type UserProfile = {
   rewardBalance?: number;
   trustScore?: number;
   currentStreak?: number;
+  bio?: string | null;
+  phone?: string | null;
+  occupation?: string | null;
+  website?: string | null;
+  twitterHandle?: string | null;
+  linkedinUrl?: string | null;
+  dateOfBirth?: string | null;
+  gender?: string | null;
+  interests?: string[] | null;
+  skills?: string[] | null;
+  profileCompleted?: boolean;
 };
 
 type Truth = {
@@ -93,7 +124,7 @@ function timeAgo(dateStr?: string): string {
 // Component
 // ---------------------------------------------------------------------------
 
-export default function UserDashboard() {
+export default function PortfolioPage() {
   const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
 
   const { data: profile, isLoading: profileLoading } = useQuery<UserProfile>({
@@ -131,10 +162,10 @@ export default function UserDashboard() {
         <div>
           <h1 className="text-xl font-display font-700 flex items-center gap-2">
             <User className="h-5 w-5 text-primary" />
-            My Dashboard
+            My Portfolio
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Your contributions, rewards, and progress on Soke
+            Your contributions, rewards, and profile on Soke
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -187,6 +218,7 @@ export default function UserDashboard() {
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList data-testid="tabs-user">
           <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+          <TabsTrigger value="profile" data-testid="tab-profile">Profile</TabsTrigger>
           <TabsTrigger value="truths" data-testid="tab-my-truths">My Truths</TabsTrigger>
           <TabsTrigger value="rewards" data-testid="tab-rewards">Rewards</TabsTrigger>
           <TabsTrigger value="achievements" data-testid="tab-achievements">Achievements</TabsTrigger>
@@ -238,6 +270,13 @@ export default function UserDashboard() {
             </Card>
           </div>
           <UserAnalyticsCharts />
+        </TabsContent>
+
+        {/* ------------------------------------------------------------- */}
+        {/* Profile — optional user details */}
+        {/* ------------------------------------------------------------- */}
+        <TabsContent value="profile" className="space-y-4">
+          <ProfileDetailsForm profile={profile} loading={profileLoading} />
         </TabsContent>
 
         {/* ------------------------------------------------------------- */}
@@ -503,5 +542,270 @@ function LedgerList({ ledger, loading }: { ledger?: RewardLedgerEntry[]; loading
         </div>
       ))}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Profile Details Form — optional user details
+// ---------------------------------------------------------------------------
+
+function ProfileDetailsForm({ profile, loading }: { profile?: UserProfile; loading: boolean }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [formData, setFormData] = useState({
+    displayName: "",
+    bio: "",
+    phone: "",
+    occupation: "",
+    website: "",
+    twitterHandle: "",
+    linkedinUrl: "",
+    dateOfBirth: "",
+    gender: "",
+    interests: "",
+    skills: "",
+  });
+
+  useEffect(() => {
+    if (profile) {
+      setFormData({
+        displayName: profile.name || "",
+        bio: profile.bio || "",
+        phone: profile.phone || "",
+        occupation: profile.occupation || "",
+        website: profile.website || "",
+        twitterHandle: profile.twitterHandle || "",
+        linkedinUrl: profile.linkedinUrl || "",
+        dateOfBirth: profile.dateOfBirth ? profile.dateOfBirth.split("T")[0] : "",
+        gender: profile.gender || "",
+        interests: Array.isArray(profile.interests) ? profile.interests.join(", ") : "",
+        skills: Array.isArray(profile.skills) ? profile.skills.join(", ") : "",
+      });
+    }
+  }, [profile]);
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: Record<string, any>) => {
+      const res = await apiRequest("PUT", "/api/user/profile", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Profile updated", description: "Your details have been saved." });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/profile"] });
+    },
+    onError: () => {
+      toast({ title: "Update failed", description: "Could not save profile. Please try again.", variant: "destructive" });
+    },
+  });
+
+  const handleSave = () => {
+    const payload: Record<string, any> = {};
+    if (formData.displayName) payload.displayName = formData.displayName;
+    if (formData.bio) payload.bio = formData.bio;
+    if (formData.phone) payload.phone = formData.phone;
+    if (formData.occupation) payload.occupation = formData.occupation;
+    if (formData.website) payload.website = formData.website;
+    if (formData.twitterHandle) payload.twitterHandle = formData.twitterHandle;
+    if (formData.linkedinUrl) payload.linkedinUrl = formData.linkedinUrl;
+    if (formData.dateOfBirth) payload.dateOfBirth = formData.dateOfBirth;
+    if (formData.gender) payload.gender = formData.gender;
+    if (formData.interests) payload.interests = formData.interests.split(",").map((s) => s.trim()).filter(Boolean);
+    if (formData.skills) payload.skills = formData.skills.split(",").map((s) => s.trim()).filter(Boolean);
+    updateMutation.mutate(payload);
+  };
+
+  if (loading) {
+    return <Skeleton className="h-96" />;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-display flex items-center gap-2">
+            <User className="h-4 w-4 text-primary" />
+            Profile Details
+          </CardTitle>
+          {profile?.profileCompleted && (
+            <Badge className="text-[9px] gap-0.5 bg-green-500/15 text-green-600">
+              <ShieldCheck className="h-2.5 w-2.5" /> Complete
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <p className="text-xs text-muted-foreground">
+          These fields are optional. Fill them in to help others in the community know you better.
+        </p>
+
+        {/* Display Name */}
+        <div className="space-y-1.5">
+          <Label htmlFor="displayName" className="text-xs flex items-center gap-1">
+            <User className="h-3 w-3" /> Display Name
+          </Label>
+          <Input
+            id="displayName"
+            value={formData.displayName}
+            onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
+            placeholder="Your name"
+            className="h-9 text-sm"
+          />
+        </div>
+
+        {/* Bio */}
+        <div className="space-y-1.5">
+          <Label htmlFor="bio" className="text-xs">Bio</Label>
+          <Textarea
+            id="bio"
+            value={formData.bio}
+            onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+            placeholder="Tell the community about yourself..."
+            rows={3}
+            className="resize-none text-sm"
+          />
+        </div>
+
+        {/* Occupation */}
+        <div className="space-y-1.5">
+          <Label htmlFor="occupation" className="text-xs flex items-center gap-1">
+            <Briefcase className="h-3 w-3" /> Occupation
+          </Label>
+          <Input
+            id="occupation"
+            value={formData.occupation}
+            onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
+            placeholder="e.g. Journalist, Engineer, Student"
+            className="h-9 text-sm"
+          />
+        </div>
+
+        {/* Phone */}
+        <div className="space-y-1.5">
+          <Label htmlFor="phone" className="text-xs flex items-center gap-1">
+            <Phone className="h-3 w-3" /> Phone
+          </Label>
+          <Input
+            id="phone"
+            value={formData.phone}
+            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            placeholder="+234..."
+            className="h-9 text-sm"
+          />
+        </div>
+
+        {/* Website */}
+        <div className="space-y-1.5">
+          <Label htmlFor="website" className="text-xs flex items-center gap-1">
+            <Globe className="h-3 w-3" /> Website
+          </Label>
+          <Input
+            id="website"
+            value={formData.website}
+            onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+            placeholder="https://..."
+            className="h-9 text-sm"
+          />
+        </div>
+
+        {/* Twitter & LinkedIn */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="twitterHandle" className="text-xs flex items-center gap-1">
+              <Twitter className="h-3 w-3" /> Twitter Handle
+            </Label>
+            <Input
+              id="twitterHandle"
+              value={formData.twitterHandle}
+              onChange={(e) => setFormData({ ...formData, twitterHandle: e.target.value })}
+              placeholder="@username"
+              className="h-9 text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="linkedinUrl" className="text-xs flex items-center gap-1">
+              <Linkedin className="h-3 w-3" /> LinkedIn URL
+            </Label>
+            <Input
+              id="linkedinUrl"
+              value={formData.linkedinUrl}
+              onChange={(e) => setFormData({ ...formData, linkedinUrl: e.target.value })}
+              placeholder="https://linkedin.com/in/..."
+              className="h-9 text-sm"
+            />
+          </div>
+        </div>
+
+        {/* Date of Birth & Gender */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="dateOfBirth" className="text-xs flex items-center gap-1">
+              <Calendar className="h-3 w-3" /> Date of Birth
+            </Label>
+            <Input
+              id="dateOfBirth"
+              type="date"
+              value={formData.dateOfBirth}
+              onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+              className="h-9 text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="gender" className="text-xs">Gender</Label>
+            <Select value={formData.gender} onValueChange={(v) => setFormData({ ...formData, gender: v })}>
+              <SelectTrigger id="gender" className="h-9 text-sm">
+                <SelectValue placeholder="Select" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="male">Male</SelectItem>
+                <SelectItem value="female">Female</SelectItem>
+                <SelectItem value="non-binary">Non-binary</SelectItem>
+                <SelectItem value="prefer-not-to-say">Prefer not to say</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Interests & Skills */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="interests" className="text-xs">Interests (comma-separated)</Label>
+            <Input
+              id="interests"
+              value={formData.interests}
+              onChange={(e) => setFormData({ ...formData, interests: e.target.value })}
+              placeholder="e.g. Energy, Politics, Technology"
+              className="h-9 text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="skills" className="text-xs">Skills (comma-separated)</Label>
+            <Input
+              id="skills"
+              value={formData.skills}
+              onChange={(e) => setFormData({ ...formData, skills: e.target.value })}
+              placeholder="e.g. Photography, Data Analysis, Writing"
+              className="h-9 text-sm"
+            />
+          </div>
+        </div>
+
+        {/* Save Button */}
+        <div className="flex justify-end pt-2">
+          <Button
+            onClick={handleSave}
+            disabled={updateMutation.isPending}
+            className="gap-2"
+            data-testid="button-save-profile"
+          >
+            {updateMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Save className="h-3.5 w-3.5" />
+            )}
+            Save Profile
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -504,5 +504,18 @@ export async function ensureDbInitialized() {
   await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS location_source TEXT`;
   await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS location_updated_at TIMESTAMPTZ`;
 
+  // Optional profile detail columns
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS bio TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS phone TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS occupation TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS website TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS twitter_handle TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS linkedin_url TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS date_of_birth DATE`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS gender TEXT`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS interests TEXT[]`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS skills TEXT[]`;
+  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS profile_completed BOOLEAN DEFAULT FALSE`;
+
   initialized = true;
 }

@@ -78,7 +78,7 @@ function useNavSections() {
     {
       label: "Main",
       items: [
-        { path: "/", label: "Dashboard", icon: LayoutDashboard },
+        { path: "/", label: "Portfolio", icon: LayoutDashboard },
         { path: "/search", label: "Search", icon: Search },
         { path: "/submit", label: "Submit Truth", icon: Send },
         { path: "/feeds", label: "Feeds", icon: Newspaper },
@@ -114,7 +114,7 @@ function useNavSections() {
           ? [{ path: "/admin", label: "Super Admin Dashboard", icon: ShieldCheck }]
           : []),
         // Show user dashboard for all authenticated users
-        { path: "/user", label: "User Dashboard", icon: User },
+        { path: "/user", label: "Portfolio", icon: User },
         // Show org dashboard only for org admins
         ...(dashboardType === "org"
           ? [{ path: "/org", label: "Org Dashboard", icon: Building2 }]

@@ -1,4 +1,4 @@
-import { ensureDbInitialized } from "@/lib/db";
+import { ensureDbInitialized, getDb } from "@/lib/db";
 import {
   getPlatformUserByClerkId,
   upsertPlatformUser,
@@ -80,5 +80,128 @@ export async function GET(request: Request) {
     region: platformUser.region ?? null,
     createdAt: platformUser.created_at,
     updatedAt: platformUser.updated_at,
+    bio: platformUser.bio ?? null,
+    phone: platformUser.phone ?? null,
+    occupation: platformUser.occupation ?? null,
+    website: platformUser.website ?? null,
+    twitterHandle: platformUser.twitter_handle ?? null,
+    linkedinUrl: platformUser.linkedin_url ?? null,
+    dateOfBirth: platformUser.date_of_birth ?? null,
+    gender: platformUser.gender ?? null,
+    interests: platformUser.interests ?? null,
+    skills: platformUser.skills ?? null,
+    profileCompleted: platformUser.profile_completed ?? false,
   });
+}
+
+/**
+ * PUT /api/user/profile — update optional profile details.
+ * Only the fields provided in the body will be updated.
+ */
+export async function PUT(request: Request) {
+  await ensureDbInitialized();
+  const clerkUserId = await getClerkUserId();
+  if (!clerkUserId) {
+    return Response.json({ message: "Not authenticated" }, { status: 401 });
+  }
+
+  let body: any;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ message: "Invalid JSON body" }, { status: 400 });
+  }
+
+  // Build SET clause dynamically from allowed fields
+  const allowedFields: Record<string, string> = {
+    bio: "bio",
+    phone: "phone",
+    occupation: "occupation",
+    website: "website",
+    twitterHandle: "twitter_handle",
+    linkedinUrl: "linkedin_url",
+    dateOfBirth: "date_of_birth",
+    gender: "gender",
+    displayName: "display_name",
+  };
+
+  const updates: { col: string; val: any }[] = [];
+  for (const [key, col] of Object.entries(allowedFields)) {
+    if (key in body) {
+      updates.push({ col, val: body[key] || null });
+    }
+  }
+  // Array fields
+  if ("interests" in body) {
+    const arr = Array.isArray(body.interests) ? body.interests : [];
+    updates.push({ col: "interests", val: arr });
+  }
+  if ("skills" in body) {
+    const arr = Array.isArray(body.skills) ? body.skills : [];
+    updates.push({ col: "skills", val: arr });
+  }
+  if (updates.length === 0) {
+    return Response.json({ message: "No updatable fields provided" }, { status: 400 });
+  }
+
+  const sql = getDb();
+  const setClauses = updates.map((u, i) => `${u.col} = $${i + 1}`).join(", ");
+  const values = updates.map((u) => u.val);
+  values.push(clerkUserId);
+
+  try {
+    // Update each field individually using Neon's tagged template
+    // Column names are validated against the allowedFields whitelist (no injection risk)
+    for (const u of updates) {
+      const col = u.col
+      const val = u.val
+      if (col === "bio") {
+        await sql`UPDATE platform_users SET bio = ${val}, updated_at = NOW(), profile_completed = TRUE WHERE clerk_user_id = ${clerkUserId}`
+      } else if (col === "phone") {
+        await sql`UPDATE platform_users SET phone = ${val}, updated_at = NOW(), profile_completed = TRUE WHERE clerk_user_id = ${clerkUserId}`
+      } else if (col === "occupation") {
+        await sql`UPDATE platform_users SET occupation = ${val}, updated_at = NOW(), profile_completed = TRUE WHERE clerk_user_id = ${clerkUserId}`
+      } else if (col === "website") {
+        await sql`UPDATE platform_users SET website = ${val}, updated_at = NOW(), profile_completed = TRUE WHERE clerk_user_id = ${clerkUserId}`
+      } else if (col === "twitter_handle") {
+        await sql`UPDATE platform_users SET twitter_handle = ${val}, updated_at = NOW(), profile_completed = TRUE WHERE clerk_user_id = ${clerkUserId}`
+      } else if (col === "linkedin_url") {
+        await sql`UPDATE platform_users SET linkedin_url = ${val}, updated_at = NOW(), profile_completed = TRUE WHERE clerk_user_id = ${clerkUserId}`
+      } else if (col === "date_of_birth") {
+        await sql`UPDATE platform_users SET date_of_birth = ${val}, updated_at = NOW(), profile_completed = TRUE WHERE clerk_user_id = ${clerkUserId}`
+      } else if (col === "gender") {
+        await sql`UPDATE platform_users SET gender = ${val}, updated_at = NOW(), profile_completed = TRUE WHERE clerk_user_id = ${clerkUserId}`
+      } else if (col === "display_name") {
+        await sql`UPDATE platform_users SET display_name = ${val}, updated_at = NOW(), profile_completed = TRUE WHERE clerk_user_id = ${clerkUserId}`
+      } else if (col === "interests") {
+        const arr = val as string[]
+        await sql`UPDATE platform_users SET interests = ${arr as any}, updated_at = NOW(), profile_completed = TRUE WHERE clerk_user_id = ${clerkUserId}`
+      } else if (col === "skills") {
+        const arr = val as string[]
+        await sql`UPDATE platform_users SET skills = ${arr as any}, updated_at = NOW(), profile_completed = TRUE WHERE clerk_user_id = ${clerkUserId}`
+      }
+    }
+    // Re-fetch updated user
+    const platformUser = await getPlatformUserByClerkId(clerkUserId);
+    return Response.json({
+      success: true,
+      message: "Profile updated",
+      profile: {
+        bio: platformUser?.bio ?? null,
+        phone: platformUser?.phone ?? null,
+        occupation: platformUser?.occupation ?? null,
+        website: platformUser?.website ?? null,
+        twitterHandle: platformUser?.twitter_handle ?? null,
+        linkedinUrl: platformUser?.linkedin_url ?? null,
+        dateOfBirth: platformUser?.date_of_birth ?? null,
+        gender: platformUser?.gender ?? null,
+        interests: platformUser?.interests ?? null,
+        skills: platformUser?.skills ?? null,
+        displayName: platformUser?.display_name ?? null,
+        profileCompleted: platformUser?.profile_completed ?? true,
+      },
+    });
+  } catch (err) {
+    return Response.json({ message: "Failed to update profile", error: String(err) }, { status: 500 });
+  }
 }

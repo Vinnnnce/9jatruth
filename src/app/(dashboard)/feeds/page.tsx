@@ -23,7 +23,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  ChevronRight, Clock, ShieldCheck, CheckCircle2,
+  Info, Clock, ShieldCheck, CheckCircle2,
   ThumbsUp, ThumbsDown, MapPin, Newspaper,
 } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
@@ -241,48 +241,51 @@ export default function FeedsPage() {
                         <span className="text-[9px] text-muted-foreground uppercase">Trust</span>
                       </div>
 
-                      {/* Actions — icon-only reactions within post borders */}
-                      <div className="flex items-center justify-between gap-1 pt-1 border-t mt-1">
-                        <div className="flex items-center gap-0.5">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => verifyMutation.mutate({ truthId: truth.id, action: "corroborate" })}
-                            disabled={verifyMutation.isPending}
-                            data-testid={`button-corroborate-${truth.id}`}
-                            className="h-8 px-2 text-xs"
-                            title="Corroborate"
-                          >
-                            <ThumbsUp className="h-3.5 w-3.5 text-green-500" />
-                            <span className="ml-1">Corroborate</span>
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => verifyMutation.mutate({ truthId: truth.id, action: "dispute" })}
-                            disabled={verifyMutation.isPending}
-                            data-testid={`button-dispute-${truth.id}`}
-                            className="h-8 px-2 text-xs"
-                            title="Dispute"
-                          >
-                            <ThumbsDown className="h-3.5 w-3.5 text-red-500" />
-                            <span className="ml-1">Dispute</span>
-                          </Button>
-                        </div>
+                      {/* Actions — all icon-only within post borders */}
+                      <div className="flex items-center gap-0.5 pt-1 border-t mt-1">
+                        {/* Corroborate — icon only */}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => verifyMutation.mutate({ truthId: truth.id, action: "corroborate" })}
+                          disabled={verifyMutation.isPending}
+                          data-testid={`button-corroborate-${truth.id}`}
+                          className="h-8 w-8 p-0"
+                          title="Corroborate"
+                          aria-label="Corroborate"
+                        >
+                          <ThumbsUp className="h-4 w-4 text-green-500" />
+                        </Button>
+                        {/* Dispute — icon only */}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => verifyMutation.mutate({ truthId: truth.id, action: "dispute" })}
+                          disabled={verifyMutation.isPending}
+                          data-testid={`button-dispute-${truth.id}`}
+                          className="h-8 w-8 p-0"
+                          title="Dispute"
+                          aria-label="Dispute"
+                        >
+                          <ThumbsDown className="h-4 w-4 text-red-500" />
+                        </Button>
+                        {/* Feed interactions (like, comment, share, subscribe) */}
                         <FeedInteractions
                           truth={truth}
                           currentUserHash={currentUserHash}
                         />
+                        {/* Details — icon only */}
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-7 text-xs ml-auto"
+                              className="h-8 w-8 p-0 ml-auto"
                               data-testid={`button-details-${truth.id}`}
+                              title="Details"
+                              aria-label="Details"
                             >
-                              Details
-                              <ChevronRight className="h-3 w-3 ml-1" />
+                              <Info className="h-4 w-4 text-muted-foreground" />
                             </Button>
                           </DialogTrigger>
                           <DialogContent>
