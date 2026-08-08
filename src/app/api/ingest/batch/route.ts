@@ -2,6 +2,7 @@ import { ensureDbInitialized } from "@/lib/db";
 import { ingestBatch } from "@/lib/neon-storage";
 import { validate, validationErrorResponse, getUserId } from "@/lib/api-helpers";
 import { z } from "zod";
+import { csrfCheck } from "@/lib/security";
 
 const batchIngestSchema = z.object({
   reports: z
@@ -20,6 +21,9 @@ const batchIngestSchema = z.object({
 
 export async function POST(request: Request) {
   await ensureDbInitialized();
+
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
   try {
     const body = await request.json();
     const parsed = validate(batchIngestSchema, body);

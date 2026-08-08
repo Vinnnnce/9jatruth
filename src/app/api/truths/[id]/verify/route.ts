@@ -1,6 +1,7 @@
 import { ensureDbInitialized } from "@/lib/db";
 import { verifyTruth } from "@/lib/neon-storage";
-import { validate, validationErrorResponse, getUserId } from "@/lib/api-helpers";
+import { validate, validationErrorResponse, getUserId, getClerkUserId } from "@/lib/api-helpers";
+import { csrfCheck } from "@/lib/security";
 import { z } from "zod";
 
 const idParamSchema = z.object({
@@ -16,6 +17,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   await ensureDbInitialized();
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
+  const clerkUserId = await getClerkUserId();
+  if (!clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   const parsedParams = validate(idParamSchema, { id });
   if (!parsedParams.success) return validationErrorResponse(parsedParams.error);

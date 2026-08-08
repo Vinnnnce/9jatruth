@@ -18,10 +18,12 @@ import {
 import { SokeLogoFull } from "@/components/logo";
 import { OfflineStatus } from "@/components/offline-status";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { UserButton } from "@clerk/nextjs";
+import { UserButton, SignedIn, SignedOut, SignInButton, SignUpButton } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { isSuperAdminProfile, getDashboardType } from "@/lib/admin-auth-client";
+import { NotificationBell } from "@/components/notification-bell";
+import { NewUserTour } from "@/components/new-user-tour";
 
 const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
@@ -232,7 +234,24 @@ function TopBar() {
         </div>
         <ThemeToggle />
         {isClerkConfigured && (
-          <UserButton afterSignOutUrl="/sign-in" />
+          <>
+            <SignedIn>
+              <NotificationBell />
+              <UserButton afterSignOutUrl="/sign-in" />
+            </SignedIn>
+            <SignedOut>
+              <SignInButton mode="modal">
+                <button className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted">
+                  Log In
+                </button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <button className="text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 transition-colors px-4 py-1.5 rounded-md">
+                  Sign Up
+                </button>
+              </SignUpButton>
+            </SignedOut>
+          </>
         )}
         {!isClerkConfigured && (
           <Link href="/sign-in" className="text-sm text-primary hover:underline">
@@ -250,6 +269,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <AppSidebar />
       <SidebarInset>
         <TopBar />
+        <NewUserTour />
         <main className="flex-1 overflow-y-auto scrollbar-thin">{children}</main>
       </SidebarInset>
     </SidebarProvider>

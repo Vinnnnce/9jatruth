@@ -8,11 +8,28 @@ import {
   verifyPassword,
 } from "@/lib/neon-storage";
 import { validate, validationErrorResponse, getClerkUserId } from "@/lib/api-helpers";
+import { csrfCheck } from "@/lib/security";
 import { agencyUpdateSchema } from "@shared/schema";
 import { z } from "zod";
 
+// Privileged fields that must never be settable through the account/settings
+// endpoint. The agencyUpdateSchema already omits them (so zod strips unknown
+// keys by default), but we strip them again here as defense-in-depth against
+// any future schema regression or direct updateAgencyAccount calls.
+const SENSITIVE_ACCOUNT_FIELDS = [
+  "isAdmin",
+  "isOrgAdmin",
+  "organizationId",
+  "role",
+  "trustScore",
+  "active",
+  "verified",
+] as const;
+
 export async function PATCH(request: Request) {
   await ensureDbInitialized();
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
   const clerkUserId = await getClerkUserId();
   if (!clerkUserId) {
     return Response.json({ message: "Unauthorized" }, { status: 401 });
@@ -28,6 +45,18 @@ export async function PATCH(request: Request) {
     const parsed = validate(agencyUpdateSchema, body);
     if (!parsed.success) return validationErrorResponse(parsed.error);
     const data = parsed.data;
+
+    // Defense-in-depth: ensure no privileged field leaked through validation.
+    for (const field of SENSITIVE_ACCOUNT_FIELDS) {
+      if (field in (data as Record<string, unknown>)) {
+        return Response.json({ message: `Field '${field}' cannot be modified here` }, { status: 400 });
+      }
+    }
+    for (const field of SENSITIVE_ACCOUNT_FIELDS) {
+      if (field in (body as Record<string, unknown>)) {
+        return Response.json({ message: `Field '${field}' cannot be modified here` }, { status: 400 });
+      }
+    }
 
     // If changing password, verify current password
     if (data.newPassword) {

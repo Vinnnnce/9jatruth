@@ -1,6 +1,7 @@
 import { ensureDbInitialized } from "@/lib/db";
-import { updateOrgMember, deleteOrgMember, getPlatformUserOrgId } from "@/lib/neon-storage";
+import { updateOrgMember, deleteOrgMember, getOrgMemberById, getPlatformUserOrgId } from "@/lib/neon-storage";
 import { getClerkUserId, sanitizeText } from "@/lib/api-helpers";
+import { csrfCheck } from "@/lib/security";
 import { z } from "zod";
 
 const updateSchema = z.object({
@@ -17,6 +18,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   await ensureDbInitialized();
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
   const clerkUserId = await getClerkUserId();
   if (!clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
   const orgId = await getPlatformUserOrgId(clerkUserId);
@@ -25,6 +28,13 @@ export async function PATCH(
   const { id } = await params;
   const numericId = parseInt(id, 10);
   if (isNaN(numericId)) return Response.json({ message: "Invalid member id" }, { status: 400 });
+
+  // IDOR guard: the target member must belong to the caller's organization.
+  const existing = await getOrgMemberById(numericId);
+  if (!existing) return Response.json({ message: "Member not found" }, { status: 404 });
+  if (existing.organization_id !== orgId) {
+    return Response.json({ message: "Forbidden — resource outside your organization" }, { status: 403 });
+  }
 
   const body = await request.json();
   const parsed = updateSchema.safeParse(body);
@@ -50,6 +60,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   await ensureDbInitialized();
+  const csrfError = csrfCheck(_request);
+  if (csrfError) return csrfError;
   const clerkUserId = await getClerkUserId();
   if (!clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
   const orgId = await getPlatformUserOrgId(clerkUserId);
@@ -58,6 +70,13 @@ export async function DELETE(
   const { id } = await params;
   const numericId = parseInt(id, 10);
   if (isNaN(numericId)) return Response.json({ message: "Invalid member id" }, { status: 400 });
+
+  // IDOR guard: the target member must belong to the caller's organization.
+  const existing = await getOrgMemberById(numericId);
+  if (!existing) return Response.json({ message: "Member not found" }, { status: 404 });
+  if (existing.organization_id !== orgId) {
+    return Response.json({ message: "Forbidden — resource outside your organization" }, { status: 403 });
+  }
 
   const result = await deleteOrgMember(numericId);
   return Response.json(result);

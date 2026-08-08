@@ -6,7 +6,9 @@ import {
   sanitizeText,
   getUserId,
   getIpLocation,
+  getClerkUserId,
 } from "@/lib/api-helpers";
+import { csrfCheck } from "@/lib/security";
 import { insertMicroTruthSchema, TRUTH_CATEGORIES } from "@shared/schema";
 import { z } from "zod";
 
@@ -28,6 +30,17 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   await ensureDbInitialized();
+
+  // Require authentication for submitting reports
+  const clerkUserId = await getClerkUserId();
+  if (!clerkUserId) {
+    return Response.json({ message: "Unauthorized — Please sign in to submit a report" }, { status: 401 });
+  }
+
+  // CSRF protection
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
+
   try {
     const body = await request.json();
     const parsed = validate(insertMicroTruthSchema, body);

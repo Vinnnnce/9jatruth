@@ -6,6 +6,7 @@ import {
   getPlatformUserOrgId,
 } from "@/lib/neon-storage";
 import { getClerkUserId, sanitizeText } from "@/lib/api-helpers";
+import { csrfCheck } from "@/lib/security";
 import { z } from "zod";
 
 /**
@@ -34,6 +35,8 @@ const addMemberSchema = z.object({
  */
 export async function POST(request: Request) {
   await ensureDbInitialized();
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
   const clerkUserId = await getClerkUserId();
   if (!clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
   const platformUser = await getPlatformUserByClerkId(clerkUserId);

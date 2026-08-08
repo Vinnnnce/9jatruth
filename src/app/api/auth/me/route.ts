@@ -4,14 +4,18 @@ import {
   getOrganization,
   getPlatformUserByClerkId,
 } from "@/lib/neon-storage";
-import { getClerkUserId } from "@/lib/api-helpers";
+import { getClerkUserId, getUserId } from "@/lib/api-helpers";
+import { createHash } from "crypto";
 
-export async function GET() {
+export async function GET(request: Request) {
   await ensureDbInitialized();
   const clerkUserId = await getClerkUserId();
   if (!clerkUserId) {
     return Response.json({ message: "Not authenticated" }, { status: 401 });
   }
+
+  // Generate the same userHash that getUserId produces
+  const userHash = `dev_${createHash("sha256").update(clerkUserId).digest("hex").substring(0, 12)}`;
 
   // Look up the agency account linked to this Clerk user.
   const account = await getAgencyAccountByClerkId(clerkUserId);
@@ -19,7 +23,11 @@ export async function GET() {
     // Fall back to the platform_users record if no agency account exists.
     const platformUser = await getPlatformUserByClerkId(clerkUserId);
     if (!platformUser) {
-      return Response.json({ message: "Account not found or inactive" }, { status: 401 });
+      return Response.json({
+        account: null,
+        organization: null,
+        userHash,
+      });
     }
     return Response.json({
       account: {
@@ -29,6 +37,7 @@ export async function GET() {
         role: platformUser.role,
       },
       organization: null,
+      userHash,
     });
   }
 
@@ -48,5 +57,6 @@ export async function GET() {
           website: org.website,
         }
       : null,
+    userHash,
   });
 }

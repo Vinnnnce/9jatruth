@@ -8,9 +8,13 @@ import {
 import { validate, validationErrorResponse, getUserId, getClerkUserId } from "@/lib/api-helpers";
 import { agencyRegisterSchema } from "@shared/schema";
 import { z } from "zod";
+import { csrfCheck } from "@/lib/security";
 
 export async function POST(request: Request) {
   await ensureDbInitialized();
+
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
   try {
     const body = await request.json();
     const parsed = validate(agencyRegisterSchema, body);

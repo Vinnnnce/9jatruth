@@ -13,6 +13,7 @@ import {
 } from "@/lib/api-helpers";
 import { insertMicroTruthSchema, TRUTH_CATEGORIES } from "@shared/schema";
 import { z } from "zod";
+import { csrfCheck } from "@/lib/security";
 
 /**
  * Organization post submission (requires agency auth via Clerk).
@@ -21,6 +22,10 @@ import { z } from "zod";
  */
 export async function POST(request: Request) {
   await ensureDbInitialized();
+
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
+
   const clerkUserId = await getClerkUserId();
   if (!clerkUserId) {
     return Response.json({ message: "Unauthorized" }, { status: 401 });

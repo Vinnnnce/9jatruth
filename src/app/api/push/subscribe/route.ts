@@ -1,6 +1,7 @@
 import { ensureDbInitialized } from "@/lib/db";
 import { registerSubscription } from "@/lib/neon-storage";
-import { validate, validationErrorResponse, getUserId } from "@/lib/api-helpers";
+import { validate, validationErrorResponse, getUserId, getClerkUserId } from "@/lib/api-helpers";
+import { csrfCheck } from "@/lib/security";
 import { z } from "zod";
 
 const subscribeSchema = z.object({
@@ -15,6 +16,10 @@ const subscribeSchema = z.object({
 
 export async function POST(request: Request) {
   await ensureDbInitialized();
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
+  const clerkUserId = await getClerkUserId();
+  if (!clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
   const body = await request.json();
   const parsed = validate(subscribeSchema, body);
   if (!parsed.success) return validationErrorResponse(parsed.error);

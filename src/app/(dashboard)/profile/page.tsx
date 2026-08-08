@@ -57,23 +57,36 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-const DEMO_USER = "dev_1d6e";
-
 export default function Profile() {
-  const { data: balance } = useQuery<{ userHash: string; balance: number }>({
-    queryKey: ["/api/rewards/balance", DEMO_USER],
+  // Fetch the current user's hash from the server
+  const { data: authData } = useQuery<{ userHash?: string }>({
+    queryKey: ["/api/auth/me"],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/rewards/balance?userHash=${DEMO_USER}`);
+      const res = await apiRequest("GET", "/api/auth/me");
+      if (!res.ok) return {};
       return res.json();
     },
   });
+  const userHash = authData?.userHash ?? null;
 
-  const { data: ledger } = useQuery<RewardLedger[]>({
-    queryKey: ["/api/rewards/ledger", DEMO_USER],
+  const { data: balance } = useQuery<{ userHash: string; balance: number }>({
+    queryKey: ["/api/rewards/balance", userHash],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/rewards/ledger?userHash=${DEMO_USER}`);
+      if (!userHash) return { userHash: "", balance: 0 };
+      const res = await apiRequest("GET", `/api/rewards/balance?userHash=${userHash}`);
       return res.json();
     },
+    enabled: !!userHash,
+  });
+
+  const { data: ledger } = useQuery<RewardLedger[]>({
+    queryKey: ["/api/rewards/ledger", userHash],
+    queryFn: async () => {
+      if (!userHash) return [];
+      const res = await apiRequest("GET", `/api/rewards/ledger?userHash=${userHash}`);
+      return res.json();
+    },
+    enabled: !!userHash,
   });
 
   const { data: leaderboard } = useQuery<LeaderboardEntry[]>({
@@ -81,23 +94,42 @@ export default function Profile() {
   });
 
   const { data: activity } = useQuery<ActivityEntry[]>({
-    queryKey: ["/api/activity", DEMO_USER],
+    queryKey: ["/api/activity", userHash],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/activity?limit=50");
       return res.json();
     },
+    enabled: !!userHash,
   });
 
-  const myEntry = leaderboard?.find(e => e.userHash === DEMO_USER);
-  const myRank = leaderboard?.findIndex(e => e.userHash === DEMO_USER) ?? -1;
-  const myActivity = activity?.filter(a => a.userHash === DEMO_USER) ?? [];
+  const myEntry = leaderboard?.find(e => e.userHash === userHash);
+  const myRank = leaderboard?.findIndex(e => e.userHash === userHash) ?? -1;
+  const myActivity = activity?.filter(a => a.userHash === userHash) ?? [];
+
+  if (!userHash) {
+    return (
+      <div className="p-4 md:p-6 max-w-4xl space-y-6">
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <User className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h2 className="text-lg font-display font-700">Sign in to view your profile</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Track your contributions, rewards, and activity history.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!myEntry) {
     return (
       <div className="p-4 md:p-6 max-w-4xl space-y-6">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-32" />
-        <Skeleton className="h-64" />
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <User className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h2 className="text-lg font-display font-700">No contributions yet</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Submit your first report to start earning rewards and climb the leaderboard.
+          </p>
+        </div>
       </div>
     );
   }
@@ -123,7 +155,7 @@ export default function Profile() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg font-display font-700 font-mono">{DEMO_USER}</h2>
+                <h2 className="text-lg font-display font-700 font-mono">{userHash}</h2>
                 <Badge className="gap-0.5 bg-primary/15 text-primary hover:bg-primary/20">
                   <Award className="h-3 w-3" /> {myEntry.badge}
                 </Badge>

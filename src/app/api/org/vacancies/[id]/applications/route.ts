@@ -2,8 +2,11 @@ import { ensureDbInitialized } from "@/lib/db";
 import {
   getVacancyApplications,
   createVacancyApplication,
+  getVacancyById,
+  getPlatformUserOrgId,
 } from "@/lib/neon-storage";
 import { getClerkUserId, sanitizeText } from "@/lib/api-helpers";
+import { csrfCheck } from "@/lib/security";
 import { z } from "zod";
 
 const createApplicationSchema = z.object({
@@ -25,9 +28,17 @@ export async function GET(
   await ensureDbInitialized();
   const clerkUserId = await getClerkUserId();
   if (!clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
+  const orgId = await getPlatformUserOrgId(clerkUserId);
+  if (!orgId) return Response.json({ message: "No organization associated with this account" }, { status: 403 });
   const { id } = await params;
   const vacancyId = parseInt(id, 10);
   if (isNaN(vacancyId)) return Response.json({ message: "Invalid vacancy id" }, { status: 400 });
+  // IDOR guard: the vacancy must belong to the caller's organization.
+  const vacancy = await getVacancyById(vacancyId);
+  if (!vacancy) return Response.json({ message: "Vacancy not found" }, { status: 404 });
+  if (vacancy.organization_id !== orgId) {
+    return Response.json({ message: "Forbidden — resource outside your organization" }, { status: 403 });
+  }
   const applications = await getVacancyApplications(vacancyId);
   return Response.json(applications);
 }
@@ -40,7 +51,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   await ensureDbInitialized();
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
   const clerkUserId = await getClerkUserId();
+  if (!clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   const vacancyId = parseInt(id, 10);
   if (isNaN(vacancyId)) return Response.json({ message: "Invalid vacancy id" }, { status: 400 });
@@ -53,7 +67,7 @@ export async function POST(
 
   const application = await createVacancyApplication({
     vacancyId,
-    clerkUserId: clerkUserId || null,
+    clerkUserId: clerkUserId,
     applicantName: sanitizeText(parsed.data.applicantName),
     applicantEmail: parsed.data.applicantEmail,
     coverLetter: parsed.data.coverLetter ? sanitizeText(parsed.data.coverLetter) : null,

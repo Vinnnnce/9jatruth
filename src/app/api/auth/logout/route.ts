@@ -1,4 +1,5 @@
 /**
+import { csrfCheck } from "@/lib/security";
  * Logout endpoint.
  *
  * With Clerk, sessions are managed client-side via Clerk's session tokens.

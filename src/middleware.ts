@@ -7,12 +7,14 @@ const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerk
 
 const SUPER_ADMIN_EMAIL = "insights793@gmail.com";
 
+// Public routes — accessible without authentication
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/webhook(.*)",
+  "/api/health(.*)",
   "/api/neighborhoods(.*)",
-  "/api/truths(.*)",
+  "/api/truths(.*)",  // GET truths is public (community feed), writes are auth-checked in route
   "/api/dashboard(.*)",
   "/api/trends(.*)",
   "/api/search(.*)",
@@ -20,9 +22,33 @@ const isPublicRoute = createRouteMatcher([
   "/api/alerts(.*)",
   "/api/leaderboard(.*)",
   "/api/predictions(.*)",
-  "/api/health(.*)",
   "/api/geo(.*)",
   "/api/organizations(.*)",
+  "/api/push/vapid-key(.*)",
+]);
+
+// Admin-only API routes — require super admin email
+const isAdminApiRoute = createRouteMatcher([
+  "/api/admin(.*)",
+  "/api/track(.*)",
+  "/api/models(.*)",
+  "/api/truths/delete(.*)",
+]);
+
+// Org-only API routes — require org admin auth
+const isOrgApiRoute = createRouteMatcher([
+  "/api/org(.*)",
+  "/api/organizations/me(.*)",
+]);
+
+// User-only API routes — require signed-in user
+const isUserApiRoute = createRouteMatcher([
+  "/api/notifications(.*)",
+  "/api/account(.*)",
+  "/api/auth/me(.*)",
+  "/api/rewards/redeem(.*)",
+  "/api/push/subscribe(.*)",
+  "/api/push/unsubscribe(.*)",
 ]);
 
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
@@ -34,8 +60,13 @@ const passThrough = () => NextResponse.next();
 
 const middleware = isClerkConfigured
   ? clerkMiddleware(async (auth, req) => {
-      // Protect admin, org, and user routes — require authentication
+      // Protect admin, org, and user dashboard pages — require authentication
       if (isAdminRoute(req) || isOrgRoute(req) || isUserRoute(req)) {
+        await auth.protect();
+      }
+
+      // Protect sensitive API routes
+      if (isAdminApiRoute(req) || isOrgApiRoute(req) || isUserApiRoute(req)) {
         await auth.protect();
       }
     })

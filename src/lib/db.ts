@@ -19,6 +19,7 @@ export function getDb(): NeonQueryFunction<true, true> {
   return sqlInstance as any;
 }
 
+
 /**
  * Ensure the database is initialized with all tables.
  * Called on first request (idempotent).
@@ -431,6 +432,20 @@ export async function ensureDbInitialized() {
     }
     console.log("[Soke] Reference data initialized (neighborhoods with geo hierarchy, no demo posts)");
   }
+
+  // Notifications table
+  await sql`CREATE TABLE IF NOT EXISTS notifications (
+    id SERIAL PRIMARY KEY,
+    user_hash TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'info',
+    read INTEGER NOT NULL DEFAULT 0,
+    action_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_notifications_user_hash ON notifications(user_hash)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(user_hash, read)`;
 
   initialized = true;
 }

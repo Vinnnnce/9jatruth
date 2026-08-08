@@ -2,6 +2,7 @@ import { ensureDbInitialized } from "@/lib/db";
 import { handleSyncPush } from "@/lib/neon-storage";
 import { validate, validationErrorResponse, getUserId } from "@/lib/api-helpers";
 import { z } from "zod";
+import { csrfCheck } from "@/lib/security";
 
 const syncPushSchema = z.object({
   deviceHash: z.string().optional(),
@@ -21,6 +22,9 @@ const syncPushSchema = z.object({
 
 export async function POST(request: Request) {
   await ensureDbInitialized();
+
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
   const body = await request.json();
   const parsed = validate(syncPushSchema, body);
   if (!parsed.success) return validationErrorResponse(parsed.error);
