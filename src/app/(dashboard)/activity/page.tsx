@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Send, ShieldCheck, Coins, TrendingUp, AlertCircle,
-  Zap, Fuel, Car, Tag, Shield, Clock,
+  Zap, Fuel, Car, Tag, Shield, Clock, Radio,
 } from "lucide-react";
 
 type ActivityEntry = {
@@ -49,13 +50,23 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function Activity() {
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
   const { data, isLoading } = useQuery<ActivityEntry[]>({
     queryKey: ["/api/activity"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/activity?limit=50");
       return res.json();
     },
+    refetchInterval: 5000, // Auto-refresh every 5 seconds for real-time data
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
   });
+
+  // Update timestamp when new data arrives
+  useEffect(() => {
+    if (data) setLastUpdated(new Date());
+  }, [data]);
 
   if (isLoading || !data) {
     return (
@@ -70,6 +81,17 @@ export default function Activity() {
       </div>
     );
   }
+
+  // Real-time live indicator
+  const LiveIndicator = () => (
+    <div className="flex items-center gap-1.5 text-[10px] text-green-500">
+      <span className="relative flex h-2 w-2">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+      </span>
+      Live — updated {timeAgo(lastUpdated.toISOString())}
+    </div>
+  );
 
   const counts = {
     truth_submitted: data.filter(e => e.type === "truth_submitted").length,

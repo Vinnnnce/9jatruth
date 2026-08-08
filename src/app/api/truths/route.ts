@@ -43,6 +43,28 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
+
+    // Support neighborhoodName: resolve to neighborhoodId
+    let neighborhoodId = body.neighborhoodId;
+    if (!neighborhoodId && body.neighborhoodName) {
+      const name = String(body.neighborhoodName).trim();
+      if (name.length < 2) {
+        return Response.json({ message: "Neighborhood name too short" }, { status: 400 });
+      }
+      // Look up or create neighborhood by name
+      const { getDb } = await import("@/lib/db");
+      const sql = getDb();
+      const existing = (await sql`SELECT id FROM neighborhoods WHERE name ILIKE ${name} LIMIT 1`) as unknown as any[];
+      if (existing.length > 0) {
+        neighborhoodId = existing[0].id;
+      } else {
+        // Auto-create neighborhood from user input
+        const created = (await sql`INSERT INTO neighborhoods (name, region) VALUES (${name}, ${body.regionName || "Unknown"}) RETURNING id`) as unknown as any[];
+        neighborhoodId = created[0].id;
+      }
+      body.neighborhoodId = neighborhoodId;
+    }
+
     const parsed = validate(insertMicroTruthSchema, body);
     if (!parsed.success) return validationErrorResponse(parsed.error);
     const data = parsed.data;

@@ -15,7 +15,7 @@ import {
   SidebarInset,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { SokeLogoFull } from "@/components/logo";
+import { SokeLogoFull, SokeLogo } from "@/components/logo";
 import { OfflineStatus } from "@/components/offline-status";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserButton, SignedIn, SignedOut, SignInButton, SignUpButton } from "@clerk/nextjs";
@@ -232,9 +232,9 @@ function TopBar() {
       <div className="flex items-center gap-2 md:gap-3">
         <SidebarTrigger className="md:hidden" />
         <SidebarTrigger className="hidden md:flex" />
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Globe className="h-4 w-4 text-primary" />
-          <span className="hidden sm:inline">Soke — Eyes on the Street</span>
+        <div className="flex items-center gap-2">
+          <SokeLogo className="h-5 w-5 text-primary" />
+          <span className="font-display font-700 text-sm tracking-tight">Soke</span>
         </div>
       </div>
       <div className="flex items-center gap-2 md:gap-3">

@@ -526,6 +526,12 @@ export default function AdminDashboard() {
           <TabsTrigger value="health" data-testid="tab-health">
             System Health
           </TabsTrigger>
+          <TabsTrigger value="rewards" data-testid="tab-rewards">
+            Rewards & Credits
+          </TabsTrigger>
+          <TabsTrigger value="settings" data-testid="tab-settings">
+            Settings
+          </TabsTrigger>
         </TabsList>
 
         {/* --------------------------------------------------------------- */}
@@ -1290,6 +1296,120 @@ export default function AdminDashboard() {
               ) : (
                 <EmptyState icon={Activity} message="System health data is currently unavailable." />
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* --------------------------------------------------------------- */}
+        {/* Rewards & Credits                                              */}
+        {/* --------------------------------------------------------------- */}
+        <TabsContent value="rewards" className="space-y-4">
+          <Card className="border-border">
+            <CardHeader>
+              <CardTitle className="text-sm font-display">Reward & Credit Management</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-[10px] uppercase text-muted-foreground">Total Credits Issued</p>
+                  <p className="text-lg font-bold tabular-nums">{stats?.totalRewards ?? 0}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-[10px] uppercase text-muted-foreground">Active Users</p>
+                  <p className="text-lg font-bold tabular-nums">{stats?.totalUsers ?? 0}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-[10px] uppercase text-muted-foreground">Total Truths</p>
+                  <p className="text-lg font-bold tabular-nums">{stats?.totalTruths ? Math.round(stats.totalTruths) : 0}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-[10px] uppercase text-muted-foreground">Total Rewards</p>
+                  <p className="text-lg font-bold tabular-nums">{stats?.totalRewards ? Math.round(stats.totalRewards) : 0}%</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium">Credit Rules</p>
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
+                    <span>Truth submission</span>
+                    <Badge variant="secondary">+20 credits</Badge>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
+                    <span>Corroboration received</span>
+                    <Badge variant="secondary">+10 credits</Badge>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
+                    <span>Verified by AI as authentic</span>
+                    <Badge variant="secondary">+15 credits</Badge>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
+                    <span>Daily streak bonus</span>
+                    <Badge variant="secondary">+5 credits</Badge>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
+                    <span>Disputed truth penalty</span>
+                    <Badge variant="destructive">-10 credits</Badge>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* --------------------------------------------------------------- */}
+        {/* Settings                                                       */}
+        {/* --------------------------------------------------------------- */}
+        <TabsContent value="settings" className="space-y-4">
+          <Card className="border-border">
+            <CardHeader>
+              <CardTitle className="text-sm font-display">System Settings</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-xs font-medium">Platform Configuration</p>
+                <div className="space-y-1 text-xs">
+                  <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
+                    <span className="text-muted-foreground">Trust score decay rate</span>
+                    <span className="font-mono">0.95 / day</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
+                    <span className="text-muted-foreground">Min report length</span>
+                    <span className="font-mono">15 chars</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
+                    <span className="text-muted-foreground">Max report length</span>
+                    <span className="font-mono">500 chars</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
+                    <span className="text-muted-foreground">Feed page size</span>
+                    <span className="font-mono">50 items</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
+                    <span className="text-muted-foreground">AI verification</span>
+                    <Badge variant="secondary" className="text-[9px]">Enabled</Badge>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
+                    <span className="text-muted-foreground">PWA install</span>
+                    <Badge variant="secondary" className="text-[9px]">Enabled</Badge>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium">Admin Actions</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" className="text-xs">
+                    Export User Data
+                  </Button>
+                  <Button size="sm" variant="outline" className="text-xs">
+                    Clear Cache
+                  </Button>
+                  <Button size="sm" variant="outline" className="text-xs">
+                    Run AI Verification Sweep
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
