@@ -52,6 +52,18 @@ export async function POST(request: Request) {
     RETURNING id
   `) as unknown as { id: number }[];
 
+  // Also create a feed post so the feedback appears on the feeds page
+  // (commented out — feedback is private to admin, not for public feeds)
+  // try {
+  //   const feedContent = `💬 Feedback: ${parsed.data.subject} — ${parsed.data.message.slice(0, 300)}`;
+  //   await sql`
+  //     INSERT INTO micro_truths (neighborhood_id, category, content, trust_score, decay_factor, verification_chain, user_hash, status, ip_hash, ip_region, ip_city, state_name, region_name)
+  //     VALUES (1, 'safety', ${feedContent}, 50, 1.0, '[]', ${ipLocation.ipHash ?? clerkUserId ?? "anonymous"}, 'pending', ${ipLocation.ipHash ?? null}, ${ipLocation.ipRegion ?? null}, ${ipLocation.ipCity ?? null}, ${ipLocation.ipRegion ?? null}, ${ipLocation.ipRegion ?? null})
+  //   `;
+  // } catch (e) {
+  //   console.error("[feedback] Could not create feed post:", e);
+  // }
+
   return Response.json({ success: true, id: rows[0]?.id, message: "Feedback submitted to admin dashboard" });
 }
 
@@ -61,12 +73,18 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   await ensureDbInitialized();
   const clerkUserId = await getClerkUserId();
-  if (!clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
 
-  const user = await currentUser();
-  const email = user?.emailAddresses?.[0]?.emailAddress || "";
-  if (email !== "insights793@gmail.com") {
-    return Response.json({ message: "Admin access required" }, { status: 403 });
+  // Allow access in dev mode when Clerk isn't configured
+  const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
+  if (isClerkConfigured && !clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
+
+  if (isClerkConfigured) {
+    const user = await currentUser();
+    const email = user?.emailAddresses?.[0]?.emailAddress || "";
+    if (email !== "insights793@gmail.com") {
+      return Response.json({ message: "Admin access required" }, { status: 403 });
+    }
   }
 
   const sql = getDb();

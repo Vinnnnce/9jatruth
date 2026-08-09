@@ -13,6 +13,11 @@ export async function GET(request: Request) {
   const queryObj = Object.fromEntries(searchParams.entries());
   const parsed = validate(activityQuerySchema, queryObj);
   if (!parsed.success) return validationErrorResponse(parsed.error);
-  const result = await getActivity(parsed.data.limit);
-  return Response.json(result);
+  try {
+    const result = await getActivity(parsed.data.limit);
+    return Response.json(result);
+  } catch (err) {
+    console.error("[api/activity] Error:", err);
+    return Response.json([]);
+  }
 }

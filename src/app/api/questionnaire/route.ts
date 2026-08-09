@@ -47,7 +47,24 @@ export async function POST(request: Request) {
     RETURNING id
   `) as unknown as { id: number }[];
 
-  return Response.json({ success: true, id: rows[0]?.id, message: "Questionnaire submitted to admin dashboard" });
+  // Also create a feed post so the questionnaire appears on the feeds page
+  try {
+    const questionnaireId = rows[0]?.id;
+    const summaryText = Object.entries(parsed.data.responses)
+      .slice(0, 3)
+      .map(([key, val]) => `${key.replace(/_/g, " ")}: ${String(val)}`)
+      .join("; ");
+    const feedContent = `📋 Questionnaire Response: ${summaryText.slice(0, 400)}`;
+    await sql`
+      INSERT INTO micro_truths (neighborhood_id, category, content, trust_score, decay_factor, verification_chain, user_hash, status, ip_hash, ip_region, ip_city, state_name, region_name)
+      VALUES (1, 'safety', ${feedContent}, 50, 1.0, '[]', ${ipLocation.ipHash ?? clerkUserId ?? "anonymous"}, 'pending', ${ipLocation.ipHash ?? null}, ${ipLocation.ipRegion ?? null}, ${ipLocation.ipCity ?? null}, ${ipLocation.ipRegion ?? null}, ${ipLocation.ipRegion ?? null})
+    `;
+  } catch (e) {
+    console.error("[questionnaire] Could not create feed post:", e);
+    // Non-critical — questionnaire is still saved
+  }
+
+  return Response.json({ success: true, id: rows[0]?.id, message: "Questionnaire submitted to admin dashboard and feeds" });
 }
 
 /**
@@ -56,12 +73,18 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   await ensureDbInitialized();
   const clerkUserId = await getClerkUserId();
-  if (!clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
 
-  const user = await currentUser();
-  const email = user?.emailAddresses?.[0]?.emailAddress || "";
-  if (email !== "insights793@gmail.com") {
-    return Response.json({ message: "Admin access required" }, { status: 403 });
+  // Allow access in dev mode when Clerk isn't configured
+  const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
+  if (isClerkConfigured && !clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
+
+  if (isClerkConfigured) {
+    const user = await currentUser();
+    const email = user?.emailAddresses?.[0]?.emailAddress || "";
+    if (email !== "insights793@gmail.com") {
+      return Response.json({ message: "Admin access required" }, { status: 403 });
+    }
   }
 
   const sql = getDb();

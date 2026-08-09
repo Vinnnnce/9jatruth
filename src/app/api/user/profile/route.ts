@@ -17,6 +17,48 @@ import { currentUser } from "@clerk/nextjs/server";
 export async function GET(request: Request) {
   await ensureDbInitialized();
   const clerkUserId = await getClerkUserId();
+
+  // If Clerk is not configured, return a dev-mode profile so the app works locally.
+  // The super admin email from SUPER_ADMIN_EMAIL env var determines admin access.
+  const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
+  if (!isClerkConfigured) {
+    const adminEmail = process.env.SUPER_ADMIN_EMAIL || "insights793@gmail.com";
+    return Response.json({
+      id: "dev-admin",
+      clerkUserId: "dev-admin",
+      email: adminEmail,
+      displayName: "Dev Admin",
+      avatarUrl: null,
+      role: "admin",
+      isAdmin: true,
+      isOrgAdmin: false,
+      organizationId: null,
+      organization: null,
+      lastIpHash: null,
+      lastIpRegion: null,
+      lastIpCity: null,
+      state: null,
+      lga: null,
+      community: null,
+      village: null,
+      region: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      bio: null,
+      phone: null,
+      occupation: null,
+      website: null,
+      twitterHandle: null,
+      linkedinUrl: null,
+      dateOfBirth: null,
+      gender: null,
+      interests: null,
+      skills: null,
+      profileCompleted: true,
+    });
+  }
+
   if (!clerkUserId) {
     return Response.json({ message: "Not authenticated" }, { status: 401 });
   }

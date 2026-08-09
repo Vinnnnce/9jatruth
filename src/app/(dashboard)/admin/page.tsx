@@ -1830,9 +1830,19 @@ type QuestionnaireEntry = {
 function FeedbackTab() {
   const { data: feedback, isLoading: fbLoading } = useQuery<FeedbackEntry[]>({
     queryKey: ["/api/feedback"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/feedback");
+      const data = await res.json();
+      return data.feedback ?? data;
+    },
   });
   const { data: questionnaires, isLoading: qLoading } = useQuery<QuestionnaireEntry[]>({
     queryKey: ["/api/questionnaire"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/questionnaire");
+      const data = await res.json();
+      return data.responses ?? data;
+    },
   });
 
   return (

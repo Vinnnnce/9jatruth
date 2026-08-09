@@ -2219,14 +2219,18 @@ export async function getGeoHierarchy() {
   const neighborhoodStates = (await sql`SELECT DISTINCT state as name FROM neighborhoods WHERE state IS NOT NULL ORDER BY name`) as unknown as SqlRow[];
   const neighborhoodLgas = (await sql`SELECT DISTINCT lga as name FROM neighborhoods WHERE lga IS NOT NULL ORDER BY name`) as unknown as SqlRow[];
   const neighborhoodCommunities = (await sql`SELECT DISTINCT community as name FROM neighborhoods WHERE community IS NOT NULL ORDER BY name`) as unknown as SqlRow[];
+  const neighborhoodCountries = (await sql`SELECT DISTINCT country as name FROM neighborhoods WHERE country IS NOT NULL ORDER BY name`) as unknown as SqlRow[];
+  const truthCountries = (await sql`SELECT DISTINCT country as name FROM micro_truths WHERE country IS NOT NULL ORDER BY name`) as unknown as SqlRow[];
 
   // Merge reference data with truth-derived data
   const allStates = [...new Set([...states.map(s => s.name), ...truthStates.map(s => s.name), ...neighborhoodStates.map(s => s.name)])].sort();
   const allLgas = [...new Set([...lgas.map(l => l.name), ...truthLgas.map(l => l.name), ...neighborhoodLgas.map(l => l.name)])].sort();
   const allCommunities = [...new Set([...communities.map(c => c.name), ...truthCommunities.map(c => c.name), ...neighborhoodCommunities.map(c => c.name)])].sort();
   const allRegions = [...new Set([...regions.map(r => r.name), ...truthRegions.map(r => r.name)])].sort();
+  const allCountries = [...new Set([...neighborhoodCountries.map(c => c.name), ...truthCountries.map(c => c.name)])].sort();
 
   return {
+    countries: allCountries.length > 0 ? allCountries : ["Nigeria"],
     regions: allRegions,
     states: allStates,
     lgas: allLgas,
@@ -2575,13 +2579,15 @@ Return a JSON array of objects with "id" (the truth id) and "reason" (personaliz
  * Get the feed snapshots view-model — the data shape needed for the
  * redesigned feed page matching the uploaded design.
  */
-export async function getFeedSnapshots(region?: string, state?: string, lga?: string) {
+export async function getFeedSnapshots(country?: string, region?: string, state?: string, lga?: string) {
   const sql = getDb();
 
-  // Build neighborhood query with optional geo filters
-  const neighborhoods = (region || state || lga)
+  // Build neighborhood query with optional geo filters (including country)
+  const hasGeoFilter = country || region || state || lga;
+  const neighborhoods = hasGeoFilter
     ? (await sql`SELECT * FROM neighborhoods WHERE 
-        (${region ?? null}::text IS NULL OR region = ${region ?? null})
+        (${country ?? null}::text IS NULL OR country = ${country ?? null})
+        AND (${region ?? null}::text IS NULL OR region = ${region ?? null})
         AND (${state ?? null}::text IS NULL OR state = ${state ?? null})
         AND (${lga ?? null}::text IS NULL OR lga = ${lga ?? null})
         ORDER BY name`) as unknown as SqlRow[]
@@ -2594,7 +2600,7 @@ export async function getFeedSnapshots(region?: string, state?: string, lga?: st
   // If geo filter is applied and we have matching neighborhoods, filter truths to those neighborhoods
   // If no neighborhoods match, fall back to showing all truths (other posts)
   const neighborhoodIds = new Set(neighborhoods.map(n => n.id));
-  const truths = (region || state || lga) && neighborhoodIds.size > 0
+  const truths = hasGeoFilter && neighborhoodIds.size > 0
     ? allTruths.filter(t => neighborhoodIds.has(t.neighborhood_id))
     : allTruths;
   const predictions = (await sql`SELECT * FROM predictions WHERE (expires_at IS NULL OR expires_at > NOW()) ORDER BY created_at DESC LIMIT 50`) as unknown as SqlRow[];

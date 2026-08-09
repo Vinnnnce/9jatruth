@@ -14,6 +14,11 @@ export async function GET(request: Request) {
   const queryObj = Object.fromEntries(searchParams.entries());
   const parsed = validate(predictionsQuerySchema, queryObj);
   if (!parsed.success) return validationErrorResponse(parsed.error);
-  const result = await getPredictions(parsed.data.category, parsed.data.neighborhoodId);
-  return Response.json(result);
+  try {
+    const result = await getPredictions(parsed.data.category, parsed.data.neighborhoodId);
+    return Response.json(result);
+  } catch (err) {
+    console.error("[api/predictions] Error:", err);
+    return Response.json([]);
+  }
 }

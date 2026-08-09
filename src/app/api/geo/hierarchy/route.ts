@@ -7,6 +7,11 @@ import { getGeoHierarchy } from "@/lib/neon-storage";
  */
 export async function GET() {
   await ensureDbInitialized();
-  const hierarchy = await getGeoHierarchy();
-  return Response.json(hierarchy);
+  try {
+    const hierarchy = await getGeoHierarchy();
+    return Response.json(hierarchy);
+  } catch (err) {
+    console.error("[api/geo/hierarchy] Error:", err);
+    return Response.json({ countries: [], regions: [], states: [], lgas: [], communities: [], villages: [] });
+  }
 }

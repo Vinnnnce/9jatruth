@@ -19,6 +19,7 @@ import {
   Brain, Loader2, Sparkles, Zap, Fuel, Car, Tag,
   TrendingUp, TrendingDown, Minus,
   Building2, Gauge,
+  MessageCircle, Share2, Flag,
 } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
 import { useUser } from "@/lib/use-user-safe";
@@ -160,7 +161,7 @@ export default function Feeds() {
   });
 
   // Fetch geo hierarchy for filter dropdowns
-  const { data: geoHierarchy } = useQuery<{ regions: string[]; states: string[]; lgas: string[] }>({
+  const { data: geoHierarchy } = useQuery<{ countries: string[]; regions: string[]; states: string[]; lgas: string[] }>({
     queryKey: ["/api/geo/hierarchy"],
   });
 
@@ -170,6 +171,7 @@ export default function Feeds() {
     queryFn: async ({ queryKey }) => {
       const [, filter] = queryKey as [string, typeof geoFilter];
       const params = new URLSearchParams();
+      if (filter.country) params.set("country", filter.country);
       if (filter.region) params.set("region", filter.region);
       if (filter.state) params.set("state", filter.state);
       if (filter.lga) params.set("lga", filter.lga);
@@ -202,10 +204,11 @@ export default function Feeds() {
 
   const verifyMutation = useMutation({
     mutationFn: (data: { truthId: number; action: string }) =>
-      apiRequest("POST", "/api/truths/verify", data),
+      apiRequest("POST", `/api/truths/${data.truthId}/verify`, { action: data.action }),
     onSuccess: () => {
       toast({ title: "Verification submitted" });
       queryClient.invalidateQueries({ queryKey: ["/api/truths"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feed/snapshots"] });
     },
     onError: () => {
       toast({ title: "Verification failed", variant: "destructive" });
@@ -214,7 +217,7 @@ export default function Feeds() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen p-4 md:p-6 max-w-[440px] mx-auto space-y-4" style={{ background: COLORS.bg }}>
+      <div className="min-h-screen p-4 md:p-6 max-w-7xl mx-auto space-y-4" style={{ background: COLORS.bg }}>
         <div className="h-24 rounded-2xl animate-pulse" style={{ background: COLORS.card }} />
         <div className="h-8 rounded-lg animate-pulse" style={{ background: COLORS.card }} />
         <div className="h-[400px] rounded-2xl animate-pulse" style={{ background: COLORS.card }} />
@@ -240,7 +243,7 @@ export default function Feeds() {
       className="min-h-screen pb-8"
       style={{ background: COLORS.bg, color: COLORS.textPrimary }}
     >
-      <div className="max-w-[440px] mx-auto px-4 pt-4 space-y-4">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 pt-4 space-y-4">
         {/* ─── Summary Grid (2×2) ─── */}
         <div className="grid grid-cols-2 gap-2.5">
           <SummaryCard
@@ -280,7 +283,16 @@ export default function Feeds() {
               >Clear</button>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <select
+              value={geoFilter.country}
+              onChange={(e) => setGeoFilter(f => ({ ...f, country: e.target.value, region: "", state: "", lga: "" }))}
+              className="h-8 rounded-md text-xs px-2 outline-none"
+              style={{ background: COLORS.tile, color: COLORS.textPrimary, border: `1px solid ${COLORS.textSecondary}30` }}
+            >
+              <option value="">All Countries</option>
+              {(geoHierarchy?.countries || []).map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
             <select
               value={geoFilter.region}
               onChange={(e) => setGeoFilter(f => ({ ...f, region: e.target.value, state: "", lga: "" }))}
@@ -302,7 +314,7 @@ export default function Feeds() {
             <select
               value={geoFilter.lga}
               onChange={(e) => setGeoFilter(f => ({ ...f, lga: e.target.value }))}
-              className="h-8 rounded-md text-xs px-2 outline-none col-span-2"
+              className="h-8 rounded-md text-xs px-2 outline-none"
               style={{ background: COLORS.tile, color: COLORS.textPrimary, border: `1px solid ${COLORS.textSecondary}30` }}
             >
               <option value="">All L.G.A</option>
@@ -704,6 +716,43 @@ function ReportDialog({
 }) {
   const meta = CATEGORY_META[report.category] || CATEGORY_META.safety;
   const Icon = meta.icon;
+  const { toast } = useToast();
+  const [showComments, setShowComments] = useState(false);
+  const [reportSubmitted, setReportSubmitted] = useState(false);
+
+  const handleShare = async () => {
+    const url = typeof window !== "undefined" ? `${window.location.origin}/feeds?truth=${report.id}` : `/feeds?truth=${report.id}`;
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({
+          title: "Soke Truth Report",
+          text: report.content.slice(0, 100),
+          url,
+        });
+      } catch { /* user cancelled */ }
+    } else if (typeof navigator !== "undefined" && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(url);
+        toast({ title: "Link copied!" });
+      } catch {
+        toast({ title: "Could not copy link", variant: "destructive" });
+      }
+    }
+    // Record share
+    try {
+      await apiRequest("POST", `/api/truths/${report.id}/share`, { channel: "link" });
+    } catch { /* best-effort */ }
+  };
+
+  const handleReport = async () => {
+    try {
+      await apiRequest("POST", `/api/truths/${report.id}/report`, { reason: "inappropriate" });
+      setReportSubmitted(true);
+      toast({ title: "Report submitted. Thank you." });
+    } catch {
+      toast({ title: "Could not submit report. Please try again.", variant: "destructive" });
+    }
+  };
 
   return (
     <DialogContent className="max-w-md" style={{ background: COLORS.card, border: `1px solid ${COLORS.tile}` }}>
@@ -759,7 +808,35 @@ function ReportDialog({
           >
             <ThumbsDown className="h-4 w-4" style={{ color: COLORS.red }} />
           </Button>
+          <Button
+            size="sm" variant="ghost"
+            onClick={() => setShowComments(s => !s)}
+            className="h-8 w-8 p-0"
+            title="Comment" aria-label="Comment"
+          >
+            <MessageCircle className="h-4 w-4" style={{ color: COLORS.textSecondary }} />
+          </Button>
+          <Button
+            size="sm" variant="ghost"
+            onClick={handleShare}
+            className="h-8 w-8 p-0"
+            title="Share" aria-label="Share"
+          >
+            <Share2 className="h-4 w-4" style={{ color: COLORS.textSecondary }} />
+          </Button>
+          <Button
+            size="sm" variant="ghost"
+            onClick={handleReport}
+            disabled={reportSubmitted}
+            className="h-8 w-8 p-0 ml-auto"
+            title="Report" aria-label="Report"
+          >
+            <Flag className={`h-4 w-4 ${reportSubmitted ? "text-red-500" : ""}`} style={{ color: reportSubmitted ? COLORS.red : COLORS.textSecondary }} />
+          </Button>
         </div>
+        {showComments && (
+          <InlineComments truthId={report.id} />
+        )}
       </div>
     </DialogContent>
   );
@@ -979,6 +1056,81 @@ function AIPredictionSection({ truthId }: { truthId: number }) {
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Inline Comments (inline on each post dialog) ───
+
+function InlineComments({ truthId }: { truthId: number }) {
+  const [comments, setComments] = useState<Array<{ id: number; userHash: string; content: string; createdAt: string }>>([]);
+  const [newComment, setNewComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await apiRequest("GET", `/api/truths/${truthId}/comments`);
+        if (active) setComments(await res.json());
+      } catch { /* ignore */ }
+      finally { if (active) setLoading(false); }
+    })();
+    return () => { active = false; };
+  }, [truthId]);
+
+  const handleSubmit = async () => {
+    if (!newComment.trim()) return;
+    setSubmitting(true);
+    try {
+      const res = await apiRequest("POST", `/api/truths/${truthId}/comments`, { content: newComment.trim() });
+      const data = await res.json();
+      setComments(prev => [...prev, data]);
+      setNewComment("");
+    } catch {
+      // Comment failed - likely not signed in
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 pt-1" style={{ borderTop: `1px solid ${COLORS.tile}` }}>
+      {loading ? (
+        <p className="text-[10px]" style={{ color: COLORS.textSecondary }}>Loading comments...</p>
+      ) : comments.length === 0 ? (
+        <p className="text-[10px]" style={{ color: COLORS.textSecondary }}>No comments yet. Be the first to comment.</p>
+      ) : (
+        <div className="space-y-1.5 max-h-40 overflow-y-auto">
+          {comments.map(c => (
+            <div key={c.id} className="rounded-md p-1.5" style={{ background: COLORS.tile }}>
+              <p className="text-[10px] text-muted-foreground">
+                {c.userHash?.slice(0, 8) || "Anonymous"} · {timeAgo(c.createdAt)}
+              </p>
+              <p className="text-xs" style={{ color: COLORS.textPrimary }}>{c.content}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-1.5">
+        <input
+          value={newComment}
+          onChange={e => setNewComment(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && !submitting) handleSubmit(); }}
+          placeholder="Write a comment..."
+          className="flex-1 h-8 rounded-md text-xs px-2 outline-none"
+          style={{ background: COLORS.tile, color: COLORS.textPrimary, border: `1px solid ${COLORS.textSecondary}30` }}
+        />
+        <Button
+          size="sm"
+          onClick={handleSubmit}
+          disabled={submitting || !newComment.trim()}
+          className="h-8 px-3 text-xs"
+        >
+          {submitting ? <Loader2 className="h-3 w-3 animate-spin" /> : "Post"}
+        </Button>
+      </div>
     </div>
   );
 }

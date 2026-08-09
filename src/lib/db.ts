@@ -326,6 +326,23 @@ export async function ensureDbInitialized() {
   await sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS lga TEXT`;
   await sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS community TEXT`;
   await sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS village TEXT`;
+  await sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS country TEXT`;
+
+  // Add country column to micro_truths
+  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS country TEXT`;
+
+  // ─── Truth Reports table ───
+  await sql`CREATE TABLE IF NOT EXISTS truth_reports (
+    id SERIAL PRIMARY KEY,
+    truth_id INTEGER NOT NULL,
+    reporter_user_hash TEXT,
+    reason TEXT NOT NULL DEFAULT 'inappropriate',
+    details TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_truth_reports_truth ON truth_reports(truth_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_truth_reports_status ON truth_reports(status)`;
 
   // Add IP tracking columns to platform_users
   await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS last_ip_hash TEXT`;

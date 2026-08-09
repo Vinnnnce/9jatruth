@@ -8,7 +8,15 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { MapPin, Navigation, Sparkles, Star, Loader2 } from "lucide-react";
-import { APIProvider, Map, Marker, InfoWindow } from "@vis.gl/react-google-maps";
+import * as maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import {
+  Map,
+  Marker,
+  Popup,
+  NavigationControl,
+  FullscreenControl,
+} from "react-map-gl/maplibre";
 
 type DashboardData = {
   neighborhood: { id: number; name: string; region: string; geoHash: string; lat: number; lng: number };
@@ -47,7 +55,8 @@ const CATEGORY_FILTERS = [
   { key: "supermarkets", label: "Supermarkets", icon: "🛒" },
 ];
 
-const GOOGLE_MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_API_KEY;
+const MAPTILER_STYLE = `https://api.maptiler.com/maps/hybrid/style.json?key=${MAPTILER_KEY}`;
 
 const statusColors: Record<string, string> = {
   on: "#22c55e", available: "#22c55e", low: "#22c55e",
@@ -144,76 +153,112 @@ export default function GeoMap() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Google Map with markers */}
+        {/* MapTiler satellite hybrid map with markers */}
         <Card className="border-border lg:col-span-2">
           <CardContent className="p-4">
-            {GOOGLE_MAPS_KEY ? (
+            {MAPTILER_KEY ? (
               <div className="rounded-lg overflow-hidden" style={{ height: "450px" }} data-testid="google-map">
-                <APIProvider apiKey={GOOGLE_MAPS_KEY}>
-                  <Map
-                    center={center}
-                    zoom={14}
-                    gestureHandling="greedy"
-                    disableDefaultUI
-                    mapTypeControl={false}
-                    style={{ width: "100%", height: "100%" }}
+                <Map
+                  key={selected.neighborhood.id}
+                  initialViewState={{
+                    longitude: center.lng,
+                    latitude: center.lat,
+                    zoom: 14,
+                  }}
+                  mapStyle={MAPTILER_STYLE}
+                  mapLib={maplibregl}
+                  style={{ width: "100%", height: "100%" }}
+                >
+                  <FullscreenControl position="top-right" />
+                  <NavigationControl position="top-right" />
+
+                  {/* Center marker for selected neighborhood */}
+                  <Marker
+                    longitude={center.lng}
+                    latitude={center.lat}
+                    anchor="bottom"
                   >
-                    {/* Center marker for selected neighborhood */}
-                    <Marker
-                      position={center}
+                    <div
                       title={selected.neighborhood.name}
-                      label={selected.neighborhood.name}
-                    />
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        transform: "translateY(-2px)",
+                      }}
+                    >
+                      <MapPin className="h-6 w-6 text-primary fill-primary/20" />
+                      <span className="text-[10px] font-medium bg-background/90 px-1 rounded shadow-sm whitespace-nowrap">
+                        {selected.neighborhood.name}
+                      </span>
+                    </div>
+                  </Marker>
 
-                    {/* Markers for nearby places */}
-                    {places.map((place, idx) => (
-                      <Marker
-                        key={`${place.id}-${idx}`}
-                        position={{ lat: place.lat, lng: place.lng }}
+                  {/* Markers for nearby places */}
+                  {places.map((place, idx) => (
+                    <Marker
+                      key={`${place.id}-${idx}`}
+                      longitude={place.lng}
+                      latitude={place.lat}
+                      anchor="bottom"
+                      onClick={(e) => {
+                        e.originalEvent.stopPropagation();
+                        setSelectedPlace(place);
+                      }}
+                    >
+                      <div
                         title={place.name}
-                        onClick={() => setSelectedPlace(place)}
-                        label={{
-                          text: place.icon,
-                          fontSize: "14px",
+                        style={{
+                          fontSize: "18px",
+                          lineHeight: 1,
+                          cursor: "pointer",
+                          filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.4))",
                         }}
-                      />
-                    ))}
-
-                    {/* Info window for selected place */}
-                    {selectedPlace && (
-                      <InfoWindow
-                        position={{ lat: selectedPlace.lat, lng: selectedPlace.lng }}
-                        onCloseClick={() => setSelectedPlace(null)}
                       >
-                        <div className="p-1 max-w-[200px]">
-                          <p className="text-xs font-medium">{selectedPlace.name}</p>
-                          <p className="text-[10px] text-gray-500">{selectedPlace.category}</p>
-                          {selectedPlace.vicinity && (
-                            <p className="text-[10px] text-gray-400">{selectedPlace.vicinity}</p>
-                          )}
-                          {selectedPlace.rating != null && (
-                            <p className="text-[10px]">
-                              <Star className="h-2.5 w-2.5 inline fill-amber-400 text-amber-400" />
-                              {" "}{selectedPlace.rating}
-                              {selectedPlace.userRatingsTotal ? ` (${selectedPlace.userRatingsTotal})` : ""}
-                            </p>
-                          )}
-                          {selectedPlace.distance != null && (
-                            <p className="text-[10px] text-gray-400">
-                              {(selectedPlace.distance / 1000).toFixed(1)}km away
-                            </p>
-                          )}
-                        </div>
-                      </InfoWindow>
-                    )}
-                  </Map>
-                </APIProvider>
+                        {place.icon}
+                      </div>
+                    </Marker>
+                  ))}
+
+                  {/* Popup for selected place */}
+                  {selectedPlace && (
+                    <Popup
+                      longitude={selectedPlace.lng}
+                      latitude={selectedPlace.lat}
+                      anchor="top"
+                      onClose={() => setSelectedPlace(null)}
+                      closeButton
+                      closeOnClick={false}
+                      maxWidth="240px"
+                    >
+                      <div className="p-1 max-w-[200px]">
+                        <p className="text-xs font-medium">{selectedPlace.name}</p>
+                        <p className="text-[10px] text-gray-500">{selectedPlace.category}</p>
+                        {selectedPlace.vicinity && (
+                          <p className="text-[10px] text-gray-400">{selectedPlace.vicinity}</p>
+                        )}
+                        {selectedPlace.rating != null && (
+                          <p className="text-[10px]">
+                            <Star className="h-2.5 w-2.5 inline fill-amber-400 text-amber-400" />
+                            {" "}{selectedPlace.rating}
+                            {selectedPlace.userRatingsTotal ? ` (${selectedPlace.userRatingsTotal})` : ""}
+                          </p>
+                        )}
+                        {selectedPlace.distance != null && (
+                          <p className="text-[10px] text-gray-400">
+                            {(selectedPlace.distance / 1000).toFixed(1)}km away
+                          </p>
+                        )}
+                      </div>
+                    </Popup>
+                  )}
+                </Map>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-[450px] bg-muted/30 rounded-lg">
                 <MapPin className="h-10 w-10 text-muted-foreground mb-2" />
                 <p className="text-sm text-muted-foreground text-center px-4">
-                  Set <code className="text-xs bg-muted px-1 py-0.5 rounded">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> in your .env file to enable Google Maps
+                  Set <code className="text-xs bg-muted px-1 py-0.5 rounded">NEXT_PUBLIC_MAPTILER_API_KEY</code> in your .env file to enable the MapTiler satellite hybrid map
                 </p>
               </div>
             )}

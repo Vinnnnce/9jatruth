@@ -3,6 +3,11 @@ import { getAlerts } from "@/lib/neon-storage";
 
 export async function GET() {
   await ensureDbInitialized();
-  const result = await getAlerts();
-  return Response.json(result);
+  try {
+    const result = await getAlerts();
+    return Response.json(result);
+  } catch (err) {
+    console.error("[api/alerts] Error:", err);
+    return Response.json([]);
+  }
 }
