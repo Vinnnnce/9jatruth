@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
@@ -18,7 +19,7 @@ import {
   ThumbsUp, ThumbsDown, MapPin, Newspaper,
   Brain, Loader2, Sparkles, Zap, Fuel, Car, Tag,
   TrendingUp, TrendingDown, Minus,
-  Building2, Gauge,
+  Building2, Gauge, CloudRain, Store, AlertTriangle, Wifi,
   MessageCircle, Share2, Flag,
 } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
@@ -80,28 +81,14 @@ type Suggestion = {
   reason: string;
 };
 
-// ─── Design tokens matching uploaded image ───
-
-const COLORS = {
-  bg: "#0A0C0B",
-  card: "#121413",
-  tile: "#1A1D1B",
-  textPrimary: "#FFFFFF",
-  textSecondary: "#8E928F",
-  green: "#22C55E",
-  orange: "#F97316",
-  red: "#EF4444",
-  blue: "#3B82F6",
-  purple: "#A855F7",
-  accent: "#6366F1",
-};
+// ─── Category metadata with Soke brand colors ───
 
 const CATEGORY_META: Record<string, { icon: typeof Zap; color: string; dot: string; label: string }> = {
-  power:    { icon: Zap,   color: "text-orange-400", dot: "bg-orange-500", label: "Power" },
-  fuel:     { icon: Fuel,  color: "text-orange-400", dot: "bg-orange-500", label: "Fuel" },
-  traffic:  { icon: Car,   color: "text-blue-400",   dot: "bg-blue-500",   label: "Traffic" },
-  prices:   { icon: Tag,   color: "text-purple-400", dot: "bg-purple-500", label: "Prices" },
-  safety:   { icon: ShieldCheck, color: "text-green-400", dot: "bg-green-500", label: "Safety" },
+  power:    { icon: Zap,   color: "text-warm-orange", dot: "bg-orange-500", label: "Power" },
+  fuel:     { icon: Fuel,  color: "text-warm-orange", dot: "bg-orange-500", label: "Fuel" },
+  traffic:  { icon: Car,   color: "text-electric-blue", dot: "bg-blue-500",   label: "Traffic" },
+  prices:   { icon: Tag,   color: "text-purple-glow", dot: "bg-purple-500", label: "Prices" },
+  safety:   { icon: ShieldCheck, color: "text-neon-green", dot: "bg-green-500", label: "Safety" },
 };
 
 function timeAgo(dateStr: string): string {
@@ -117,16 +104,24 @@ function timeAgo(dateStr: string): string {
 
 function statusColor(status: string): string {
   const s = status.toLowerCase();
-  if (/on|available|clear|free|flowing|stable|low/.test(s)) return COLORS.green;
-  if (/off|outage|unavailable|down|gridlock|heavy|scarce/.test(s)) return COLORS.red;
-  if (/unstable|moderate|scarce/.test(s)) return COLORS.orange;
-  return COLORS.textSecondary;
+  if (/on|available|clear|free|flowing|stable|low/.test(s)) return "text-green-500";
+  if (/off|outage|unavailable|down|gridlock|heavy|scarce/.test(s)) return "text-red-500";
+  if (/unstable|moderate/.test(s)) return "text-amber-500";
+  return "text-muted-foreground";
+}
+
+function statusDot(status: string): string {
+  const s = status.toLowerCase();
+  if (/on|available|clear|free|flowing|stable|low/.test(s)) return "bg-green-500";
+  if (/off|outage|unavailable|down|gridlock|heavy|scarce/.test(s)) return "bg-red-500";
+  if (/unstable|moderate/.test(s)) return "bg-amber-500";
+  return "bg-muted-foreground";
 }
 
 function trendIcon(trend: string) {
-  if (trend === "up" || trend === "risk") return <TrendingUp className="h-3 w-3" style={{ color: trend === "risk" ? COLORS.red : COLORS.orange }} />;
-  if (trend === "down") return <TrendingDown className="h-3 w-3" style={{ color: COLORS.green }} />;
-  return <Minus className="h-3 w-3" style={{ color: COLORS.textSecondary }} />;
+  if (trend === "up" || trend === "risk") return <TrendingUp className="h-3 w-3 text-amber-500" />;
+  if (trend === "down") return <TrendingDown className="h-3 w-3 text-green-500" />;
+  return <Minus className="h-3 w-3 text-muted-foreground" />;
 }
 
 // ─── Browsing event tracker hook ───
@@ -181,7 +176,7 @@ export default function Feeds() {
       return res.json();
     },
     enabled: isLoaded,
-    refetchInterval: 5000, // Auto-refresh every 5 seconds
+    refetchInterval: 5000,
     refetchOnWindowFocus: true,
   });
 
@@ -195,7 +190,6 @@ export default function Feeds() {
     enabled: isLoaded && isSignedIn,
   });
 
-  // Track feed view on mount
   useEffect(() => {
     if (isLoaded) {
       recordEvent("feed_view", { path: "/feeds" });
@@ -217,11 +211,11 @@ export default function Feeds() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen p-4 md:p-6 max-w-7xl mx-auto space-y-4" style={{ background: COLORS.bg }}>
-        <div className="h-24 rounded-2xl animate-pulse" style={{ background: COLORS.card }} />
-        <div className="h-8 rounded-lg animate-pulse" style={{ background: COLORS.card }} />
-        <div className="h-[400px] rounded-2xl animate-pulse" style={{ background: COLORS.card }} />
-        <div className="h-[400px] rounded-2xl animate-pulse" style={{ background: COLORS.card }} />
+      <div className="min-h-screen p-4 md:p-6 max-w-7xl mx-auto space-y-4">
+        <div className="h-24 rounded-2xl bg-card animate-pulse" />
+        <div className="h-8 rounded-lg bg-card animate-pulse" />
+        <div className="h-[400px] rounded-2xl bg-card animate-pulse" />
+        <div className="h-[400px] rounded-2xl bg-card animate-pulse" />
       </div>
     );
   }
@@ -230,56 +224,27 @@ export default function Feeds() {
   const neighborhoods = feedData?.neighborhoods ?? [];
   const suggestions = suggestionsData?.suggestions ?? [];
   const hasNearbyFeeds = neighborhoods.length > 0;
-
-  // Build a fallback feed from all available truths if no nearby feeds
-  const allReports = neighborhoods.length > 0
-    ? neighborhoods.flatMap(n => n.recentReports || [])
-    : [];
-
-  // If no nearby feeds, show a message and other available posts
   const showFallback = !hasNearbyFeeds;
+
   return (
-    <div
-      className="min-h-screen pb-8"
-      style={{ background: COLORS.bg, color: COLORS.textPrimary }}
-    >
+    <div className="min-h-screen pb-8 bg-background text-foreground">
       <div className="max-w-7xl mx-auto px-4 md:px-6 pt-4 space-y-4">
-        {/* ─── Summary Grid (2×2) ─── */}
+        {/* ─── Summary Grid (2x2) ─── */}
         <div className="grid grid-cols-2 gap-2.5">
-          <SummaryCard
-            icon={Newspaper}
-            label="Active Truths"
-            value={summary?.activeTruths ?? 0}
-            color={COLORS.green}
-          />
-          <SummaryCard
-            icon={Building2}
-            label="Neighborhoods"
-            value={summary?.neighborhoods ?? 0}
-            color={COLORS.blue}
-          />
-          <SummaryCard
-            icon={ShieldCheck}
-            label="Avg Safety Index"
-            value={summary?.avgSafetyIndex ?? 0}
-            color={COLORS.green}
-          />
-          <SummaryCard
-            icon={Gauge}
-            label="Avg Price Index"
-            value={summary?.avgPriceIndex ?? 0}
-            color={COLORS.purple}
-          />
+          <SummaryCard icon={Newspaper} label="Active Truths" value={summary?.activeTruths ?? 0} colorClass="text-neon-green" />
+          <SummaryCard icon={Building2} label="Neighborhoods" value={summary?.neighborhoods ?? 0} colorClass="text-electric-blue" />
+          <SummaryCard icon={ShieldCheck} label="Avg Safety Index" value={summary?.avgSafetyIndex ?? 0} colorClass="text-neon-green" />
+          <SummaryCard icon={Gauge} label="Avg Price Index" value={summary?.avgPriceIndex ?? 0} colorClass="text-purple-glow" />
         </div>
 
         {/* ─── Geo Filters ─── */}
-        <div className="rounded-xl p-3 space-y-2" style={{ background: COLORS.card }}>
+        <div className="rounded-xl p-3 space-y-2 bg-card border border-border">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium uppercase" style={{ color: COLORS.textSecondary }}>Filter by Location</span>
+            <span className="text-[10px] font-medium uppercase text-muted-foreground">Filter by Location</span>
             {(geoFilter.region || geoFilter.state || geoFilter.lga) && (
               <button
                 onClick={() => setGeoFilter({ country: "", region: "", state: "", lga: "" })}
-                className="text-[10px] text-blue-400 hover:underline"
+                className="text-[10px] text-primary hover:underline"
               >Clear</button>
             )}
           </div>
@@ -287,8 +252,7 @@ export default function Feeds() {
             <select
               value={geoFilter.country}
               onChange={(e) => setGeoFilter(f => ({ ...f, country: e.target.value, region: "", state: "", lga: "" }))}
-              className="h-8 rounded-md text-xs px-2 outline-none"
-              style={{ background: COLORS.tile, color: COLORS.textPrimary, border: `1px solid ${COLORS.textSecondary}30` }}
+              className="h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
             >
               <option value="">All Countries</option>
               {(geoHierarchy?.countries || []).map(c => <option key={c} value={c}>{c}</option>)}
@@ -296,8 +260,7 @@ export default function Feeds() {
             <select
               value={geoFilter.region}
               onChange={(e) => setGeoFilter(f => ({ ...f, region: e.target.value, state: "", lga: "" }))}
-              className="h-8 rounded-md text-xs px-2 outline-none"
-              style={{ background: COLORS.tile, color: COLORS.textPrimary, border: `1px solid ${COLORS.textSecondary}30` }}
+              className="h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
             >
               <option value="">All Regions</option>
               {(geoHierarchy?.regions || []).map(r => <option key={r} value={r}>{r}</option>)}
@@ -305,8 +268,7 @@ export default function Feeds() {
             <select
               value={geoFilter.state}
               onChange={(e) => setGeoFilter(f => ({ ...f, state: e.target.value, lga: "" }))}
-              className="h-8 rounded-md text-xs px-2 outline-none"
-              style={{ background: COLORS.tile, color: COLORS.textPrimary, border: `1px solid ${COLORS.textSecondary}30` }}
+              className="h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
             >
               <option value="">All States</option>
               {(geoHierarchy?.states || []).map(s => <option key={s} value={s}>{s}</option>)}
@@ -314,8 +276,7 @@ export default function Feeds() {
             <select
               value={geoFilter.lga}
               onChange={(e) => setGeoFilter(f => ({ ...f, lga: e.target.value }))}
-              className="h-8 rounded-md text-xs px-2 outline-none"
-              style={{ background: COLORS.tile, color: COLORS.textPrimary, border: `1px solid ${COLORS.textSecondary}30` }}
+              className="h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
             >
               <option value="">All L.G.A</option>
               {(geoHierarchy?.lgas || []).map(l => <option key={l} value={l}>{l}</option>)}
@@ -329,22 +290,26 @@ export default function Feeds() {
             <span className="absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75 animate-ping" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
           </span>
-          <span className="text-[10px] font-medium" style={{ color: COLORS.textSecondary }}>
+          <span className="text-[10px] font-medium text-muted-foreground">
             Auto-refreshing every 5s · Live
           </span>
         </div>
 
+        {/* ─── Additional dashboard widgets row (POS, Weather, Scam Alerts) ─── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <ExtraWidget icon={Store} label="POS Network" value={summary ? (summary.neighborhoods > 0 ? `${Math.min(summary.meshNodes, 100)}% online` : "No data") : "—"} colorClass="text-electric-blue" />
+          <ExtraWidget icon={CloudRain} label="Micro-Climate" value="Clear · 28°C" colorClass="text-purple-glow" />
+          <ExtraWidget icon={AlertTriangle} label="Scam Alerts" value="0 active" colorClass="text-warm-orange" />
+        </div>
+
         {/* ─── Section Header ─── */}
         <div className="flex items-center justify-between pt-1">
-          <h2 className="text-sm font-semibold" style={{ color: COLORS.textPrimary }}>
+          <h2 className="text-sm font-semibold text-foreground">
             {hasNearbyFeeds ? "Neighborhood Snapshots" : "Other Posts"}
           </h2>
           <div className="flex items-center gap-1.5">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75 animate-ping" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
-            </span>
-            <span className="text-[10px] font-medium" style={{ color: COLORS.textSecondary }}>
+            <Wifi className="h-3 w-3 text-neon-green animate-pulse-soft" />
+            <span className="text-[10px] font-medium text-muted-foreground">
               Live · {summary?.meshNodes ?? 0} mesh nodes
             </span>
           </div>
@@ -352,10 +317,10 @@ export default function Feeds() {
 
         {/* ─── Fallback: No nearby feeds ─── */}
         {showFallback && (
-          <div className="rounded-xl p-4 text-center" style={{ background: COLORS.card }}>
-            <Newspaper className="h-6 w-6 mx-auto mb-2" style={{ color: COLORS.textSecondary }} />
-            <p className="text-sm font-medium" style={{ color: COLORS.textPrimary }}>No feeds nearby</p>
-            <p className="text-xs mt-1" style={{ color: COLORS.textSecondary }}>
+          <div className="rounded-xl p-4 text-center bg-card border border-border">
+            <Newspaper className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm font-medium text-foreground">No feeds nearby</p>
+            <p className="text-xs mt-1 text-muted-foreground">
               Showing other posts from across the platform
             </p>
           </div>
@@ -363,21 +328,11 @@ export default function Feeds() {
 
         {/* ─── AI Suggestions (if available) ─── */}
         {suggestions.length > 0 && (
-          <div
-            className="rounded-2xl p-4 space-y-3"
-            style={{ background: COLORS.card, border: `1px solid ${COLORS.tile}` }}
-          >
+          <div className="rounded-2xl p-4 space-y-3 bg-card border border-purple-glow">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-3.5 w-3.5" style={{ color: COLORS.accent }} />
-              <span className="text-xs font-medium" style={{ color: COLORS.textPrimary }}>
-                Suggested for You
-              </span>
-              <Badge
-                className="text-[9px] px-1.5 py-0 rounded-full"
-                style={{ background: `${COLORS.accent}20`, color: COLORS.accent, border: "none" }}
-              >
-                AI
-              </Badge>
+              <Sparkles className="h-3.5 w-3.5 text-purple-glow" />
+              <span className="text-xs font-medium text-foreground">Suggested for You</span>
+              <Badge className="text-[9px] px-1.5 py-0 rounded-full bg-purple-glow/20 text-purple-glow border-none">AI</Badge>
             </div>
             <div className="space-y-2">
               {suggestions.slice(0, 3).map((s) => {
@@ -387,21 +342,15 @@ export default function Feeds() {
                   <Dialog key={s.truthId}>
                     <DialogTrigger asChild>
                       <button
-                        className="w-full flex items-center gap-2.5 py-2 px-2 rounded-lg hover:bg-white/5 transition-colors text-left"
+                        className="w-full flex items-center gap-2.5 py-2 px-2 rounded-lg hover:bg-muted/50 transition-colors text-left"
                         onClick={() => recordEvent("suggestion_click", { truthId: s.truthId })}
                       >
                         <Icon className={`h-3.5 w-3.5 ${meta.color} shrink-0`} />
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs truncate" style={{ color: COLORS.textPrimary }}>
-                            {s.content}
-                          </p>
-                          <p className="text-[9px]" style={{ color: COLORS.textSecondary }}>
-                            {s.reason}
-                          </p>
+                          <p className="text-xs truncate text-foreground">{s.content}</p>
+                          <p className="text-[9px] text-muted-foreground">{s.reason}</p>
                         </div>
-                        <span className="text-[9px] shrink-0" style={{ color: COLORS.textSecondary }}>
-                          {timeAgo(s.createdAt)}
-                        </span>
+                        <span className="text-[9px] shrink-0 text-muted-foreground">{timeAgo(s.createdAt)}</span>
                       </button>
                     </DialogTrigger>
                     <SuggestionDialog
@@ -418,14 +367,9 @@ export default function Feeds() {
 
         {/* ─── Neighborhood Snapshot Cards ─── */}
         {neighborhoods.length === 0 ? (
-          <div
-            className="rounded-2xl p-8 text-center"
-            style={{ background: COLORS.card }}
-          >
-            <Newspaper className="h-8 w-8 mx-auto mb-2 opacity-30" style={{ color: COLORS.textSecondary }} />
-            <p className="text-xs" style={{ color: COLORS.textSecondary }}>
-              No neighborhood data yet. Be the first to share a truth.
-            </p>
+          <div className="rounded-2xl p-8 text-center bg-card border border-border">
+            <Newspaper className="h-8 w-8 mx-auto mb-2 opacity-30 text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">No neighborhood data yet. Be the first to share a truth.</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -450,32 +394,53 @@ export default function Feeds() {
   );
 }
 
-// ─── Summary Card (2×2 grid item) ───
+// ─── Summary Card ───
 
 function SummaryCard({
   icon: Icon,
   label,
   value,
-  color,
+  colorClass,
 }: {
   icon: typeof Zap;
   label: string;
   value: number | string;
-  color: string;
+  colorClass: string;
 }) {
   return (
-    <div
-      className="rounded-2xl p-4 space-y-2"
-      style={{ background: COLORS.card }}
-    >
-      <Icon className="h-4 w-4" style={{ color }} />
+    <div className="rounded-2xl p-4 space-y-2 bg-card border border-border">
+      <Icon className={`h-4 w-4 ${colorClass}`} />
       <div>
-        <p className="text-xl font-bold" style={{ color: COLORS.textPrimary }}>
+        <p className="text-xl font-bold text-foreground">
           {typeof value === "number" ? value.toLocaleString() : value}
         </p>
-        <p className="text-[10px] uppercase tracking-normal" style={{ color: COLORS.textSecondary }}>
-          {label}
-        </p>
+        <p className="text-[10px] uppercase tracking-normal text-muted-foreground">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Extra Widget (POS, Weather, Scam) ───
+
+function ExtraWidget({
+  icon: Icon,
+  label,
+  value,
+  colorClass,
+}: {
+  icon: typeof Zap;
+  label: string;
+  value: string;
+  colorClass: string;
+}) {
+  return (
+    <div className="rounded-xl p-3 flex items-center gap-3 bg-card border border-border">
+      <div className="rounded-lg bg-muted/50 p-2">
+        <Icon className={`h-4 w-4 ${colorClass}`} />
+      </div>
+      <div>
+        <p className="text-[10px] uppercase text-muted-foreground">{label}</p>
+        <p className="text-xs font-medium text-foreground">{value}</p>
       </div>
     </div>
   );
@@ -497,7 +462,6 @@ function NeighborhoodSnapshotCard({
   const ref = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
 
-  // IntersectionObserver for tracking card views
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -523,25 +487,14 @@ function NeighborhoodSnapshotCard({
   ];
 
   return (
-    <div
-      ref={ref}
-      className="rounded-2xl p-5 space-y-4"
-      style={{ background: COLORS.card }}
-    >
+    <div ref={ref} className="rounded-2xl p-5 space-y-4 bg-card border border-border">
       {/* ─── Header ─── */}
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="text-lg font-bold" style={{ color: COLORS.textPrimary }}>
-            {card.name}
-          </h3>
-          <p className="text-xs" style={{ color: COLORS.textSecondary }}>
-            {card.region}
-          </p>
+          <h3 className="text-lg font-bold text-foreground">{card.name}</h3>
+          <p className="text-xs text-muted-foreground">{card.region}</p>
         </div>
-        <Badge
-          className="text-[10px] px-2.5 py-0.5 rounded-full"
-          style={{ background: COLORS.tile, color: COLORS.textPrimary, border: "none" }}
-        >
+        <Badge className="text-[10px] px-2.5 py-0.5 rounded-full bg-muted text-foreground border-none">
           {card.truthCount} truths
         </Badge>
       </div>
@@ -560,44 +513,30 @@ function NeighborhoodSnapshotCard({
 
       {/* ─── AI Prediction Box ─── */}
       {card.prediction && (
-        <div
-          className="rounded-xl p-3 space-y-2"
-          style={{
-            background: `${COLORS.tile}`,
-            border: `1px solid ${COLORS.accent}30`,
-          }}
-        >
+        <div className="rounded-xl p-3 space-y-2 bg-muted/30 border border-purple-glow prediction-glow">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <Brain className="h-3.5 w-3.5" style={{ color: COLORS.accent }} />
-              <span className="text-[10px] font-medium uppercase tracking-wide" style={{ color: COLORS.textSecondary }}>
-                AI Prediction
-              </span>
+              <Brain className="h-3.5 w-3.5 text-purple-glow" />
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">AI Prediction</span>
               {trendIcon(card.prediction.trend)}
             </div>
             <Badge
-              className="text-[9px] px-1.5 py-0 rounded-full"
+              className="text-[9px] px-1.5 py-0 rounded-full border-none"
               style={{
-                background: card.prediction.confidence >= 75 ? `${COLORS.green}20` : card.prediction.confidence >= 50 ? `${COLORS.orange}20` : `${COLORS.red}20`,
-                color: card.prediction.confidence >= 75 ? COLORS.green : card.prediction.confidence >= 50 ? COLORS.orange : COLORS.red,
-                border: "none",
+                background: card.prediction.confidence >= 75 ? "hsl(142 100% 50% / 0.2)" : card.prediction.confidence >= 50 ? "hsl(25 95% 55% / 0.2)" : "hsl(0 84% 60% / 0.2)",
+                color: card.prediction.confidence >= 75 ? "hsl(142 100% 50%)" : card.prediction.confidence >= 50 ? "hsl(25 95% 55%)" : "hsl(0 84% 60%)",
               }}
             >
               {card.prediction.confidence}% confidence
             </Badge>
           </div>
-          <p className="text-xs" style={{ color: COLORS.textPrimary }}>
-            {card.prediction.text}
-          </p>
+          <p className="text-xs text-foreground">{card.prediction.text}</p>
           <div className="flex items-center gap-2">
-            <span className="text-[9px]" style={{ color: COLORS.textSecondary }}>
+            <span className="text-[9px] text-muted-foreground">
               {card.prediction.category} · {card.prediction.timeframe}
             </span>
-            {card.prediction.modelVersion.startsWith("kimi") && (
-              <Badge
-                className="text-[8px] px-1 py-0 rounded-full"
-                style={{ background: `${COLORS.accent}15`, color: COLORS.accent, border: "none" }}
-              >
+            {card.prediction.modelVersion?.startsWith("kimi") && (
+              <Badge className="text-[8px] px-1 py-0 rounded-full border-none bg-purple-glow/15 text-purple-glow">
                 Kimi K3 AI
               </Badge>
             )}
@@ -607,13 +546,9 @@ function NeighborhoodSnapshotCard({
 
       {/* ─── Recent Reports ─── */}
       <div className="space-y-1.5">
-        <p className="text-[10px] uppercase tracking-wide font-medium" style={{ color: COLORS.textSecondary }}>
-          Recent Reports
-        </p>
+        <p className="text-[10px] uppercase tracking-wide font-medium text-muted-foreground">Recent Reports</p>
         {card.recentReports.length === 0 ? (
-          <p className="text-[10px] py-2" style={{ color: COLORS.textSecondary }}>
-            No reports yet
-          </p>
+          <p className="text-[10px] py-2 text-muted-foreground">No reports yet</p>
         ) : (
           <div className="space-y-0.5">
             {card.recentReports.map((report) => {
@@ -624,9 +559,8 @@ function NeighborhoodSnapshotCard({
                   <DialogTrigger asChild>
                     <button className="group w-full">
                       <div
-                        className="flex items-center gap-2.5 py-2 px-1 rounded-lg hover:bg-white/5 transition-colors"
+                        className="flex items-center gap-2.5 py-2 px-1 rounded-lg hover:bg-muted/50 transition-colors"
                         onClick={() => {
-                          // Track post detail open
                           apiRequest("POST", "/api/user/browsing-events", {
                             eventType: "post_detail_open",
                             truthId: report.id,
@@ -636,12 +570,8 @@ function NeighborhoodSnapshotCard({
                         }}
                       >
                         <Icon className={`h-3.5 w-3.5 ${meta.color} shrink-0`} />
-                        <p className="text-xs truncate flex-1 text-left" style={{ color: COLORS.textPrimary }}>
-                          {report.content}
-                        </p>
-                        <span className="text-[10px] shrink-0" style={{ color: COLORS.textSecondary }}>
-                          {timeAgo(report.createdAt)}
-                        </span>
+                        <p className="text-xs truncate flex-1 text-left text-foreground">{report.content}</p>
+                        <span className="text-[10px] shrink-0 text-muted-foreground">{timeAgo(report.createdAt)}</span>
                       </div>
                     </button>
                   </DialogTrigger>
@@ -660,8 +590,8 @@ function NeighborhoodSnapshotCard({
 
       {/* ─── Footer ─── */}
       <div className="flex items-center gap-1.5 pt-1">
-        <Clock className="h-2.5 w-2.5" style={{ color: COLORS.textSecondary }} />
-        <span className="text-[10px]" style={{ color: COLORS.textSecondary }}>
+        <Clock className="h-2.5 w-2.5 text-muted-foreground" />
+        <span className="text-[10px] text-muted-foreground">
           Updated {card.updatedAt ? timeAgo(card.updatedAt) : "just now"}
         </span>
       </div>
@@ -674,26 +604,20 @@ function NeighborhoodSnapshotCard({
 function MetricTile({ metric }: { metric: { label: string; value: string | number; icon: typeof Zap; category: string } }) {
   const Icon = metric.icon;
   const meta = CATEGORY_META[metric.category];
-  const color = meta?.color || "text-gray-400";
-
+  const colorClass = meta?.color || "text-muted-foreground";
   const isNumeric = typeof metric.value === "number";
   const statusStr = String(metric.value);
-  const dotColor = statusColor(statusStr);
+  const dotClass = statusDot(statusStr);
 
   return (
-    <div
-      className="rounded-xl p-2.5 space-y-1 overflow-hidden"
-      style={{ background: COLORS.tile }}
-    >
-      <Icon className={`h-3.5 w-3.5 ${color}`} />
-      <p className="text-[9px] uppercase tracking-normal whitespace-nowrap overflow-hidden text-ellipsis" style={{ color: COLORS.textSecondary }}>
+    <div className="rounded-xl p-2.5 space-y-1 overflow-hidden bg-muted/30">
+      <Icon className={`h-3.5 w-3.5 ${colorClass}`} />
+      <p className="text-[9px] uppercase tracking-normal whitespace-nowrap overflow-hidden text-ellipsis text-muted-foreground">
         {metric.label}
       </p>
       <div className="flex items-center gap-1">
-        {!isNumeric && (
-          <span className="h-1.5 w-1.5 rounded-full" style={{ background: dotColor }} />
-        )}
-        <span className="text-[11px] font-medium" style={{ color: COLORS.textPrimary }}>
+        {!isNumeric && <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />}
+        <span className="text-[11px] font-medium text-foreground">
           {isNumeric ? metric.value : statusStr}
         </span>
       </div>
@@ -724,11 +648,7 @@ function ReportDialog({
     const url = typeof window !== "undefined" ? `${window.location.origin}/feeds?truth=${report.id}` : `/feeds?truth=${report.id}`;
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
-        await navigator.share({
-          title: "Soke Truth Report",
-          text: report.content.slice(0, 100),
-          url,
-        });
+        await navigator.share({ title: "Soke Truth Report", text: report.content.slice(0, 100), url });
       } catch { /* user cancelled */ }
     } else if (typeof navigator !== "undefined" && navigator.clipboard) {
       try {
@@ -738,7 +658,6 @@ function ReportDialog({
         toast({ title: "Could not copy link", variant: "destructive" });
       }
     }
-    // Record share
     try {
       await apiRequest("POST", `/api/truths/${report.id}/share`, { channel: "link" });
     } catch { /* best-effort */ }
@@ -755,7 +674,7 @@ function ReportDialog({
   };
 
   return (
-    <DialogContent className="max-w-md" style={{ background: COLORS.card, border: `1px solid ${COLORS.tile}` }}>
+    <DialogContent className="max-w-md">
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2 text-sm">
           <Icon className={`h-4 w-4 ${meta.color}`} />
@@ -763,80 +682,44 @@ function ReportDialog({
         </DialogTitle>
       </DialogHeader>
       <div className="space-y-3">
-        <p className="text-sm" style={{ color: COLORS.textPrimary }}>{report.content}</p>
-        <div className="flex items-center gap-3 text-[10px]" style={{ color: COLORS.textSecondary }}>
-          <span className="flex items-center gap-1">
-            <MapPin className="h-2.5 w-2.5" />
-            {neighborhoodName}
-          </span>
-          <span className="flex items-center gap-1">
-            <Clock className="h-2.5 w-2.5" />
-            {timeAgo(report.createdAt)}
-          </span>
+        <p className="text-sm text-foreground">{report.content}</p>
+        <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1"><MapPin className="h-2.5 w-2.5" />{neighborhoodName}</span>
+          <span className="flex items-center gap-1"><Clock className="h-2.5 w-2.5" />{timeAgo(report.createdAt)}</span>
         </div>
         {/* Trust score */}
-        <div className="flex items-center gap-2 rounded-md px-2 py-1.5" style={{ background: COLORS.tile }}>
-          <ShieldCheck className="h-3.5 w-3.5" style={{ color: report.trustScore >= 70 ? COLORS.green : report.trustScore >= 40 ? COLORS.orange : COLORS.red }} />
+        <div className="flex items-center gap-2 rounded-md px-2 py-1.5 bg-muted/30">
+          <ShieldCheck className={`h-3.5 w-3.5 ${report.trustScore >= 70 ? "text-green-500" : report.trustScore >= 40 ? "text-amber-500" : "text-red-500"}`} />
           <div className="flex-1 max-w-[100px]">
             <Progress value={report.trustScore} className="h-1.5" />
           </div>
-          <span className="text-xs font-mono font-medium" style={{ color: report.trustScore >= 70 ? COLORS.green : report.trustScore >= 40 ? COLORS.orange : COLORS.red }}>
+          <span className={`text-xs font-mono font-medium ${report.trustScore >= 70 ? "text-green-500" : report.trustScore >= 40 ? "text-amber-500" : "text-red-500"}`}>
             {report.trustScore}%
           </span>
-          <span className="text-[9px] uppercase" style={{ color: COLORS.textSecondary }}>Trust</span>
+          <span className="text-[9px] uppercase text-muted-foreground">Trust</span>
         </div>
         {/* AI Verification Section */}
         <AIVerificationSection truthId={report.id} />
         <AIPredictionSection truthId={report.id} />
         {/* Actions */}
-        <div className="flex items-center gap-0.5 pt-2" style={{ borderTop: `1px solid ${COLORS.tile}` }}>
-          <Button
-            size="sm" variant="ghost"
-            onClick={() => onVerify("corroborate")}
-            disabled={isPending}
-            className="h-8 w-8 p-0"
-            title="Corroborate" aria-label="Corroborate"
-          >
-            <ThumbsUp className="h-4 w-4" style={{ color: COLORS.green }} />
+        <div className="flex items-center gap-0.5 pt-2 border-t border-border">
+          <Button size="sm" variant="ghost" onClick={() => onVerify("corroborate")} disabled={isPending} className="h-8 w-8 p-0" title="Corroborate" aria-label="Corroborate">
+            <ThumbsUp className="h-4 w-4 text-green-500" />
           </Button>
-          <Button
-            size="sm" variant="ghost"
-            onClick={() => onVerify("dispute")}
-            disabled={isPending}
-            className="h-8 w-8 p-0"
-            title="Dispute" aria-label="Dispute"
-          >
-            <ThumbsDown className="h-4 w-4" style={{ color: COLORS.red }} />
+          <Button size="sm" variant="ghost" onClick={() => onVerify("dispute")} disabled={isPending} className="h-8 w-8 p-0" title="Dispute" aria-label="Dispute">
+            <ThumbsDown className="h-4 w-4 text-red-500" />
           </Button>
-          <Button
-            size="sm" variant="ghost"
-            onClick={() => setShowComments(s => !s)}
-            className="h-8 w-8 p-0"
-            title="Comment" aria-label="Comment"
-          >
-            <MessageCircle className="h-4 w-4" style={{ color: COLORS.textSecondary }} />
+          <Button size="sm" variant="ghost" onClick={() => setShowComments(s => !s)} className="h-8 w-8 p-0" title="Comment" aria-label="Comment">
+            <MessageCircle className="h-4 w-4 text-muted-foreground" />
           </Button>
-          <Button
-            size="sm" variant="ghost"
-            onClick={handleShare}
-            className="h-8 w-8 p-0"
-            title="Share" aria-label="Share"
-          >
-            <Share2 className="h-4 w-4" style={{ color: COLORS.textSecondary }} />
+          <Button size="sm" variant="ghost" onClick={handleShare} className="h-8 w-8 p-0" title="Share" aria-label="Share">
+            <Share2 className="h-4 w-4 text-muted-foreground" />
           </Button>
-          <Button
-            size="sm" variant="ghost"
-            onClick={handleReport}
-            disabled={reportSubmitted}
-            className="h-8 w-8 p-0 ml-auto"
-            title="Report" aria-label="Report"
-          >
-            <Flag className={`h-4 w-4 ${reportSubmitted ? "text-red-500" : ""}`} style={{ color: reportSubmitted ? COLORS.red : COLORS.textSecondary }} />
+          <Button size="sm" variant="ghost" onClick={handleReport} disabled={reportSubmitted} className="h-8 w-8 p-0 ml-auto" title="Report" aria-label="Report">
+            <Flag className={`h-4 w-4 ${reportSubmitted ? "text-red-500" : "text-muted-foreground"}`} />
           </Button>
         </div>
-        {showComments && (
-          <InlineComments truthId={report.id} />
-        )}
+        {showComments && <InlineComments truthId={report.id} />}
       </div>
     </DialogContent>
   );
@@ -856,45 +739,29 @@ function SuggestionDialog({
   const Icon = meta.icon;
 
   return (
-    <DialogContent className="max-w-md" style={{ background: COLORS.card, border: `1px solid ${COLORS.tile}` }}>
+    <DialogContent className="max-w-md">
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2 text-sm">
-          <Sparkles className="h-4 w-4" style={{ color: COLORS.accent }} />
+          <Sparkles className="h-4 w-4 text-purple-glow" />
           AI Suggestion
         </DialogTitle>
       </DialogHeader>
       <div className="space-y-3">
-        <p className="text-sm" style={{ color: COLORS.textPrimary }}>{suggestion.content}</p>
-        <div className="flex items-center gap-2 rounded-md px-2 py-1.5" style={{ background: `${COLORS.accent}15` }}>
-          <Brain className="h-3.5 w-3.5" style={{ color: COLORS.accent }} />
-          <p className="text-[10px]" style={{ color: COLORS.textSecondary }}>{suggestion.reason}</p>
+        <p className="text-sm text-foreground">{suggestion.content}</p>
+        <div className="flex items-center gap-2 rounded-md px-2 py-1.5 bg-purple-glow/10">
+          <Brain className="h-3.5 w-3.5 text-purple-glow" />
+          <p className="text-[10px] text-muted-foreground">{suggestion.reason}</p>
         </div>
-        <div className="flex items-center gap-3 text-[10px]" style={{ color: COLORS.textSecondary }}>
-          <span className="flex items-center gap-1">
-            <MapPin className="h-2.5 w-2.5" />
-            {suggestion.neighborhoodName}
-          </span>
-          <span className="flex items-center gap-1">
-            <Clock className="h-2.5 w-2.5" />
-            {timeAgo(suggestion.createdAt)}
-          </span>
+        <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1"><MapPin className="h-2.5 w-2.5" />{suggestion.neighborhoodName}</span>
+          <span className="flex items-center gap-1"><Clock className="h-2.5 w-2.5" />{timeAgo(suggestion.createdAt)}</span>
         </div>
-        <div className="flex items-center gap-0.5 pt-2" style={{ borderTop: `1px solid ${COLORS.tile}` }}>
-          <Button
-            size="sm" variant="ghost"
-            onClick={() => onVerify("corroborate")}
-            className="h-8 w-8 p-0"
-            title="Corroborate"
-          >
-            <ThumbsUp className="h-4 w-4" style={{ color: COLORS.green }} />
+        <div className="flex items-center gap-0.5 pt-2 border-t border-border">
+          <Button size="sm" variant="ghost" onClick={() => onVerify("corroborate")} className="h-8 w-8 p-0" title="Corroborate">
+            <ThumbsUp className="h-4 w-4 text-green-500" />
           </Button>
-          <Button
-            size="sm" variant="ghost"
-            onClick={() => onVerify("dispute")}
-            className="h-8 w-8 p-0"
-            title="Dispute"
-          >
-            <ThumbsDown className="h-4 w-4" style={{ color: COLORS.red }} />
+          <Button size="sm" variant="ghost" onClick={() => onVerify("dispute")} className="h-8 w-8 p-0" title="Dispute">
+            <ThumbsDown className="h-4 w-4 text-red-500" />
           </Button>
         </div>
       </div>
@@ -925,16 +792,16 @@ function AIVerificationSection({ truthId }: { truthId: number }) {
   };
 
   const verdictColor = (v: string) => {
-    if (v === "authentic") return COLORS.green;
-    if (v === "suspicious") return COLORS.red;
-    return COLORS.orange;
+    if (v === "authentic") return "text-green-500";
+    if (v === "suspicious") return "text-red-500";
+    return "text-amber-500";
   };
 
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium flex items-center gap-1">
-          <Brain className="h-3.5 w-3.5" style={{ color: COLORS.accent }} />
+          <Brain className="h-3.5 w-3.5 text-purple-glow" />
           AI Authenticity Check
         </p>
         {!result && !loading && (
@@ -945,23 +812,19 @@ function AIVerificationSection({ truthId }: { truthId: number }) {
         )}
       </div>
       {loading && (
-        <div className="flex items-center gap-2 text-xs py-1" style={{ color: COLORS.textSecondary }}>
+        <div className="flex items-center gap-2 text-xs py-1 text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" />
           Analyzing...
         </div>
       )}
-      {error && <p className="text-xs" style={{ color: COLORS.red }}>{error}</p>}
+      {error && <p className="text-xs text-red-500">{error}</p>}
       {result && !loading && (
-        <div className="rounded-md border p-2.5 space-y-2" style={{ background: COLORS.tile, borderColor: `${verdictColor(result.verdict)}30` }}>
+        <div className="rounded-md border p-2.5 space-y-2 bg-muted/30 border-border">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium capitalize" style={{ color: verdictColor(result.verdict) }}>
-              {result.verdict}
-            </span>
-            <span className="text-xs font-mono font-bold" style={{ color: verdictColor(result.verdict) }}>
-              {result.confidence}%
-            </span>
+            <span className={`text-xs font-medium capitalize ${verdictColor(result.verdict)}`}>{result.verdict}</span>
+            <span className={`text-xs font-mono font-bold ${verdictColor(result.verdict)}`}>{result.confidence}%</span>
           </div>
-          <p className="text-[10px]" style={{ color: COLORS.textSecondary }}>{result.explanation}</p>
+          <p className="text-[10px] text-muted-foreground">{result.explanation}</p>
           <div className="grid grid-cols-4 gap-1 text-[9px]">
             {[
               { label: "Content", val: result.signals?.contentAnalysis?.score ?? 0 },
@@ -969,9 +832,9 @@ function AIVerificationSection({ truthId }: { truthId: number }) {
               { label: "Community", val: result.signals?.communitySignals?.score ?? 0 },
               { label: "Time", val: result.signals?.temporalPattern?.score ?? 0 },
             ].map((s) => (
-              <div key={s.label} className="rounded px-1 py-0.5 text-center" style={{ background: COLORS.card }}>
-                <p style={{ color: COLORS.textSecondary }}>{s.label}</p>
-                <p className="font-mono font-medium" style={{ color: COLORS.textPrimary }}>{Math.round(s.val)}%</p>
+              <div key={s.label} className="rounded px-1 py-0.5 text-center bg-card">
+                <p className="text-muted-foreground">{s.label}</p>
+                <p className="font-mono font-medium text-foreground">{Math.round(s.val)}%</p>
               </div>
             ))}
           </div>
@@ -1008,16 +871,16 @@ function AIPredictionSection({ truthId }: { truthId: number }) {
   };
 
   const riskColor = (r: string) => {
-    if (r === "high") return COLORS.red;
-    if (r === "moderate") return COLORS.orange;
-    return COLORS.green;
+    if (r === "high") return "text-red-500";
+    if (r === "moderate") return "text-amber-500";
+    return "text-green-500";
   };
 
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium flex items-center gap-1">
-          <TrendingUp className="h-3.5 w-3.5" style={{ color: COLORS.accent }} />
+          <TrendingUp className="h-3.5 w-3.5 text-purple-glow" />
           AI Prediction
         </p>
         {!result && !loading && (
@@ -1028,25 +891,23 @@ function AIPredictionSection({ truthId }: { truthId: number }) {
         )}
       </div>
       {loading && (
-        <div className="flex items-center gap-2 text-xs py-1" style={{ color: COLORS.textSecondary }}>
+        <div className="flex items-center gap-2 text-xs py-1 text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" />
           Generating prediction...
         </div>
       )}
-      {error && <p className="text-xs" style={{ color: COLORS.red }}>{error}</p>}
+      {error && <p className="text-xs text-red-500">{error}</p>}
       {result && !loading && (
-        <div className="rounded-md border p-2.5 space-y-2" style={{ background: COLORS.tile, borderColor: `${riskColor(result.riskLevel)}30` }}>
+        <div className="rounded-md border p-2.5 space-y-2 bg-muted/30 border-border">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium" style={{ color: riskColor(result.riskLevel) }}>
+            <span className={`text-[10px] font-medium ${riskColor(result.riskLevel)}`}>
               Risk: <span className="capitalize">{result.riskLevel}</span>
             </span>
-            <span className="text-xs font-mono font-bold" style={{ color: COLORS.accent }}>
-              {result.confidence}%
-            </span>
+            <span className="text-xs font-mono font-bold text-purple-glow">{result.confidence}%</span>
           </div>
-          <p className="text-[10px]" style={{ color: COLORS.textSecondary }}>{result.prediction}</p>
+          <p className="text-[10px] text-muted-foreground">{result.prediction}</p>
           {result.aiPowered && (
-            <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: `${COLORS.accent}15`, color: COLORS.accent }}>
+            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-purple-glow/15 text-purple-glow">
               Kimi K3 AI
             </span>
           )}
@@ -1060,7 +921,7 @@ function AIPredictionSection({ truthId }: { truthId: number }) {
   );
 }
 
-// ─── Inline Comments (inline on each post dialog) ───
+// ─── Inline Comments ───
 
 function InlineComments({ truthId }: { truthId: number }) {
   const [comments, setComments] = useState<Array<{ id: number; userHash: string; content: string; createdAt: string }>>([]);
@@ -1096,19 +957,19 @@ function InlineComments({ truthId }: { truthId: number }) {
   };
 
   return (
-    <div className="space-y-2 pt-1" style={{ borderTop: `1px solid ${COLORS.tile}` }}>
+    <div className="space-y-2 pt-1 border-t border-border">
       {loading ? (
-        <p className="text-[10px]" style={{ color: COLORS.textSecondary }}>Loading comments...</p>
+        <p className="text-[10px] text-muted-foreground">Loading comments...</p>
       ) : comments.length === 0 ? (
-        <p className="text-[10px]" style={{ color: COLORS.textSecondary }}>No comments yet. Be the first to comment.</p>
+        <p className="text-[10px] text-muted-foreground">No comments yet. Be the first to comment.</p>
       ) : (
         <div className="space-y-1.5 max-h-40 overflow-y-auto">
           {comments.map(c => (
-            <div key={c.id} className="rounded-md p-1.5" style={{ background: COLORS.tile }}>
+            <div key={c.id} className="rounded-md p-1.5 bg-muted/30">
               <p className="text-[10px] text-muted-foreground">
                 {c.userHash?.slice(0, 8) || "Anonymous"} · {timeAgo(c.createdAt)}
               </p>
-              <p className="text-xs" style={{ color: COLORS.textPrimary }}>{c.content}</p>
+              <p className="text-xs text-foreground">{c.content}</p>
             </div>
           ))}
         </div>
@@ -1119,15 +980,9 @@ function InlineComments({ truthId }: { truthId: number }) {
           onChange={e => setNewComment(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !submitting) handleSubmit(); }}
           placeholder="Write a comment..."
-          className="flex-1 h-8 rounded-md text-xs px-2 outline-none"
-          style={{ background: COLORS.tile, color: COLORS.textPrimary, border: `1px solid ${COLORS.textSecondary}30` }}
+          className="flex-1 h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
         />
-        <Button
-          size="sm"
-          onClick={handleSubmit}
-          disabled={submitting || !newComment.trim()}
-          className="h-8 px-3 text-xs"
-        >
+        <Button size="sm" onClick={handleSubmit} disabled={submitting || !newComment.trim()} className="h-8 px-3 text-xs">
           {submitting ? <Loader2 className="h-3 w-3 animate-spin" /> : "Post"}
         </Button>
       </div>

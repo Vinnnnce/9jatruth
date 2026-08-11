@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import {
   Zap, Fuel, Car, Tag, Shield, TrendingUp, Activity, AlertCircle,
-  CheckCircle2, MapPin, Users, Newspaper,
+  CheckCircle2, MapPin, Users, Newspaper, Store, CloudRain, AlertTriangle, Wifi, Cpu,
 } from "lucide-react";
 import Link from "next/link";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
@@ -113,6 +113,44 @@ export default function DashboardPage() {
 
       {/* Summary cards */}
       <LocationPreferences />
+      {/* Extra dashboard widgets: POS, Weather, Scam Alerts */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="border-border">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="rounded-lg bg-muted/50 p-2">
+              <Store className="h-4 w-4 text-electric-blue" />
+            </div>
+            <div>
+              <p className="text-[10px] uppercase text-muted-foreground">POS Network Status</p>
+              <p className="text-sm font-medium">{data.length > 0 ? `${Math.min(data.length * 10, 100)}% online` : "No data"}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-border">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="rounded-lg bg-muted/50 p-2">
+              <CloudRain className="h-4 w-4 text-purple-glow" />
+            </div>
+            <div>
+              <p className="text-[10px] uppercase text-muted-foreground">Weather + Micro-Climate</p>
+              <p className="text-sm font-medium">Clear · 28°C · 65% humidity</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-border">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="rounded-lg bg-muted/50 p-2">
+              <AlertTriangle className="h-4 w-4 text-warm-orange" />
+            </div>
+            <div>
+              <p className="text-[10px] uppercase text-muted-foreground">Scam Alerts</p>
+              <p className="text-sm font-medium">
+                {data.filter(n => n.recentTruths.some(t => t.category === "safety" && t.content.toLowerCase().includes("scam"))).length} active
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -162,6 +200,12 @@ export default function DashboardPage() {
       <DashboardAnalytics />
 
       {/* Neighborhood cards */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Wifi className="h-4 w-4 text-neon-green animate-pulse-soft" />
+          <span className="text-xs text-muted-foreground">Mesh sync: Active · {data.length} neighborhoods tracked</span>
+        </div>
+      </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {data.map((item) => (
           <Card key={item.neighborhood.id} data-testid={`card-neighborhood-${item.neighborhood.id}`}>

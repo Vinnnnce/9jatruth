@@ -40,6 +40,12 @@
     --status-online: 142 71% 45%;
     --status-warning: 38 92% 50%;
     --status-offline: 0 84% 60%;
+    /* ─── Soke Brand Colors ─── */
+    --soke-electric-blue: 210 100% 50%;
+    --soke-neon-green: 142 100% 50%;
+    --soke-purple-glow: 280 100% 65%;
+    --soke-warm-orange: 25 95% 55%;
+    --soke-soft-grey: 220 10% 88%;
     --font-sans: "Inter", system-ui, -apple-system, sans-serif;
     --font-mono: "JetBrains Mono", "SF Mono", monospace;
   }
@@ -80,6 +86,12 @@
     --status-online: 142 71% 50%;
     --status-warning: 38 92% 55%;
     --status-offline: 0 84% 60%;
+    /* ─── Soke Brand Colors (Dark) ─── */
+    --soke-electric-blue: 210 100% 55%;
+    --soke-neon-green: 142 100% 50%;
+    --soke-purple-glow: 280 100% 70%;
+    --soke-warm-orange: 25 95% 58%;
+    --soke-soft-grey: 220 10% 25%;
   }
 }
 
@@ -171,4 +183,119 @@
 
 html {
   scroll-behavior: smooth;
+}
+
+/* ─── Soke Brand Utility Classes ─── */
+.text-electric-blue { color: hsl(var(--soke-electric-blue)); }
+.text-neon-green { color: hsl(var(--soke-neon-green)); }
+.text-purple-glow { color: hsl(var(--soke-purple-glow)); }
+.text-warm-orange { color: hsl(var(--soke-warm-orange)); }
+.text-soft-grey { color: hsl(var(--soke-soft-grey)); }
+.bg-electric-blue { background-color: hsl(var(--soke-electric-blue)); }
+.bg-neon-green { background-color: hsl(var(--soke-neon-green)); }
+.bg-purple-glow { background-color: hsl(var(--soke-purple-glow)); }
+.bg-warm-orange { background-color: hsl(var(--soke-warm-orange)); }
+.bg-soft-grey { background-color: hsl(var(--soke-soft-grey)); }
+.border-electric-blue { border-color: hsl(var(--soke-electric-blue) / 0.3); }
+.border-neon-green { border-color: hsl(var(--soke-neon-green) / 0.3); }
+.border-purple-glow { border-color: hsl(var(--soke-purple-glow) / 0.3); }
+.glow-electric-blue { box-shadow: 0 0 12px hsl(var(--soke-electric-blue) / 0.4); }
+.glow-neon-green { box-shadow: 0 0 12px hsl(var(--soke-neon-green) / 0.4); }
+.glow-purple-glow { box-shadow: 0 0 12px hsl(var(--soke-purple-glow) / 0.4); }
+
+/* ─── Soke Motion & Animation ─── */
+
+/* Icons pulse when verified */
+@keyframes pulse-verified {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 hsl(var(--soke-neon-green) / 0.5); }
+  50% { transform: scale(1.08); box-shadow: 0 0 0 8px hsl(var(--soke-neon-green) / 0); }
+}
+.animate-pulse-verified {
+  animation: pulse-verified 2s ease-in-out infinite;
+}
+
+/* Soft pulse for status indicators */
+@keyframes pulse-soft-anim {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.animate-pulse-soft {
+  animation: pulse-soft-anim 3s ease-in-out infinite;
+}
+
+/* Mesh lines ripple outward */
+@keyframes mesh-ripple {
+  0% { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+.animate-mesh-ripple {
+  animation: mesh-ripple 2s ease-out infinite;
+}
+
+/* Prediction rings rotate */
+@keyframes ring-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-ring-rotate {
+  animation: ring-rotate 8s linear infinite;
+}
+
+/* Hologram map breathes subtly */
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.95; }
+  50% { transform: scale(1.02); opacity: 1; }
+}
+.animate-breathe {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+/* Credits float upward when earned */
+@keyframes float-up {
+  0% { transform: translateY(0); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(-60px); opacity: 0; }
+}
+.animate-float-up {
+  animation: float-up 2s ease-out forwards;
+}
+
+/* Verified badge glow pulse */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 4px hsl(var(--soke-neon-green) / 0.3); }
+  50% { box-shadow: 0 0 16px hsl(var(--soke-neon-green) / 0.6); }
+}
+.animate-glow-pulse {
+  animation: glow-pulse 2.5s ease-in-out infinite;
+}
+
+/* Truth signal sweep */
+@keyframes signal-sweep {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.animate-signal-sweep {
+  background: linear-gradient(90deg, transparent, hsl(var(--soke-electric-blue) / 0.15), transparent);
+  background-size: 200% 100%;
+  animation: signal-sweep 3s ease-in-out infinite;
+}
+
+/* Prediction card glow */
+.prediction-glow {
+  box-shadow: 0 0 20px hsl(var(--soke-purple-glow) / 0.1), inset 0 0 0 1px hsl(var(--soke-purple-glow) / 0.1);
+}
+
+/* Sidebar hover zone for auto-reveal */
+.sidebar-hover-zone {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  z-index: 40;
+}
+
+/* Smooth sidebar transition */
+[data-sidebar="sidebar"] {
+  transition: transform 0.3s ease, width 0.3s ease;
 }

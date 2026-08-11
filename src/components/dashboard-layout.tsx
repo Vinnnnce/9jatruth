@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 import {
   SidebarProvider,
   Sidebar,
@@ -20,7 +21,6 @@ import { OfflineStatus } from "@/components/offline-status";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserButton, SignedIn, SignedOut, SignInButton, SignUpButton } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import { isSuperAdminProfile, getDashboardType } from "@/lib/admin-auth-client";
 import { NotificationBell } from "@/components/notification-bell";
 import { NewUserTour } from "@/components/new-user-tour";
@@ -57,6 +57,7 @@ import {
   SlidersHorizontal,
   MessageSquare,
   ClipboardList,
+  CloudRain,
 } from "lucide-react";
 
 type UserProfile = {
@@ -114,13 +115,10 @@ function useNavSections() {
     {
       label: "Dashboards",
       items: [
-        // Only show admin dashboard to super admin
         ...(dashboardType === "admin"
           ? [{ path: "/admin", label: "Super Admin Dashboard", icon: ShieldCheck }]
           : []),
-        // Show user dashboard for all authenticated users
         { path: "/user", label: "Portfolio", icon: User },
-        // Show org dashboard only for org admins
         ...(dashboardType === "org"
           ? [{ path: "/org", label: "Business Dashboard", icon: Building2 }]
           : []),
@@ -144,15 +142,56 @@ function AppSidebar() {
   const pathname = usePathname();
   const { setOpenMobile, setOpen, openMobile, open } = useSidebar();
   const navSections = useNavSections();
+  const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-collapse on desktop after navigation
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth >= 768) {
+      setOpen(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  // Auto-collapse on mouse leave (desktop only)
+  const handleMouseLeave = () => {
+    if (typeof window !== "undefined" && window.innerWidth >= 768) {
+      if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
+      collapseTimerRef.current = setTimeout(() => setOpen(false), 300);
+    }
+  };
+
+  // Cancel auto-collapse on mouse enter
+  const handleMouseEnter = () => {
+    if (collapseTimerRef.current) {
+      clearTimeout(collapseTimerRef.current);
+      collapseTimerRef.current = null;
+    }
+  };
+
+  // Hover zone to reveal sidebar on desktop when collapsed
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (window.innerWidth < 768) return;
+      if (e.clientX <= 12 && !open) {
+        setOpen(true);
+      }
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => window.removeEventListener("mousemove", handleMouseMove);
+  }, [open, setOpen]);
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar
+      collapsible="icon"
+      onMouseLeave={handleMouseLeave}
+      onMouseEnter={handleMouseEnter}
+    >
       <SidebarHeader className="border-b border-sidebar-border px-4 h-16 flex flex-row items-center justify-center group-data-[collapsible=icon]:px-2">
         <Link
           href="/"
           onClick={() => {
             setOpenMobile(false);
-            // On desktop, collapse after navigation
             if (window.innerWidth >= 768) setOpen(false);
           }}
         >
@@ -180,7 +219,6 @@ function AppSidebar() {
                     tooltip={item.label}
                     onClick={() => {
                       setOpenMobile(false);
-                      // On desktop, collapse after navigation
                       if (window.innerWidth >= 768) setOpen(false);
                     }}
                   >

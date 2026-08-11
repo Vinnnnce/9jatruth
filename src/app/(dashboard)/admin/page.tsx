@@ -49,6 +49,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { AdminAnalytics } from "@/components/admin-analytics";
 import { VerifiedBadge } from "@/components/verified-badge";
 
@@ -310,54 +311,62 @@ export default function AdminDashboard() {
   const [geoFilters, setGeoFilters] = useState<GeoFilters>(EMPTY_FILTERS);
 
   // Profile — super admin gate
-  const { data: profile, isLoading: profileLoading } = useQuery<UserProfile>({
+  const { data: profile, isLoading: profileLoading, isError: profileError } = useQuery<UserProfile>({
     queryKey: ["/api/user/profile"],
+    retry: 1,
   });
 
   const isSuperAdmin = isSuperAdminProfile(profile);
   const dashboardType = getDashboardType(profile);
 
   // Geo hierarchy for dropdowns
-  const { data: geo, isLoading: geoLoading } = useQuery<GeoHierarchy>({
+  const { data: geo, isLoading: geoLoading, isError: geoError } = useQuery<GeoHierarchy>({
     queryKey: ["/api/geo/hierarchy"],
     enabled: isSuperAdmin,
+    retry: 1,
   });
 
   // Platform stats + chart breakdowns
-  const { data: stats, isLoading: statsLoading } = useQuery<PlatformStats>({
+  const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery<PlatformStats>({
     queryKey: ["/api/admin/stats"],
     enabled: isSuperAdmin,
+    retry: 1,
   });
 
   // All users with IP tracking
-  const { data: users, isLoading: usersLoading } = useQuery<PlatformUser[]>({
+  const { data: users, isLoading: usersLoading, isError: usersError } = useQuery<PlatformUser[]>({
     queryKey: ["/api/admin/users"],
     enabled: isSuperAdmin,
+    retry: 1,
   });
 
   // All truths with IP tracking + geo filters (cascading)
   const truthsQueryKey = buildTruthsQuery(geoFilters);
-  const { data: truths, isLoading: truthsLoading } = useQuery<AdminTruth[]>({
+  const { data: truths, isLoading: truthsLoading, isError: truthsError } = useQuery<AdminTruth[]>({
     queryKey: [truthsQueryKey],
     enabled: isSuperAdmin,
+    retry: 1,
   });
 
   // Organizations overview
-  const { data: organizations, isLoading: orgsLoading } = useQuery<Organization[]>({
+  const { data: organizations, isLoading: orgsLoading, isError: orgsError } = useQuery<Organization[]>({
     queryKey: ["/api/organizations"],
     enabled: isSuperAdmin,
+    retry: 1,
   });
 
   // Recent activity
-  const { data: activity, isLoading: activityLoading } = useQuery<ActivityEntry[]>({
+  const { data: activity, isLoading: activityLoading, isError: activityError } = useQuery<ActivityEntry[]>({
     queryKey: ["/api/activity?limit=20"],
     enabled: isSuperAdmin,
+    retry: 1,
   });
 
   // System health
-  const { data: health, isLoading: healthLoading } = useQuery<SystemHealth>({
+  const { data: health, isLoading: healthLoading, isError: healthError } = useQuery<SystemHealth>({
     queryKey: ["/api/health"],
     enabled: isSuperAdmin,
+    retry: 1,
   });
 
   // User role/status mutation (preserved from prior dashboard)
@@ -494,7 +503,24 @@ export default function AdminDashboard() {
   // Render
   // -----------------------------------------------------------------------
 
+  if (profileError) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto">
+        <div className="rounded-xl p-6 space-y-3 bg-card border border-red-500/30">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-red-500" />
+            <p className="text-sm font-medium">Failed to load admin profile</p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Could not verify admin access. Please refresh the page or try again later.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
+    <ErrorBoundary>
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6" data-testid="page-admin-dashboard">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
         <div>
@@ -547,6 +573,15 @@ export default function AdminDashboard() {
         {/* Overview — stat cards + charts + activity feed                  */}
         {/* --------------------------------------------------------------- */}
         <TabsContent value="overview" className="space-y-6">
+          {statsError ? (
+            <div className="rounded-xl p-4 bg-card border border-red-500/30 flex items-center gap-3">
+              <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Failed to load platform stats</p>
+                <p className="text-xs text-muted-foreground">The admin stats API may be unavailable. Other tabs may still work.</p>
+              </div>
+            </div>
+          ) : null}
           {/* Stat cards */}
           {statsLoading ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -797,6 +832,15 @@ export default function AdminDashboard() {
         {/* Users — IP tracking table                                       */}
         {/* --------------------------------------------------------------- */}
         <TabsContent value="users" className="space-y-4">
+          {usersError ? (
+            <div className="rounded-xl p-4 bg-card border border-red-500/30 flex items-center gap-3">
+              <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Failed to load users</p>
+                <p className="text-xs text-muted-foreground">The admin users API may be unavailable.</p>
+              </div>
+            </div>
+          ) : null}
           <Card>
             <CardHeader className="pb-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
               <CardTitle className="text-sm font-display flex items-center gap-2">
@@ -914,6 +958,15 @@ export default function AdminDashboard() {
         {/* Posts / Truths — IP tracking + geo filters                     */}
         {/* --------------------------------------------------------------- */}
         <TabsContent value="posts" className="space-y-4">
+          {truthsError ? (
+            <div className="rounded-xl p-4 bg-card border border-red-500/30 flex items-center gap-3">
+              <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Failed to load truths</p>
+                <p className="text-xs text-muted-foreground">The admin truths API may be unavailable.</p>
+              </div>
+            </div>
+          ) : null}
           {/* Geo-hierarchical filters */}
           <Card data-testid="card-geo-filters">
             <CardHeader className="pb-2">
@@ -1113,6 +1166,15 @@ export default function AdminDashboard() {
         {/* Organizations                                                    */}
         {/* --------------------------------------------------------------- */}
         <TabsContent value="organizations" className="space-y-4">
+          {orgsError ? (
+            <div className="rounded-xl p-4 bg-card border border-red-500/30 flex items-center gap-3">
+              <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Failed to load organizations</p>
+                <p className="text-xs text-muted-foreground">The organizations API may be unavailable.</p>
+              </div>
+            </div>
+          ) : null}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-display flex items-center gap-2">
@@ -1192,6 +1254,15 @@ export default function AdminDashboard() {
         {/* System Health                                                    */}
         {/* --------------------------------------------------------------- */}
         <TabsContent value="health" className="space-y-4">
+          {healthError ? (
+            <div className="rounded-xl p-4 bg-card border border-red-500/30 flex items-center gap-3">
+              <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Failed to load system health</p>
+                <p className="text-xs text-muted-foreground">The health API may be unavailable.</p>
+              </div>
+            </div>
+          ) : null}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-display flex items-center gap-2">
@@ -1438,6 +1509,7 @@ export default function AdminDashboard() {
         </TabsContent>
       </Tabs>
     </div>
+    </ErrorBoundary>
   );
 }
 
