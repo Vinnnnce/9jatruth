@@ -12,6 +12,10 @@
     {
       "path": "/api/news/auto-summary",
       "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/schedule/process",
+      "schedule": "0 * * * *"
     }
   ],
   "headers": [

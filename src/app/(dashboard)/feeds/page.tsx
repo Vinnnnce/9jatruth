@@ -20,14 +20,16 @@ import {
   Brain, Loader2, Sparkles, Zap, Fuel, Car, Tag,
   TrendingUp, TrendingDown, Minus,
   Building2, Gauge, CloudRain, Store, AlertTriangle, Wifi,
-  MessageCircle, Share2, Flag, Heart,
+  MessageCircle, Share2, Flag, Heart, BarChart3,
 } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
 import { useUser } from "@/lib/use-user-safe";
 import { NewsFeed } from "@/components/news-feed";
 import { FeedComments } from "@/components/feed-comments";
+import { PollCard } from "@/components/poll-card";
 import { motion } from "framer-motion";
 import { ClipboardList, Send as SendIcon } from "lucide-react";
+import { NIGERIA_STATES, getLgasForState } from "@/lib/nigeria-locations";
 
 // ─── Types ───
 
@@ -188,6 +190,32 @@ export default function Feeds() {
     refetchOnWindowFocus: true,
   });
 
+  // Fetch recent truths directly (not just neighborhood-grouped)
+  const { data: recentTruths } = useQuery({
+    queryKey: ["/api/truths", geoFilter],
+    queryFn: async ({ queryKey }) => {
+      const [, filter] = queryKey as [string, typeof geoFilter];
+      const params = new URLSearchParams({ limit: "50" });
+      if (filter.state) params.set("state", filter.state);
+      if (filter.lga) params.set("lga", filter.lga);
+      const res = await apiRequest("GET", `/api/truths?${params.toString()}`);
+      return res.json();
+    },
+    enabled: isLoaded,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
+  });
+
+  // Fetch active polls
+  const { data: pollsData } = useQuery({
+    queryKey: ["/api/polls"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/polls?limit=5");
+      return res.json();
+    },
+    enabled: isLoaded,
+  });
+
   // Fetch AI suggestions
   const { data: suggestionsData } = useQuery<{ suggestions: Suggestion[] }>({
     queryKey: ["/api/feed/suggestions"],
@@ -280,7 +308,7 @@ export default function Feeds() {
               className="h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
             >
               <option value="">All States</option>
-              {(geoHierarchy?.states || []).map(s => <option key={s} value={s}>{s}</option>)}
+              {(geoHierarchy?.states?.length ? geoHierarchy.states : NIGERIA_STATES).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <select
               value={geoFilter.lga}
@@ -288,7 +316,7 @@ export default function Feeds() {
               className="h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
             >
               <option value="">All L.G.A</option>
-              {(geoHierarchy?.lgas || []).map(l => <option key={l} value={l}>{l}</option>)}
+              {(geoFilter.state ? getLgasForState(geoFilter.state) : (geoHierarchy?.lgas || [])).map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </div>
         </div>
@@ -303,6 +331,67 @@ export default function Feeds() {
             Auto-refreshing every 5s · Live
           </span>
         </div>
+
+        {/* ─── Recent Posts (direct truth feed) ─── */}
+        {recentTruths?.truths && recentTruths.truths.length > 0 && (
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <Newspaper className="h-4 w-4 text-primary" />
+              Recent Posts
+              <span className="text-[10px] text-muted-foreground font-normal">
+                ({recentTruths.truths.length})
+              </span>
+            </h2>
+            <div className="grid gap-2">
+              {recentTruths.truths.slice(0, 15).map((truth: any) => (
+                <Card key={truth.id} className="border-border hover:border-primary/30 transition-colors">
+                  <CardContent className="p-3 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {truth.category && (
+                          <Badge variant="secondary" className="text-[9px]">
+                            {truth.category}
+                          </Badge>
+                        )}
+                        {truth.neighborhoodName && (
+                          <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                            <MapPin className="h-2.5 w-2.5" />
+                            {truth.neighborhoodName}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[9px] text-muted-foreground">
+                        {new Date(truth.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-foreground line-clamp-2">{truth.content}</p>
+                    <div className="flex items-center gap-3 pt-1">
+                      <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                        <ShieldCheck className="h-2.5 w-2.5" />
+                        Trust: {truth.trustScore ?? 50}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ─── Active Polls ─── */}
+        {pollsData?.polls && pollsData.polls.length > 0 && (
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <BarChart3 className="h-4 w-4 text-primary" />
+              Active Polls
+            </h2>
+            <div className="grid gap-2">
+              {pollsData.polls.map((poll: any) => (
+                <PollCard key={poll.id} pollId={poll.id} />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ─── Additional dashboard widgets row (POS, Weather, Scam Alerts) ─── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

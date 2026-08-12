@@ -20,6 +20,7 @@ import {
 import { useToast } from "@/components/hooks/use-toast";
 import {
   Send, CheckCircle2, Info, MapPin, LocateFixed, Building2, Navigation, Coins, ShieldCheck, User,
+  Clock, BarChart3, Plus, X,
 } from "lucide-react";
 import { useLiveLocation } from "@/hooks/use-live-location";
 import { useAgencyAuth } from "@/hooks/use-agency-auth";
@@ -65,6 +66,16 @@ export default function SubmitTruth() {
   const [postAsOrg, setPostAsOrg] = useState(false);
   const [detectedLocation, setDetectedLocation] = useState<{ lat: number | null; lng: number | null; region: string | null; city: string | null } | null>(null);
   const [detectingLoc, setDetectingLoc] = useState(false);
+
+  // Scheduling
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState("");
+
+  // Poll
+  const [pollEnabled, setPollEnabled] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState("");
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { lat, lng, requestLocation, loading: locLoading } = useLiveLocation();
@@ -103,11 +114,20 @@ export default function SubmitTruth() {
       const endpoint = postAsOrg && isAgencyAuth ? "/api/organizations/me/truths" : "/api/truths";
       return apiRequest("POST", endpoint, data);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({
         title: "Truth submitted",
         description: "Your micro-truth has been received and is being verified. +20 credits earned!",
       });
+
+      // If poll is enabled, create the poll
+      if (pollEnabled && pollQuestion.trim() && pollOptions.filter(o => o.trim()).length >= 2) {
+        createPollMutation.mutate({
+          question: pollQuestion.trim(),
+          options: pollOptions.filter(o => o.trim()),
+        });
+      }
+
       setCategory("");
       setContent("");
       setNeighborhoodInput("");
@@ -148,6 +168,42 @@ export default function SubmitTruth() {
     },
   });
 
+  // Schedule mutation
+  const scheduleMutation = useMutation({
+    mutationFn: (data: { contentType: string; payload: any; scheduledAt: string }) =>
+      apiRequest("POST", "/api/schedule", data),
+    onSuccess: () => {
+      toast({
+        title: "Post scheduled",
+        description: "Your post will be published at the scheduled time.",
+      });
+      setCategory("");
+      setContent("");
+      setNeighborhoodInput("");
+      setScheduleEnabled(false);
+      setScheduleAt("");
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to schedule", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // Poll creation mutation (called after truth submission if poll is enabled)
+  const createPollMutation = useMutation({
+    mutationFn: (data: { question: string; options: string[]; contentId?: number }) =>
+      apiRequest("POST", "/api/polls", data),
+    onSuccess: () => {
+      toast({ title: "Poll created", description: "Your poll is now live." });
+      setPollEnabled(false);
+      setPollQuestion("");
+      setPollOptions(["", ""]);
+    },
+    onError: () => {
+      toast({ title: "Poll creation failed", variant: "destructive" });
+    },
+  });
+
   const handleSubmit = () => {
     if (!neighborhoodInput.trim() || !category || !content.trim()) {
       toast({
@@ -165,6 +221,33 @@ export default function SubmitTruth() {
       });
       return;
     }
+
+    // If scheduling is enabled, create a scheduled post instead
+    if (scheduleEnabled) {
+      if (!scheduleAt) {
+        toast({ title: "Select a date and time", variant: "destructive" });
+        return;
+      }
+      const scheduledDate = new Date(scheduleAt);
+      if (scheduledDate <= new Date()) {
+        toast({ title: "Scheduled time must be in the future", variant: "destructive" });
+        return;
+      }
+      scheduleMutation.mutate({
+        contentType: "truth",
+        payload: {
+          neighborhoodName: neighborhoodInput.trim(),
+          category,
+          content: content.trim(),
+          reportLat: lat ?? undefined,
+          reportLng: lng ?? undefined,
+          locationSource: lat ? "gps" : "ip",
+        },
+        scheduledAt: scheduledDate.toISOString(),
+      });
+      return;
+    }
+
     mutation.mutate({
       neighborhoodName: neighborhoodInput.trim(),
       category,
@@ -330,6 +413,90 @@ export default function SubmitTruth() {
             )}
           </div>
 
+          {/* Schedule + Poll toggles */}
+          <div className="space-y-3 pt-2 border-t border-border">
+            {/* Schedule toggle */}
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="schedule-toggle"
+                checked={scheduleEnabled}
+                onCheckedChange={(v) => setScheduleEnabled(v === true)}
+              />
+              <Label htmlFor="schedule-toggle" className="text-xs flex items-center gap-1 cursor-pointer">
+                <Clock className="h-3.5 w-3.5" />
+                Schedule for later
+              </Label>
+              {scheduleEnabled && (
+                <Input
+                  type="datetime-local"
+                  value={scheduleAt}
+                  onChange={(e) => setScheduleAt(e.target.value)}
+                  className="ml-auto w-auto h-8 text-xs"
+                />
+              )}
+            </div>
+
+            {/* Poll toggle */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="poll-toggle"
+                  checked={pollEnabled}
+                  onCheckedChange={(v) => setPollEnabled(v === true)}
+                />
+                <Label htmlFor="poll-toggle" className="text-xs flex items-center gap-1 cursor-pointer">
+                  <BarChart3 className="h-3.5 w-3.5" />
+                  Attach a poll
+                </Label>
+              </div>
+              {pollEnabled && (
+                <div className="space-y-2 pl-6">
+                  <Input
+                    placeholder="Poll question (e.g., Is the power out in your area?)"
+                    value={pollQuestion}
+                    onChange={(e) => setPollQuestion(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                  {pollOptions.map((opt, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <Input
+                        placeholder={`Option ${i + 1}`}
+                        value={opt}
+                        onChange={(e) => {
+                          const next = [...pollOptions];
+                          next[i] = e.target.value;
+                          setPollOptions(next);
+                        }}
+                        className="h-8 text-xs"
+                      />
+                      {pollOptions.length > 2 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => setPollOptions(pollOptions.filter((_, idx) => idx !== i))}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  {pollOptions.length < 6 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1"
+                      onClick={() => setPollOptions([...pollOptions, ""])}
+                    >
+                      <Plus className="h-3 w-3" />
+                      Add option
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Submit row — credits and trust-scored badges inline */}
           <div className="flex items-center justify-between gap-2 pt-1">
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -344,17 +511,17 @@ export default function SubmitTruth() {
             </div>
             <Button
               onClick={handleSubmit}
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || scheduleMutation.isPending}
               data-testid="button-submit-truth"
               className="gap-2"
               size="sm"
             >
-              {mutation.isPending ? (
-                "Submitting..."
+              {mutation.isPending || scheduleMutation.isPending ? (
+                scheduleEnabled ? "Scheduling..." : "Submitting..."
               ) : (
                 <>
                   <Send className="h-3.5 w-3.5" />
-                  Submit
+                  {scheduleEnabled ? "Schedule" : "Submit"}
                 </>
               )}
             </Button>

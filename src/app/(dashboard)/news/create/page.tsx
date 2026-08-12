@@ -94,17 +94,17 @@ export default function CreateArticlePage() {
       tags: string[];
       state: string;
       lga: string;
-      coverImage: string | null;
-      videoUrl: string | null;
-      status: "draft" | "pending_review";
+      coverImageUrl?: string;
+      mediaUrls: string[];
+      status: "draft" | "published";
     }) => apiRequest("POST", "/api/news/create", data),
     onSuccess: (_data, variables) => {
       toast({
-        title: variables.status === "draft" ? "Draft saved" : "Submitted for review",
+        title: variables.status === "draft" ? "Draft saved" : "Article published",
         description:
           variables.status === "draft"
             ? "Your draft has been saved."
-            : "Your article is pending review by editors.",
+            : "Your article has been published.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/news/feed"] });
       router.push("/news");
@@ -140,7 +140,7 @@ export default function CreateArticlePage() {
       const formData = new FormData();
       formData.append("file", file);
       try {
-        const res = await fetch("/api/upload", { method: "POST", body: formData });
+        const res = await fetch("/api/media/upload", { method: "POST", body: formData });
         const data = await res.json();
         if (data.url) setCoverImage(data.url);
       } catch {
@@ -207,7 +207,7 @@ export default function CreateArticlePage() {
     }
   };
 
-  const validate = (status: "draft" | "pending_review"): boolean => {
+  const validate = (status: "draft" | "published"): boolean => {
     if (!title.trim()) {
       toast({ title: "Title is required", variant: "destructive" });
       return false;
@@ -216,15 +216,17 @@ export default function CreateArticlePage() {
       toast({ title: "Please select a category", variant: "destructive" });
       return false;
     }
-    if (status === "pending_review" && !getContent()) {
+    if (status === "published" && !getContent()) {
       toast({ title: "Content is required to submit", variant: "destructive" });
       return false;
     }
     return true;
   };
 
-  const handleSubmit = (status: "draft" | "pending_review") => {
+  const handleSubmit = (status: "draft" | "published") => {
     if (!validate(status)) return;
+    const mediaUrls: string[] = [];
+    if (videoUrl) mediaUrls.push(videoUrl);
     createMutation.mutate({
       title: title.trim(),
       content: getContent(),
@@ -233,8 +235,8 @@ export default function CreateArticlePage() {
       tags,
       state,
       lga,
-      coverImage,
-      videoUrl,
+      coverImageUrl: coverImage || undefined,
+      mediaUrls,
       status,
     });
   };
@@ -546,15 +548,15 @@ export default function CreateArticlePage() {
             </Button>
             <Button
               className="w-full gap-1.5"
-              onClick={() => handleSubmit("pending_review")}
+              onClick={() => handleSubmit("published")}
               disabled={createMutation.isPending}
             >
-              {createMutation.isPending && createMutation.variables?.status === "pending_review" ? (
+              {createMutation.isPending && createMutation.variables?.status === "published" ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Send className="h-3.5 w-3.5" />
               )}
-              Submit for Review
+              Publish Article
             </Button>
           </div>
         </div>

@@ -178,15 +178,16 @@ Base your summary ONLY on the data provided. Do not invent information. Highligh
   const insertResult = (await sql`
     INSERT INTO news_articles (
       title, slug, excerpt, content, cover_image_url, media_urls,
-      category, tags, author_id, author_name, author_type,
+      category, tags, author_name, author_type,
       organization_id, state, lga, status, is_verified,
       verification_badge, trust_score, view_count, like_count,
       comment_count, accuracy_bonus, published_at, created_at, updated_at
     ) VALUES (
       ${articleData.title}, ${slug}, ${articleData.excerpt}, ${articleData.content},
-      NULL, '[]', ${articleData.category || "general"},
+      NULL, ${JSON.stringify([])}, ${articleData.category || "general"},
       ${JSON.stringify(articleData.tags || ["daily-summary"])},
-      'system', 'Soke AI Daily Digest', 'system', NULL, 'All', 'All',
+      'Soke AI Daily Digest', 'system',
+      NULL, 'All', 'All',
       'published', TRUE, 'ai-verified', 100, 0, 0, 0, 0, NOW(), NOW(), NOW()
     ) RETURNING id
   `) as unknown as any[];

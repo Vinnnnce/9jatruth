@@ -750,6 +750,22 @@ export async function ensureDbInitialized() {
   await sql`CREATE INDEX IF NOT EXISTS idx_news_category ON news_articles(category)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_news_org ON news_articles(organization_id)`;
 
+  // Ensure all columns exist (for tables created before all columns were added)
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS accuracy_bonus INTEGER NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS author_id TEXT`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS verification_badge TEXT`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS trust_score INTEGER NOT NULL DEFAULT 50`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS like_count INTEGER NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS comment_count INTEGER NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS media_urls TEXT NOT NULL DEFAULT '[]'`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS cover_image_url TEXT`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS tags TEXT NOT NULL DEFAULT '[]'`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS state TEXT`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS lga TEXT`;
+
   await sql`CREATE TABLE IF NOT EXISTS news_comments (
     id SERIAL PRIMARY KEY,
     article_id INTEGER NOT NULL,
@@ -948,6 +964,48 @@ export async function ensureDbInitialized() {
   )`;
   await sql`CREATE INDEX IF NOT EXISTS idx_incentives_article ON news_incentives(article_id)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_incentives_user ON news_incentives(user_hash)`;
+
+  // Polls
+  await sql`CREATE TABLE IF NOT EXISTS polls (
+    id SERIAL PRIMARY KEY,
+    question TEXT NOT NULL,
+    content_type VARCHAR(20) DEFAULT 'truth' NOT NULL,
+    content_id INTEGER,
+    created_by VARCHAR(64) NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    expires_at TIMESTAMPTZ,
+    total_votes INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE TABLE IF NOT EXISTS poll_options (
+    id SERIAL PRIMARY KEY,
+    poll_id INTEGER REFERENCES polls(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    vote_count INTEGER DEFAULT 0,
+    display_order INTEGER DEFAULT 0
+  )`;
+  await sql`CREATE TABLE IF NOT EXISTS poll_votes (
+    id SERIAL PRIMARY KEY,
+    poll_id INTEGER REFERENCES polls(id) ON DELETE CASCADE,
+    option_id INTEGER REFERENCES poll_options(id) ON DELETE CASCADE,
+    user_hash VARCHAR(64) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(poll_id, user_hash)
+  )`;
+
+  // Scheduled content
+  await sql`CREATE TABLE IF NOT EXISTS scheduled_content (
+    id SERIAL PRIMARY KEY,
+    content_type VARCHAR(20) NOT NULL,
+    payload JSONB NOT NULL,
+    scheduled_at TIMESTAMPTZ NOT NULL,
+    status VARCHAR(20) DEFAULT 'scheduled',
+    created_by VARCHAR(64) NOT NULL,
+    published_ref_id INTEGER,
+    error_message TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_scheduled_status ON scheduled_content(status, scheduled_at)`;
 
   // Seed default reward categories
   const existingCats = await sql`SELECT COUNT(*) as count FROM reward_categories`;

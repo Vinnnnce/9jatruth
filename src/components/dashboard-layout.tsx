@@ -87,7 +87,6 @@ function useNavSections() {
       items: [
         { path: "/feeds", label: "Feeds", icon: Newspaper },
         { path: "/news", label: "News", icon: Newspaper },
-        { path: "/news/create", label: "Create Article", icon: FilePlus },
         { path: "/search", label: "Search", icon: Search },
         { path: "/submit", label: "Submit Truth", icon: Send },
         { path: "/activity", label: "Activity", icon: ActivityIcon },
