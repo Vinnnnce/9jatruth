@@ -9,9 +9,8 @@ import {
 import { csrfCheck } from "@/lib/security";
 import { z } from "zod";
 
-// Schedule: first prompt after 3 days, then every 30 days, max 12 prompts
-const FIRST_PROMPT_DELAY_DAYS = 3;
-const SUBSEQUENT_PROMPT_INTERVAL_DAYS = 30;
+// Schedule: first prompt within 24 hours of signup, then monthly (end of every month)
+const FIRST_PROMPT_DELAY_HOURS = 24;
 const MAX_FEEDBACK_PROMPTS = 12;
 
 const feedbackSchema = z.object({
@@ -42,7 +41,7 @@ export async function GET(request: Request) {
     // No schedule — create one with signup date now
     const newRows = (await sql`
       INSERT INTO feedback_schedules (user_hash, clerk_user_id, signup_date, first_prompt_shown, feedback_count, next_prompt_date)
-      VALUES (${userHash}, ${clerkUserId}, NOW(), FALSE, 0, NOW() + INTERVAL '${FIRST_PROMPT_DELAY_DAYS} days')
+      VALUES (${userHash}, ${clerkUserId}, NOW(), FALSE, 0, NOW() + INTERVAL '1 day')
       RETURNING *
     `) as unknown as any[];
 
@@ -119,7 +118,8 @@ export async function POST(request: Request) {
   `) as unknown as any[];
 
   const now = new Date();
-  const nextPromptDate = new Date(now.getTime() + SUBSEQUENT_PROMPT_INTERVAL_DAYS * 24 * 60 * 60 * 1000);
+  // Next prompt: end of next month (last day of the current month)
+  const nextPromptDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
   if (existing.length === 0) {
     await sql`

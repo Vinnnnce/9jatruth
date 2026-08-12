@@ -506,7 +506,12 @@ export async function ensureDbInitialized() {
     truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE,
     user_hash TEXT NOT NULL,
     content TEXT NOT NULL,
+    image_url TEXT,
+    sticker_id TEXT,
+    gift_id TEXT,
     parent_comment_id INTEGER REFERENCES feed_comments(id) ON DELETE CASCADE,
+    like_count INTEGER NOT NULL DEFAULT 0,
+    reply_count INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -523,6 +528,23 @@ export async function ensureDbInitialized() {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
   await sql`CREATE INDEX IF NOT EXISTS idx_feed_shares_truth ON feed_shares(truth_id)`;
+
+  // Add rich comment columns to feed_comments (idempotent)
+  await sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS image_url TEXT`;
+  await sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS sticker_id TEXT`;
+  await sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS gift_id TEXT`;
+  await sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS like_count INTEGER NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS reply_count INTEGER NOT NULL DEFAULT 0`;
+
+  // Feed comment likes table
+  await sql`CREATE TABLE IF NOT EXISTS feed_comment_likes (
+    id SERIAL PRIMARY KEY,
+    comment_id INTEGER NOT NULL REFERENCES feed_comments(id) ON DELETE CASCADE,
+    user_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(comment_id, user_hash)
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_feed_comment_likes_comment ON feed_comment_likes(comment_id)`;
 
   // User subscriptions
   await sql`CREATE TABLE IF NOT EXISTS user_subscriptions (

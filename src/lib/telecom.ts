@@ -240,6 +240,15 @@ async function africasTalkingPurchase(req: TelecomRequest): Promise<TelecomResul
 // ─── Mock Purchase (for development/testing) ───
 
 async function mockPurchase(req: TelecomRequest): Promise<TelecomResult> {
+  // Only allow mock in development or when explicitly enabled
+  if (process.env.NODE_ENV === "production" && process.env.TELECOM_MOCK !== "true") {
+    return {
+      success: false,
+      provider: "mock",
+      errorMessage: "No telecom provider configured. Set VTPASS_API_KEY or AFRICAS_TALKING_API_KEY, or set TELECOM_MOCK=true for testing.",
+      status: "failed",
+    };
+  }
   await new Promise((r) => setTimeout(r, 500));
 
   const providerRef = `MOCK-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
@@ -259,7 +268,10 @@ export async function purchaseAirtimeOrData(req: TelecomRequest): Promise<Teleco
   // Determine provider priority
   if (process.env.VTPASS_API_KEY) providers.push("vtpass");
   if (process.env.AFRICAS_TALKING_API_KEY) providers.push("africastalking");
-  if (providers.length === 0) providers.push("mock");
+  // Only use mock in development or when explicitly enabled
+  if (providers.length === 0 && (process.env.NODE_ENV !== "production" || process.env.TELECOM_MOCK === "true")) {
+    providers.push("mock");
+  }
 
   let lastError = "";
   const maxRetries = 3;
