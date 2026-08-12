@@ -24,6 +24,9 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
 import { useUser } from "@/lib/use-user-safe";
+import { NewsFeed } from "@/components/news-feed";
+import { motion } from "framer-motion";
+import { ClipboardList, Send as SendIcon } from "lucide-react";
 
 // ─── Types ───
 
@@ -79,6 +82,14 @@ type Suggestion = {
   createdAt: string;
   score: number;
   reason: string;
+};
+
+type QuestionnaireQuestion = {
+  id: number;
+  question: string;
+  type: string;
+  options?: string[];
+  required?: boolean;
 };
 
 // ─── Category metadata with Soke brand colors ───
@@ -147,16 +158,14 @@ export default function Feeds() {
   const { recordEvent } = useBrowsingTracker();
   const trackedRef = useRef<Set<number>>(new Set());
 
-  // Geo filters for feeds
+  // Geo filters for feeds (state and lga only)
   const [geoFilter, setGeoFilter] = useState({
-    country: "",
-    region: "",
     state: "",
     lga: "",
   });
 
-  // Fetch geo hierarchy for filter dropdowns
-  const { data: geoHierarchy } = useQuery<{ countries: string[]; regions: string[]; states: string[]; lgas: string[] }>({
+  // Fetch geo hierarchy for filter dropdowns (states and lgas only)
+  const { data: geoHierarchy } = useQuery<{ states: string[]; lgas: string[] }>({
     queryKey: ["/api/geo/hierarchy"],
   });
 
@@ -166,8 +175,6 @@ export default function Feeds() {
     queryFn: async ({ queryKey }) => {
       const [, filter] = queryKey as [string, typeof geoFilter];
       const params = new URLSearchParams();
-      if (filter.country) params.set("country", filter.country);
-      if (filter.region) params.set("region", filter.region);
       if (filter.state) params.set("state", filter.state);
       if (filter.lga) params.set("lga", filter.lga);
       const qs = params.toString();
@@ -188,6 +195,23 @@ export default function Feeds() {
       return res.json();
     },
     enabled: isLoaded && isSignedIn,
+  });
+
+  // Fetch active questionnaire questions
+  const { data: questionnaireData } = useQuery<{ questions: QuestionnaireQuestion[] }>({
+    queryKey: ["/api/questionnaire/manage"],
+  });
+
+  const submitAnswerMutation = useMutation({
+    mutationFn: (data: { questionId: number; answer: string }) =>
+      apiRequest("POST", "/api/questionnaire/manage/answer", data),
+    onSuccess: () => {
+      toast({ title: "Answer submitted" });
+      queryClient.invalidateQueries({ queryKey: ["/api/questionnaire/manage"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to submit answer", variant: "destructive" });
+    },
   });
 
   useEffect(() => {
@@ -241,30 +265,14 @@ export default function Feeds() {
         <div className="rounded-xl p-3 space-y-2 bg-card border border-border">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-medium uppercase text-muted-foreground">Filter by Location</span>
-            {(geoFilter.region || geoFilter.state || geoFilter.lga) && (
+            {(geoFilter.state || geoFilter.lga) && (
               <button
-                onClick={() => setGeoFilter({ country: "", region: "", state: "", lga: "" })}
+                onClick={() => setGeoFilter({ state: "", lga: "" })}
                 className="text-[10px] text-primary hover:underline"
               >Clear</button>
             )}
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <select
-              value={geoFilter.country}
-              onChange={(e) => setGeoFilter(f => ({ ...f, country: e.target.value, region: "", state: "", lga: "" }))}
-              className="h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
-            >
-              <option value="">All Countries</option>
-              {(geoHierarchy?.countries || []).map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select
-              value={geoFilter.region}
-              onChange={(e) => setGeoFilter(f => ({ ...f, region: e.target.value, state: "", lga: "" }))}
-              className="h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
-            >
-              <option value="">All Regions</option>
-              {(geoHierarchy?.regions || []).map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
+          <div className="grid grid-cols-2 gap-2">
             <select
               value={geoFilter.state}
               onChange={(e) => setGeoFilter(f => ({ ...f, state: e.target.value, lga: "" }))}
@@ -389,7 +397,105 @@ export default function Feeds() {
             ))}
           </div>
         )}
+
+        {/* ─── News Section ─── */}
+        <div className="pt-2">
+          <NewsFeed />
+        </div>
+
+        {/* ─── Questionnaire Section ─── */}
+        {questionnaireData?.questions && questionnaireData.questions.length > 0 && (
+          <div className="rounded-2xl p-4 space-y-3 bg-card border border-border">
+            <div className="flex items-center gap-2">
+              <ClipboardList className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold text-foreground">Active Questionnaire</h2>
+            </div>
+            <div className="space-y-3">
+              {questionnaireData.questions.map((q, i) => (
+                <motion.div
+                  key={q.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: i * 0.08 }}
+                  className="rounded-xl border border-border p-3 space-y-2"
+                >
+                  <p className="text-xs font-medium text-foreground">
+                    {q.question}
+                    {q.required && <span className="text-red-500 ml-0.5">*</span>}
+                  </p>
+                  <QuestionnaireItem
+                    question={q}
+                    onSubmit={(answer) => submitAnswerMutation.mutate({ questionId: q.id, answer })}
+                    isPending={submitAnswerMutation.isPending}
+                  />
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+// ─── Questionnaire Item (inline answer) ───
+
+function QuestionnaireItem({
+  question,
+  onSubmit,
+  isPending,
+}: {
+  question: QuestionnaireQuestion;
+  onSubmit: (answer: string) => void;
+  isPending: boolean;
+}) {
+  const [answer, setAnswer] = useState("");
+
+  const handleSubmit = () => {
+    if (!answer.trim()) return;
+    onSubmit(answer.trim());
+    setAnswer("");
+  };
+
+  if (question.options && question.options.length > 0) {
+    return (
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-1.5">
+          {question.options.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => onSubmit(opt)}
+              disabled={isPending}
+              className="rounded-md border border-border px-2.5 py-1 text-[11px] hover:border-primary/30 hover:bg-primary/5 transition-colors disabled:opacity-50"
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-2">
+      <input
+        value={answer}
+        onChange={(e) => setAnswer(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !isPending) handleSubmit();
+        }}
+        placeholder="Your answer..."
+        className="flex-1 h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
+      />
+      <Button
+        size="sm"
+        onClick={handleSubmit}
+        disabled={isPending || !answer.trim()}
+        className="h-8 px-3 text-xs gap-1"
+      >
+        <SendIcon className="h-3 w-3" />
+        Submit
+      </Button>
     </div>
   );
 }

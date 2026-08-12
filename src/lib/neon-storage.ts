@@ -2229,11 +2229,21 @@ export async function getGeoHierarchy() {
   const allRegions = [...new Set([...regions.map(r => r.name), ...truthRegions.map(r => r.name)])].sort();
   const allCountries = [...new Set([...neighborhoodCountries.map(c => c.name), ...truthCountries.map(c => c.name)])].sort();
 
+  const lgasByState = lgas.reduce((acc: Record<string, string[]>, l) => {
+    const stateName = (l as any).state_name;
+    if (stateName) {
+      if (!acc[stateName]) acc[stateName] = [];
+      acc[stateName].push((l as any).name);
+    }
+    return acc;
+  }, {} as Record<string, string[]>);
+
   return {
     countries: allCountries.length > 0 ? allCountries : ["Nigeria"],
     regions: allRegions,
     states: allStates,
     lgas: allLgas,
+    lgasByState,
     communities: allCommunities,
     villages: villages.map(v => v.name),
   };

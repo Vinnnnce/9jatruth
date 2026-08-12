@@ -440,3 +440,259 @@ model WeeklyUserReview {
   @@unique([weekStart, clerkUserId])
   @@map("weekly_user_reviews")
 }
+
+// ─── News System ───
+
+model NewsArticle {
+  id              Int       @id @default(autoincrement())
+  title           String    @db.VarChar(300)
+  slug            String    @unique
+  excerpt         String?    @db.Text
+  content         String    @db.Text
+  coverImageUrl   String?   @map("cover_image_url")
+  mediaUrls       String    @default("[]") @map("media_urls") // JSON array
+  category        String    @default("general")
+  tags            String    @default("[]") // JSON array
+  authorId        Int?      @map("author_id")
+  authorName      String    @map("author_name")
+  authorType      String    @default("agency") @map("author_type") // agency | user | admin
+  organizationId  Int?      @map("organization_id")
+  state           String?
+  lga             String?
+  status          String    @default("draft") // draft | pending_review | published | rejected | archived
+  isVerified      Boolean   @default(false) @map("is_verified")
+  verificationBadge String? @map("verification_badge")
+  trustScore      Int       @default(50) @map("trust_score")
+  viewCount       Int       @default(0) @map("view_count")
+  likeCount       Int       @default(0) @map("like_count")
+  commentCount    Int       @default(0) @map("comment_count")
+  accuracyBonus   Int       @default(0) @map("accuracy_bonus")
+  publishedAt     DateTime? @map("published_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @map("updated_at")
+
+  @@index([status])
+  @@index([category])
+  @@index([organizationId])
+  @@map("news_articles")
+}
+
+model NewsComment {
+  id              Int       @id @default(autoincrement())
+  articleId       Int       @map("article_id")
+  userHash        String    @map("user_hash")
+  authorName      String    @map("author_name")
+  authorAvatar    String?   @map("author_avatar")
+  content         String    @db.Text // Rich text HTML
+  imageUrl        String?   @map("image_url")
+  stickerId       String?   @map("sticker_id")
+  giftId          String?   @map("gift_id")
+  parentCommentId Int?      @map("parent_comment_id")
+  likeCount       Int       @default(0) @map("like_count")
+  replyCount      Int       @default(0) @map("reply_count")
+  status          String    @default("active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @map("updated_at")
+
+  @@index([articleId])
+  @@index([userHash])
+  @@map("news_comments")
+}
+
+model NewsLike {
+  id         Int      @id @default(autoincrement())
+  articleId  Int      @map("article_id")
+  userHash   String   @map("user_hash")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([articleId, userHash])
+  @@map("news_likes")
+}
+
+model CommentLike {
+  id         Int      @id @default(autoincrement())
+  commentId  Int      @map("comment_id")
+  userHash   String   @map("user_hash")
+  articleId  Int      @map("article_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([commentId, userHash])
+  @@map("comment_likes")
+}
+
+// ─── Rewards System ───
+
+model RewardCategory {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  icon        String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("reward_categories")
+}
+
+model RewardRedemption {
+  id              Int       @id @default(autoincrement())
+  userHash        String    @map("user_hash")
+  rewardType      String    @map("reward_type") // airtime | data | giftcard | voucher | cash
+  rewardCategory  String    @map("reward_category")
+  amount          Int
+  status          String    @default("pending") // pending | approved | denied | fulfilled | failed
+  description     String
+  recipientPhone  String?   @map("recipient_phone")
+  recipientName   String?   @map("recipient_name")
+  networkProvider String?   @map("network_provider")
+  giftCardCode    String?   @map("gift_card_code")
+  voucherStoreName String? @map("voucher_store_name")
+  voucherCode     String?   @map("voucher_code")
+  adminNotes      String?   @map("admin_notes")
+  processedBy     String?   @map("processed_by")
+  processedAt     DateTime? @map("processed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([userHash])
+  @@index([status])
+  @@map("reward_redemptions")
+}
+
+model GiftCard {
+  id            Int       @id @default(autoincrement())
+  code          String    @unique
+  type          String    // airtime | data | shopping | voucher
+  brand         String
+  faceValue     Int       @map("face_value")
+  balance       Int       @default(0)
+  currency      String    @default("NGN")
+  expiryDate    DateTime  @map("expiry_date")
+  status        String    @default("active") // active | redeemed | expired | revoked
+  redeemedBy    String?   @map("redeemed_by")
+  redeemedAt    DateTime? @map("redeemed_at")
+  createdBy     String    @map("created_by")
+  metadata      String    @default("{}")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([status])
+  @@index([type])
+  @@map("gift_cards")
+}
+
+model StoreVoucher {
+  id            Int       @id @default(autoincrement())
+  code          String    @unique
+  storeName     String    @map("store_name")
+  storeType     String    @default("general") @map("store_type")
+  description   String?
+  discountType  String    @default("fixed") @map("discount_type") // fixed | percentage
+  discountValue Int       @map("discount_value")
+  minPurchase   Int       @default(0) @map("min_purchase")
+  maxDiscount   Int?      @map("max_discount")
+  validFrom     DateTime  @map("valid_from")
+  validUntil    DateTime  @map("valid_until")
+  status        String    @default("active") // active | used | expired | revoked
+  usedBy        String?   @map("used_by")
+  usedAt        DateTime? @map("used_at")
+  partnerBusiness String? @map("partner_business")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([storeName])
+  @@index([status])
+  @@map("store_vouchers")
+}
+
+model TelecomTransaction {
+  id              Int       @id @default(autoincrement())
+  userHash        String    @map("user_hash")
+  phoneNumber     String    @map("phone_number")
+  networkProvider String    @map("network_provider") // MTN | Airtel | Glo | 9mobile
+  serviceType     String    @map("service_type") // airtime | data
+  amount          Int
+  planCode        String?   @map("plan_code")
+  planName        String?   @map("plan_name")
+  status          String    @default("pending") // pending | success | failed | retry
+  providerRef     String?   @map("provider_ref")
+  provider        String?   // vtpass | africastalking | termii | infobip
+  errorMessage    String?   @map("error_message")
+  retryCount      Int       @default(0) @map("retry_count")
+  ledgerEntryId   Int?      @map("ledger_entry_id")
+  redemptionId    Int?      @map("redemption_id")
+  processedAt     DateTime? @map("processed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @map("updated_at")
+
+  @@index([userHash])
+  @@index([status])
+  @@index([phoneNumber])
+  @@map("telecom_transactions")
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  actorId     String   @map("actor_id")
+  actorName   String    @map("actor_name")
+  actorRole   String    @map("actor_role")
+  action      String
+  entityType  String   @map("entity_type") // reward | news | telecom | user | giftcard | voucher
+  entityId    Int?     @map("entity_id")
+  description String
+  oldValues   String?  @map("old_values") // JSON
+  newValues   String?  @map("new_values") // JSON
+  ipAddress   String?  @map("ip_address")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([entityType])
+  @@index([actorId])
+  @@map("audit_logs")
+}
+
+// ─── Questionnaire System ───
+
+model Questionnaire {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  questions   String   @default("[]") // JSON array of question objects
+  status      String   @default("active") // active | inactive
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @map("updated_at")
+
+  @@map("questionnaires")
+}
+
+// ─── Feedback Schedule ───
+
+model FeedbackSchedule {
+  id              Int       @id @default(autoincrement())
+  userHash        String    @map("user_hash")
+  clerkUserId     String?   @map("clerk_user_id")
+  signupDate      DateTime  @map("signup_date")
+  firstPromptShown Boolean  @default(false) @map("first_prompt_shown")
+  firstPromptDate DateTime? @map("first_prompt_date")
+  lastPromptDate  DateTime? @map("last_prompt_date")
+  nextPromptDate  DateTime? @map("next_prompt_date")
+  feedbackCount   Int       @default(0) @map("feedback_count")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@unique([userHash])
+  @@map("feedback_schedules")
+}
+
+// ─── News Accuracy Incentives ───
+
+model NewsIncentive {
+  id          Int      @id @default(autoincrement())
+  articleId   Int      @map("article_id")
+  userHash    String   @map("user_hash")
+  incentiveType String @map("incentive_type") // credit | badge | trust_boost
+  amount      Int      @default(0)
+  badgeName   String?  @map("badge_name")
+  trustBoost  Int      @default(0) @map("trust_boost")
+  reason      String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([articleId])
+  @@index([userHash])
+  @@map("news_incentives")
+}

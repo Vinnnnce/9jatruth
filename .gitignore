@@ -40,3 +40,5 @@ data.db-shm
 # IDE
 .vscode
 .idea
+public/uploads/*
+!public/uploads/.gitkeep
