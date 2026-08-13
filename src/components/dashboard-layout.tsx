@@ -114,8 +114,6 @@ function useNavSections() {
         // User Portfolio
         { path: "/profile", label: "Profile", icon: User },
         { path: "/advanced-settings", label: "Advanced Settings", icon: SlidersHorizontal },
-        { path: "/feedback", label: "Feedback", icon: MessageSquare },
-        { path: "/questionnaire", label: "Questionnaire", icon: ClipboardList },
       ],
     },
     {

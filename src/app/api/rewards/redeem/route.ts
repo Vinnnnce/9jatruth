@@ -12,7 +12,7 @@ import { z } from "zod";
 const redeemSchema = z.object({
   rewardType: z.enum(["airtime", "data", "giftcard", "voucher", "cash"]),
   rewardCategory: z.string().trim().min(1).max(100),
-  amount: z.number().int().positive().max(100000),
+  amount: z.coerce.number().int().positive().max(100000),
   description: z.string().trim().min(1).max(300),
   recipientPhone: z.string().max(20).optional(),
   recipientName: z.string().max(200).optional(),
@@ -22,6 +22,9 @@ const redeemSchema = z.object({
   voucherStoreName: z.string().max(200).optional(),
   planCode: z.string().max(100).optional(),
   planName: z.string().max(200).optional(),
+  // Backwards compat — ignored, userHash comes from auth context
+  userHash: z.string().max(200).optional(),
+  type: z.string().max(50).optional(),
 });
 
 /**

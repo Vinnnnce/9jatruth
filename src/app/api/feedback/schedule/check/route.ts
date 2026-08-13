@@ -8,7 +8,13 @@ export async function GET(request: Request) {
   await ensureDbInitialized();
 
   const clerkUserId = await getClerkUserId();
-  if (!clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
+  if (!clerkUserId) {
+    const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
+    if (isClerkConfigured) {
+      return Response.json({ message: "Unauthorized" }, { status: 401 });
+    }
+  }
 
   const userHash = await getUserId(request);
   const sql = getDb();
@@ -18,11 +24,16 @@ export async function GET(request: Request) {
   `) as unknown as any[];
 
   if (rows.length === 0) {
+    // No schedule record — check if today is the last day of the month
+    const now = new Date();
+    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const isLastDay = now.getDate() === lastDayOfMonth.getDate();
     return Response.json({
       hasSchedule: false,
-      shouldShow: false,
+      shouldShow: isLastDay,
+      due: isLastDay,
       feedbackCount: 0,
-      message: "No feedback schedule found",
+      message: isLastDay ? "Monthly feedback day" : "No feedback schedule found",
     });
   }
 

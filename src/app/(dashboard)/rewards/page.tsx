@@ -217,7 +217,20 @@ export default function Rewards() {
   });
 
   const redeemMutation = useMutation({
-    mutationFn: (data: { userHash: string; amount: number; description: string; type?: string }) =>
+    mutationFn: (data: {
+      rewardType: "airtime" | "data" | "giftcard" | "voucher" | "cash";
+      rewardCategory: string;
+      amount: number;
+      description: string;
+      recipientPhone?: string;
+      recipientName?: string;
+      networkProvider?: string;
+      giftCardCode?: string;
+      voucherCode?: string;
+      voucherStoreName?: string;
+      planCode?: string;
+      planName?: string;
+    }) =>
       apiRequest("POST", "/api/rewards/redeem", data),
     onSuccess: () => {
       toast({ title: "Redemption submitted", description: "Your reward is being processed." });
@@ -249,10 +262,12 @@ export default function Rewards() {
     }
     const net = detectedNetwork || "Auto";
     redeemMutation.mutate({
-      userHash: USER_HASH,
+      rewardType: "airtime",
+      rewardCategory: net,
       amount: airtimeAmount,
       description: `${net} airtime ₦${airtimeAmount} to ${phone}`,
-      type: "airtime",
+      recipientPhone: phone.replace(/\D/g, ""),
+      networkProvider: net,
     });
   };
 
@@ -267,10 +282,14 @@ export default function Rewards() {
       return;
     }
     redeemMutation.mutate({
-      userHash: USER_HASH,
+      rewardType: "data",
+      rewardCategory: plan.network,
       amount: plan.amount,
       description: `${plan.label} data bundle`,
-      type: "data",
+      recipientPhone: phone.replace(/\D/g, "") || undefined,
+      networkProvider: plan.network,
+      planCode: plan.id,
+      planName: plan.label,
     });
   };
 
@@ -280,19 +299,26 @@ export default function Rewards() {
       return;
     }
     redeemMutation.mutate({
-      userHash: USER_HASH,
+      rewardType: "giftcard",
+      rewardCategory: card.brand,
       amount: card.value,
       description: `${card.brand} gift card (₦${card.value})`,
-      type: "gift_card",
+      giftCardCode: card.id,
     });
   };
 
   const handleVoucherRedeem = (voucher: Voucher) => {
+    if (balance < 500) {
+      toast({ title: "Insufficient credits (min 500)", variant: "destructive" });
+      return;
+    }
     redeemMutation.mutate({
-      userHash: USER_HASH,
-      amount: 0,
+      rewardType: "voucher",
+      rewardCategory: voucher.store,
+      amount: 500,
       description: `${voucher.store} voucher (${voucher.discount})`,
-      type: "voucher",
+      voucherCode: voucher.id,
+      voucherStoreName: voucher.store,
     });
   };
 

@@ -20,8 +20,11 @@ import {
 import { useToast } from "@/components/hooks/use-toast";
 import {
   Send, CheckCircle2, Info, MapPin, LocateFixed, Building2, Navigation, Coins, ShieldCheck, User,
-  Clock, BarChart3, Plus, X,
+  Clock, BarChart3, Plus, X, Upload, Image as ImageIcon, Video, RotateCw, RotateCcw, Crop,
+  Wand2, Trash2, Film, AlertTriangle, Loader2, Scissors,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Slider } from "@/components/ui/slider";
 import { useLiveLocation } from "@/hooks/use-live-location";
 import { useAgencyAuth } from "@/hooks/use-agency-auth";
 import { CATEGORY_LIST } from "@/lib/categories";
@@ -33,6 +36,49 @@ const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
 
 const categories = CATEGORY_LIST;
+
+const MAX_VIDEO_SECONDS = 60;
+const ASPECT_RATIOS = [
+  { value: "free", label: "Free", ratio: null },
+  { value: "1:1", label: "1:1", ratio: 1 },
+  { value: "4:3", label: "4:3", ratio: 4 / 3 },
+  { value: "16:9", label: "16:9", ratio: 16 / 9 },
+] as const;
+const FILTERS = [
+  { value: "none", label: "None", css: "none" },
+  { value: "grayscale", label: "Grayscale", css: "grayscale(1)" },
+  { value: "sepia", label: "Sepia", css: "sepia(1)" },
+  { value: "brighten", label: "Brighten", css: "brightness(1.4)" },
+  { value: "contrast", label: "Contrast", css: "contrast(1.5)" },
+] as const;
+
+const ACCEPTED_MEDIA = "image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm";
+
+type MediaItem = {
+  id: string;
+  kind: "image" | "video";
+  file: File;
+  previewUrl: string;
+  uploadedUrl: string | null;
+  uploading: boolean;
+  rotation: number;
+  filter: string;
+  aspectRatio: string;
+  editedPreview: string | null;
+  hasEdits: boolean;
+  duration: number;
+  trimStart: number;
+  trimEnd: number;
+  overLimit: boolean;
+  thumbDataUrl: string | null;
+};
+
+function fmtTime(s: number): string {
+  if (!isFinite(s) || s < 0) s = 0;
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
 
 /** Parse the HTTP status code from an apiRequest error */
 function getErrorStatus(error: any): number | null {
@@ -76,6 +122,9 @@ export default function SubmitTruth() {
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
 
+  // Media upload
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { lat, lng, requestLocation, loading: locLoading } = useLiveLocation();
@@ -84,9 +133,68 @@ export default function SubmitTruth() {
   const hasOrganization = !!auth?.organization;
   const { isSignedIn, isLoaded } = useUser();
 
-  // Auto-detect user's real location via IP on mount
+  // Auto-detect user's real location via GPS first (works even with VPN), then IP fallback
   useEffect(() => {
     if (detectedLocation) return;
+
+    // Try GPS first — browser geolocation uses GPS/WiFi/Cell triangulation, not IP,
+    // so it gives the user's real location even when they're on a VPN
+    if (navigator.geolocation) {
+      setDetectingLoc(true);
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude, accuracy } = position.coords;
+          try {
+            // Reverse geocode using MapTiler or OpenStreetMap
+            const geoRes = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14&addressdetails=1`,
+              { headers: { "Accept-Language": "en" } }
+            );
+            const geoData = await geoRes.json();
+            const address = geoData?.address || {};
+            const city = address.city || address.town || address.village || address.suburb || address.county || "";
+            const region = address.state || address.region || "";
+            const loc = { lat: latitude, lng: longitude, region, city };
+            setDetectedLocation(loc);
+            if (city && !neighborhoodInput) {
+              setNeighborhoodInput(city);
+            }
+          } catch {
+            // Reverse geocoding failed — still use GPS coordinates
+            const loc = { lat: latitude, lng: longitude, region: null, city: null };
+            setDetectedLocation(loc);
+          } finally {
+            setDetectingLoc(false);
+          }
+        },
+        () => {
+          // GPS denied or failed — fall back to IP-based detection
+          setDetectingLoc(true);
+          fetch("/api/geo/nearby")
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.userLocation) {
+                const loc = {
+                  lat: data.userLocation.lat ?? null,
+                  lng: data.userLocation.lng ?? null,
+                  region: data.userLocation.region ?? null,
+                  city: data.userLocation.city ?? null,
+                };
+                setDetectedLocation(loc);
+                if (loc.city && !neighborhoodInput) {
+                  setNeighborhoodInput(loc.city);
+                }
+              }
+            })
+            .catch(() => {})
+            .finally(() => setDetectingLoc(false));
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+      );
+      return;
+    }
+
+    // No geolocation API — use IP detection
     setDetectingLoc(true);
     fetch("/api/geo/nearby")
       .then((res) => res.json())
@@ -99,7 +207,6 @@ export default function SubmitTruth() {
             city: data.userLocation.city ?? null,
           };
           setDetectedLocation(loc);
-          // Pre-fill neighborhood input with detected city
           if (loc.city && !neighborhoodInput) {
             setNeighborhoodInput(loc.city);
           }
@@ -107,10 +214,11 @@ export default function SubmitTruth() {
       })
       .catch(() => {})
       .finally(() => setDetectingLoc(false));
-  }, [detectedLocation, neighborhoodInput]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const mutation = useMutation({
-    mutationFn: (data: { neighborhoodName: string; category: string; content: string; reportLat?: number; reportLng?: number; locationSource?: string }) => {
+    mutationFn: (data: { neighborhoodName: string; category: string; content: string; reportLat?: number; reportLng?: number; locationSource?: string; mediaUrls?: string[] }) => {
       const endpoint = postAsOrg && isAgencyAuth ? "/api/organizations/me/truths" : "/api/truths";
       return apiRequest("POST", endpoint, data);
     },
@@ -132,6 +240,7 @@ export default function SubmitTruth() {
       setContent("");
       setNeighborhoodInput("");
       setPostAsOrg(false);
+      setMediaItems([]);
       queryClient.invalidateQueries({ queryKey: ["/api/truths"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["/api/rewards/balance"] });
@@ -182,6 +291,7 @@ export default function SubmitTruth() {
       setNeighborhoodInput("");
       setScheduleEnabled(false);
       setScheduleAt("");
+      setMediaItems([]);
       queryClient.invalidateQueries({ queryKey: ["/api/schedule"] });
     },
     onError: (err: Error) => {
@@ -204,6 +314,251 @@ export default function SubmitTruth() {
     },
   });
 
+  // ── Media helpers ──
+
+  const updateMedia = (id: string, patch: Partial<MediaItem>) => {
+    setMediaItems((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  };
+
+  const uploadMediaFile = async (id: string, file: File, duration?: number) => {
+    updateMedia(id, { uploading: true });
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      if (duration !== undefined) fd.append("duration", String(duration));
+      const res = await fetch("/api/media/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        throw new Error(data.message || "Upload failed");
+      }
+      updateMedia(id, { uploadedUrl: data.url, uploading: false });
+      return data.url as string;
+    } catch (err: any) {
+      updateMedia(id, { uploading: false });
+      toast({
+        title: "Media upload failed",
+        description: err?.message || "Could not upload media.",
+        variant: "destructive",
+      });
+      return null;
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (!files.length) return;
+
+    for (const file of files) {
+      const isImage = file.type.startsWith("image/");
+      const isVideo = file.type.startsWith("video/");
+      if (!isImage && !isVideo) {
+        toast({ title: "Unsupported file", description: file.name, variant: "destructive" });
+        continue;
+      }
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const previewUrl = URL.createObjectURL(file);
+      const item: MediaItem = {
+        id,
+        kind: isImage ? "image" : "video",
+        file,
+        previewUrl,
+        uploadedUrl: null,
+        uploading: false,
+        rotation: 0,
+        filter: "none",
+        aspectRatio: "free",
+        editedPreview: null,
+        hasEdits: false,
+        duration: 0,
+        trimStart: 0,
+        trimEnd: 0,
+        overLimit: false,
+        thumbDataUrl: null,
+      };
+      setMediaItems((prev) => [...prev, item]);
+
+      if (isVideo) {
+        // Load video metadata to get duration and capture a thumbnail frame
+        const video = document.createElement("video");
+        video.preload = "metadata";
+        video.muted = true;
+        video.src = previewUrl;
+        video.addEventListener("loadedmetadata", async () => {
+          const duration = video.duration || 0;
+          const over = duration > MAX_VIDEO_SECONDS;
+          const trimEnd = over ? MAX_VIDEO_SECONDS : duration;
+          updateMedia(id, {
+            duration,
+            trimStart: 0,
+            trimEnd,
+            overLimit: over,
+          });
+          // Capture a frame at 0s for the thumbnail
+          try {
+            video.currentTime = Math.min(0.1, duration / 2);
+            video.addEventListener("seeked", () => {
+              const canvas = document.createElement("canvas");
+              canvas.width = video.videoWidth || 160;
+              canvas.height = video.videoHeight || 90;
+              const ctx = canvas.getContext("2d");
+              if (ctx) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                updateMedia(id, { thumbDataUrl: canvas.toDataURL("image/jpeg", 0.7) });
+              }
+            }, { once: true });
+          } catch {
+            // ignore thumbnail errors
+          }
+          // Upload original video, passing the trimmed segment length as duration
+          await uploadMediaFile(id, file, Math.min(trimEnd, MAX_VIDEO_SECONDS));
+        }, { once: true });
+        video.addEventListener("error", () => {
+          toast({ title: "Could not read video", description: file.name, variant: "destructive" });
+        }, { once: true });
+      } else {
+        // Image — render to canvas with default edits and upload edited blob
+        await applyImageEdits(id, file, 0, "none", "free");
+      }
+    }
+  };
+
+  /** Render image with rotation + filter + crop aspect to a canvas, return blob */
+  const renderImageToCanvas = (
+    img: HTMLImageElement,
+    rotation: number,
+    filterCss: string,
+    aspectRatio: number | null
+  ): HTMLCanvasElement => {
+    const swap = rotation === 90 || rotation === 270;
+    const naturalW = swap ? img.naturalHeight : img.naturalWidth;
+    const naturalH = swap ? img.naturalWidth : img.naturalHeight;
+
+    // Determine crop box for aspect ratio
+    let cropW = naturalW;
+    let cropH = naturalH;
+    if (aspectRatio) {
+      if (naturalW / naturalH > aspectRatio) {
+        cropW = naturalH * aspectRatio;
+      } else {
+        cropH = naturalW / aspectRatio;
+      }
+    }
+    const cropX = (naturalW - cropW) / 2;
+    const cropY = (naturalH - cropH) / 2;
+
+    const maxDim = 1280;
+    const scale = Math.min(1, maxDim / Math.max(cropW, cropH));
+    const outW = Math.round(cropW * scale);
+    const outH = Math.round(cropH * scale);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = outW;
+    canvas.height = outH;
+    const ctx = canvas.getContext("2d")!;
+    if (filterCss !== "none") ctx.filter = filterCss;
+    ctx.translate(outW / 2, outH / 2);
+    ctx.rotate((rotation * Math.PI) / 180);
+    // Draw centered; account for swap of dimensions and the crop offset
+    ctx.drawImage(
+      img,
+      cropX, cropY, cropW, cropH,
+      -outW / 2, -outH / 2, outW, outH
+    );
+    return canvas;
+  };
+
+  const applyImageEdits = async (
+    id: string,
+    file: File,
+    rotation: number,
+    filter: string,
+    aspectRatio: string
+  ) => {
+    const ratio = ASPECT_RATIOS.find((a) => a.value === aspectRatio)?.ratio ?? null;
+    const filterCss = FILTERS.find((f) => f.value === filter)?.css ?? "none";
+    try {
+      const img = await loadImage(file);
+      const canvas = renderImageToCanvas(img, rotation, filterCss, ratio);
+      const blob: Blob = await new Promise((resolve) =>
+        canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.85)
+      );
+      const editedPreview = URL.createObjectURL(blob);
+      setMediaItems((prev) =>
+        prev.map((m) => {
+          if (m.id !== id) return m;
+          if (m.editedPreview) URL.revokeObjectURL(m.editedPreview);
+          return {
+            ...m,
+            editedPreview,
+            hasEdits: rotation !== 0 || filter !== "none" || aspectRatio !== "free",
+          };
+        })
+      );
+      // Upload the edited blob (as jpeg) and store returned URL
+      const editedFile = new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+      await uploadMediaFile(id, editedFile);
+    } catch (err: any) {
+      toast({ title: "Image edit failed", description: err?.message, variant: "destructive" });
+    }
+  };
+
+  const loadImage = (file: File): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(img);
+      };
+      img.onerror = (e) => {
+        URL.revokeObjectURL(url);
+        reject(e);
+      };
+      img.src = url;
+    });
+
+  const handleRotate = (id: string, dir: "left" | "right") => {
+    const item = mediaItems.find((m) => m.id === id);
+    if (!item) return;
+    const rotation = (item.rotation + (dir === "right" ? 90 : 270)) % 360;
+    updateMedia(id, { rotation });
+    applyImageEdits(id, item.file, rotation, item.filter, item.aspectRatio);
+  };
+
+  const handleFilterChange = (id: string, filter: string) => {
+    const item = mediaItems.find((m) => m.id === id);
+    if (!item) return;
+    updateMedia(id, { filter });
+    applyImageEdits(id, item.file, item.rotation, filter, item.aspectRatio);
+  };
+
+  const handleAspectChange = (id: string, aspectRatio: string) => {
+    const item = mediaItems.find((m) => m.id === id);
+    if (!item) return;
+    updateMedia(id, { aspectRatio });
+    applyImageEdits(id, item.file, item.rotation, item.filter, aspectRatio);
+  };
+
+  const handleTrimChange = (id: string, start: number, end: number) => {
+    const item = mediaItems.find((m) => m.id === id);
+    if (!item) return;
+    start = Math.max(0, Math.min(start, item.duration));
+    end = Math.max(start, Math.min(end, item.duration));
+    updateMedia(id, { trimStart: start, trimEnd: end });
+  };
+
+  const handleRemoveMedia = (id: string) => {
+    setMediaItems((prev) => {
+      const item = prev.find((m) => m.id === id);
+      if (item) {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+        if (item.editedPreview) URL.revokeObjectURL(item.editedPreview);
+      }
+      return prev.filter((m) => m.id !== id);
+    });
+  };
+
   const handleSubmit = () => {
     if (!neighborhoodInput.trim() || !category || !content.trim()) {
       toast({
@@ -221,6 +576,11 @@ export default function SubmitTruth() {
       });
       return;
     }
+
+    // Build media URLs from uploaded items
+    const mediaUrls = mediaItems
+      .map((m) => m.uploadedUrl)
+      .filter((u): u is string => typeof u === "string" && u.length > 0);
 
     // If scheduling is enabled, create a scheduled post instead
     if (scheduleEnabled) {
@@ -242,6 +602,7 @@ export default function SubmitTruth() {
           reportLat: lat ?? undefined,
           reportLng: lng ?? undefined,
           locationSource: lat ? "gps" : "ip",
+          mediaUrls,
         },
         scheduledAt: scheduledDate.toISOString(),
       });
@@ -255,6 +616,7 @@ export default function SubmitTruth() {
       reportLat: lat ?? undefined,
       reportLng: lng ?? undefined,
       locationSource: lat ? "gps" : "ip",
+      mediaUrls,
     });
   };
 
@@ -293,11 +655,19 @@ export default function SubmitTruth() {
                 <div className="text-xs font-medium">Your Location</div>
                 <div className="text-[10px] text-muted-foreground truncate">
                   {detectingLoc
-                    ? "Detecting..."
+                    ? "Detecting via GPS..."
                     : detectedLocation?.city && detectedLocation?.region
                     ? `${detectedLocation.city}, ${detectedLocation.region}`
+                    : detectedLocation?.lat !== null && detectedLocation?.lat !== undefined
+                    ? `GPS: ${detectedLocation.lat.toFixed(4)}, ${detectedLocation.lng?.toFixed(4)}`
                     : detectedLocation?.region || "Not detected"}
                 </div>
+                {detectedLocation?.lat !== null && detectedLocation?.lat !== undefined && !detectingLoc && (
+                  <div className="text-[9px] text-green-500 flex items-center gap-0.5 mt-0.5">
+                    <MapPin className="h-2 w-2" />
+                    GPS location (works even with VPN)
+                  </div>
+                )}
               </div>
               <Button
                 type="button"
@@ -368,6 +738,223 @@ export default function SubmitTruth() {
               <p className="text-[10px] text-muted-foreground">{content.length} characters</p>
               <p className="text-[10px] text-muted-foreground">Min 15 characters</p>
             </div>
+          </div>
+
+          {/* Media upload */}
+          <div className="space-y-2">
+            <Label className="text-xs flex items-center gap-1.5">
+              <ImageIcon className="h-3.5 w-3.5" />
+              Media
+              {mediaItems.length > 0 && (
+                <Badge variant="secondary" className="text-[9px] h-4 px-1">{mediaItems.length}</Badge>
+              )}
+            </Label>
+
+            <input
+              type="file"
+              accept={ACCEPTED_MEDIA}
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+              id="media-upload"
+              data-testid="input-media-upload"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full h-9 text-xs gap-2 border-dashed"
+              onClick={() => document.getElementById("media-upload")?.click()}
+              data-testid="button-media-add"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Add photo or video
+              <span className="text-[9px] text-muted-foreground font-normal">
+                (jpg, png, webp, gif · mp4, webm · max 60s video)
+              </span>
+            </Button>
+
+            <AnimatePresence>
+              {mediaItems.map((m) => (
+                <motion.div
+                  key={m.id}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="rounded-md border border-border bg-muted/20 p-2 space-y-2"
+                  data-testid={`media-item-${m.id}`}
+                >
+                  {/* Header row */}
+                  <div className="flex items-center gap-2">
+                    {m.kind === "video" ? (
+                      <Video className="h-3.5 w-3.5 text-primary shrink-0" />
+                    ) : (
+                      <ImageIcon className="h-3.5 w-3.5 text-primary shrink-0" />
+                    )}
+                    <span className="text-[10px] truncate flex-1">{m.file.name}</span>
+                    {m.uploading && (
+                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                    )}
+                    {m.uploadedUrl && !m.uploading && (
+                      <CheckCircle2 className="h-3 w-3 text-green-500" />
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0"
+                      onClick={() => handleRemoveMedia(m.id)}
+                      data-testid={`button-media-remove-${m.id}`}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+
+                  {/* Preview */}
+                  <div className="relative rounded overflow-hidden bg-black/5 max-h-44 flex items-center justify-center">
+                    {m.kind === "image" ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={m.editedPreview || m.previewUrl}
+                        alt={m.file.name}
+                        className="max-h-44 w-auto object-contain"
+                      />
+                    ) : (
+                      <video
+                        src={`${m.previewUrl}#t=${m.trimStart},${m.trimEnd}`}
+                        poster={m.thumbDataUrl || undefined}
+                        controls
+                        muted
+                        className="max-h-44 w-auto"
+                      />
+                    )}
+                  </div>
+
+                  {/* Image editing tools */}
+                  {m.kind === "image" && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-[10px] gap-1"
+                          onClick={() => handleRotate(m.id, "left")}
+                          data-testid={`button-rotate-left-${m.id}`}
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          Left
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-[10px] gap-1"
+                          onClick={() => handleRotate(m.id, "right")}
+                          data-testid={`button-rotate-right-${m.id}`}
+                        >
+                          <RotateCw className="h-3 w-3" />
+                          Right
+                        </Button>
+                        <Select
+                          value={m.aspectRatio}
+                          onValueChange={(v) => handleAspectChange(m.id, v)}
+                        >
+                          <SelectTrigger
+                            className="h-7 text-[10px] w-auto min-w-[72px] gap-1"
+                            data-testid={`select-aspect-${m.id}`}
+                          >
+                            <Crop className="h-3 w-3" />
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ASPECT_RATIOS.map((a) => (
+                              <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={m.filter}
+                          onValueChange={(v) => handleFilterChange(m.id, v)}
+                        >
+                          <SelectTrigger
+                            className="h-7 text-[10px] w-auto min-w-[88px] gap-1 ml-auto"
+                            data-testid={`select-filter-${m.id}`}
+                          >
+                            <Wand2 className="h-3 w-3" />
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {FILTERS.map((f) => (
+                              <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {m.hasEdits && (
+                        <p className="text-[9px] text-muted-foreground flex items-center gap-1">
+                          <Wand2 className="h-2.5 w-2.5" />
+                          Edits applied
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Video trimmer */}
+                  {m.kind === "video" && m.duration > 0 && (
+                    <div className="space-y-1.5">
+                      {m.overLimit && (
+                        <p className="text-[9px] text-amber-500 flex items-center gap-1">
+                          <AlertTriangle className="h-2.5 w-2.5" />
+                          Video is {fmtTime(m.duration)} — trimmed to first {MAX_VIDEO_SECONDS}s
+                        </p>
+                      )}
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                        <Film className="h-3 w-3" />
+                        <span>Trim segment</span>
+                        <span className="ml-auto font-medium text-foreground">
+                          {fmtTime(m.trimStart)} – {fmtTime(m.trimEnd)}
+                        </span>
+                        <span className="text-muted-foreground">
+                          / {fmtTime(m.duration)}
+                        </span>
+                      </div>
+                      {/* Start slider */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] text-muted-foreground w-8">Start</span>
+                        <Slider
+                          value={[m.trimStart]}
+                          min={0}
+                          max={m.duration}
+                          step={0.5}
+                          onValueChange={(v) => handleTrimChange(m.id, v[0], m.trimEnd)}
+                          className="flex-1"
+                        />
+                      </div>
+                      {/* End slider */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] text-muted-foreground w-8">End</span>
+                        <Slider
+                          value={[m.trimEnd]}
+                          min={m.trimStart}
+                          max={m.duration}
+                          step={0.5}
+                          onValueChange={(v) => handleTrimChange(m.id, m.trimStart, v[0])}
+                          className="flex-1"
+                        />
+                      </div>
+                      <p className="text-[9px] text-muted-foreground flex items-center gap-1">
+                        <Scissors className="h-2.5 w-2.5" />
+                        Selected: {fmtTime(Math.max(0, m.trimEnd - m.trimStart))}
+                        {m.trimEnd - m.trimStart > MAX_VIDEO_SECONDS && (
+                          <span className="text-amber-500">(max {MAX_VIDEO_SECONDS}s)</span>
+                        )}
+                      </p>
+                    </div>
+                  )}
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
 
           {/* Post as — always visible */}

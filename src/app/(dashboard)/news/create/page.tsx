@@ -38,6 +38,8 @@ import {
   Loader2,
   FileText,
   Tag as TagIcon,
+  Sparkles,
+  Wand2,
 } from "lucide-react";
 
 // ─── Constants ───
@@ -77,6 +79,11 @@ export default function CreateArticlePage() {
   const [showPreview, setShowPreview] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
 
+  // AI generation state
+  const [aiTopic, setAiTopic] = useState("");
+  const [aiTone, setAiTone] = useState("neutral");
+  const [showAiPanel, setShowAiPanel] = useState(false);
+
   // Geo hierarchy
   const { data: geoHierarchy } = useQuery<{ states: string[]; lgas: string[] }>({
     queryKey: ["/api/geo/hierarchy"],
@@ -113,6 +120,50 @@ export default function CreateArticlePage() {
       toast({ title: "Failed to save article", description: err.message, variant: "destructive" });
     },
   });
+
+  // AI article generation mutation
+  const aiGenerateMutation = useMutation({
+    mutationFn: async (data: { topic: string; category: string; state?: string; lga?: string; tone: string }) => {
+      const res = await apiRequest("POST", "/api/news/generate", data);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      setTitle(data.title || "");
+      setExcerpt(data.excerpt || "");
+      if (data.content && editorRef.current) {
+        editorRef.current.innerHTML = data.content;
+      }
+      if (data.suggestedCategory) {
+        const cat = CATEGORIES.find(c => c.toLowerCase() === data.suggestedCategory.toLowerCase());
+        if (cat) setCategory(cat);
+      }
+      if (data.tags && Array.isArray(data.tags)) {
+        setTags(data.tags.slice(0, 10));
+      }
+      toast({
+        title: "Article generated",
+        description: data.source === "kimi" ? "Generated with AI" : "Generated from template (AI not configured)",
+      });
+      setShowAiPanel(false);
+    },
+    onError: (err: Error) => {
+      toast({ title: "AI generation failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleAiGenerate = () => {
+    if (!aiTopic.trim()) {
+      toast({ title: "Please enter a topic", variant: "destructive" });
+      return;
+    }
+    aiGenerateMutation.mutate({
+      topic: aiTopic.trim(),
+      category: category?.toLowerCase() || "local",
+      state: state || undefined,
+      lga: lga || undefined,
+      tone: aiTone,
+    });
+  };
 
   const focusEditor = () => editorRef.current?.focus();
 
@@ -252,16 +303,116 @@ export default function CreateArticlePage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">Write and publish a news article.</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowPreview((s) => !s)}
-          className="gap-1.5"
-        >
-          {showPreview ? <Edit3 className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-          {showPreview ? "Edit" : "Preview"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => setShowAiPanel(s => !s)}
+            className="gap-1.5"
+            data-testid="button-ai-generate"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            AI Generate
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowPreview((s) => !s)}
+            className="gap-1.5"
+          >
+            {showPreview ? <Edit3 className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            {showPreview ? "Edit" : "Preview"}
+          </Button>
+        </div>
       </div>
+
+      {/* AI Generation Panel */}
+      <AnimatePresence>
+        {showAiPanel && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <Card className="border-primary/30 bg-primary/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-display flex items-center gap-2">
+                  <Wand2 className="h-4 w-4 text-primary" />
+                  AI Article Generator
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="ai-topic" className="text-xs">Topic / Prompt</Label>
+                  <Input
+                    id="ai-topic"
+                    data-testid="input-ai-topic"
+                    value={aiTopic}
+                    onChange={(e) => setAiTopic(e.target.value)}
+                    placeholder="e.g. Power outage in Lagos mainland, fuel scarcity in Abuja..."
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Tone</Label>
+                    <Select value={aiTone} onValueChange={setAiTone}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="neutral">Neutral</SelectItem>
+                        <SelectItem value="formal">Formal</SelectItem>
+                        <SelectItem value="conversational">Conversational</SelectItem>
+                        <SelectItem value="urgent">Urgent</SelectItem>
+                        <SelectItem value="analytical">Analytical</SelectItem>
+                        <SelectItem value="inspirational">Inspirational</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Category (optional)</Label>
+                    <Select value={category} onValueChange={setCategory}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CATEGORIES.map((c) => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <Button
+                    onClick={handleAiGenerate}
+                    disabled={aiGenerateMutation.isPending}
+                    className="gap-1.5"
+                    data-testid="button-generate-article"
+                  >
+                    {aiGenerateMutation.isPending ? (
+                      <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating...</>
+                    ) : (
+                      <><Sparkles className="h-3.5 w-3.5" /> Generate Article</>
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowAiPanel(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  AI generates a draft article based on your topic. You can edit it before publishing.
+                </p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ─── Editor ─── */}

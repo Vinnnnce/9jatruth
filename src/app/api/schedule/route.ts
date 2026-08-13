@@ -14,7 +14,13 @@ export async function POST(request: Request) {
   await ensureDbInitialized();
 
   const clerkUserId = await getClerkUserId();
-  if (!clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
+  if (!clerkUserId) {
+    const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
+    if (isClerkConfigured) {
+      return Response.json({ message: "Unauthorized — Please sign in to schedule a post" }, { status: 401 });
+    }
+  }
 
   const csrfError = csrfCheck(request);
   if (csrfError) return csrfError;
@@ -58,7 +64,13 @@ export async function GET(request: Request) {
   await ensureDbInitialized();
 
   const clerkUserId = await getClerkUserId();
-  if (!clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
+  if (!clerkUserId) {
+    const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
+    if (isClerkConfigured) {
+      return Response.json({ message: "Unauthorized — Please sign in to view scheduled posts" }, { status: 401 });
+    }
+  }
 
   const userHash = await getUserId(request);
   const sql = getDb();

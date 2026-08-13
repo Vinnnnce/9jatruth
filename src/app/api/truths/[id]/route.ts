@@ -32,7 +32,13 @@ export async function DELETE(
   const csrfError = csrfCheck(request);
   if (csrfError) return csrfError;
   const clerkUserId = await getClerkUserId();
-  if (!clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
+  if (!clerkUserId) {
+    const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
+    if (isClerkConfigured) {
+      return Response.json({ message: "Unauthorized — Please sign in to delete a post" }, { status: 401 });
+    }
+  }
 
   const { id } = await params;
   const parsed = validate(idParamSchema, { id });

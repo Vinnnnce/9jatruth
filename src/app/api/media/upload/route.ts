@@ -37,7 +37,13 @@ export async function POST(request: Request) {
   if (csrfError) return csrfError;
 
   const clerkUserId = await getClerkUserId();
-  if (!clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
+  if (!clerkUserId) {
+    const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
+    if (isClerkConfigured) {
+      return Response.json({ message: "Unauthorized — Please sign in to upload media" }, { status: 401 });
+    }
+  }
 
   const userHash = await getUserId(request);
 

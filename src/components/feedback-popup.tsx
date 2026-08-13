@@ -18,7 +18,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Star, X, MessageSquare, Clock, Loader2, Send } from "lucide-react";
 
 type ScheduleCheck = {
-  due: boolean;
+  shouldShow: boolean;
+  due?: boolean;
   reason?: string;
 };
 
@@ -47,7 +48,7 @@ export function FeedbackPopup() {
       try {
         const res = await apiRequest("GET", "/api/feedback/schedule/check");
         const data: ScheduleCheck = await res.json();
-        if (active && data.due) {
+        if (active && (data.due || data.shouldShow)) {
           setShow(true);
         }
       } catch {

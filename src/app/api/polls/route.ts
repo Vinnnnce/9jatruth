@@ -11,8 +11,8 @@ import { z } from "zod";
 const createPollSchema = z.object({
   question: z.string().trim().min(5).max(500),
   options: z.array(z.string().trim().min(1).max(200)).min(2).max(6),
-  expiresInHours: z.number().min(1).max(168).optional(),
-  contentId: z.number().int().optional(),
+  expiresInHours: z.coerce.number().min(1).max(168).optional(),
+  contentId: z.coerce.number().int().optional(),
 });
 
 /** GET /api/polls — list active polls */
@@ -51,12 +51,18 @@ export async function GET(request: Request) {
   return Response.json({ polls });
 }
 
-/** POST /api/polls — create a poll (requires auth) */
+/** POST /api/polls — create a poll (requires auth when Clerk is configured) */
 export async function POST(request: Request) {
   await ensureDbInitialized();
 
   const clerkUserId = await getClerkUserId();
-  if (!clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
+  if (!clerkUserId) {
+    const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
+    if (isClerkConfigured) {
+      return Response.json({ message: "Unauthorized — Please sign in to create a poll" }, { status: 401 });
+    }
+  }
 
   const csrfError = csrfCheck(request);
   if (csrfError) return csrfError;
