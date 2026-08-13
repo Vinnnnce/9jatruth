@@ -8,6 +8,16 @@
       "maxDuration": 30
     }
   },
+  "crons": [
+    {
+      "path": "/api/news/auto-summary",
+      "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/schedule/process",
+      "schedule": "0 23 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/soke-app.apk",

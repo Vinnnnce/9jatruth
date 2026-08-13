@@ -2222,18 +2222,36 @@ export async function getGeoHierarchy() {
   const neighborhoodCountries = (await sql`SELECT DISTINCT country as name FROM neighborhoods WHERE country IS NOT NULL ORDER BY name`) as unknown as SqlRow[];
   const truthCountries = (await sql`SELECT DISTINCT country as name FROM micro_truths WHERE country IS NOT NULL ORDER BY name`) as unknown as SqlRow[];
 
-  // Merge reference data with truth-derived data
-  const allStates = [...new Set([...states.map(s => s.name), ...truthStates.map(s => s.name), ...neighborhoodStates.map(s => s.name)])].sort();
-  const allLgas = [...new Set([...lgas.map(l => l.name), ...truthLgas.map(l => l.name), ...neighborhoodLgas.map(l => l.name)])].sort();
+  // Merge reference data with truth-derived data and static Nigerian data
+  const { NIGERIA_STATES, NIGERIA_LGAS } = await import("@/lib/nigeria-locations");
+  const staticLgas = Object.values(NIGERIA_LGAS).flat();
+  const allStates = [...new Set([...states.map(s => s.name), ...truthStates.map(s => s.name), ...neighborhoodStates.map(s => s.name), ...NIGERIA_STATES])].sort();
+  const allLgas = [...new Set([...lgas.map(l => l.name), ...truthLgas.map(l => l.name), ...neighborhoodLgas.map(l => l.name), ...staticLgas])].sort();
   const allCommunities = [...new Set([...communities.map(c => c.name), ...truthCommunities.map(c => c.name), ...neighborhoodCommunities.map(c => c.name)])].sort();
-  const allRegions = [...new Set([...regions.map(r => r.name), ...truthRegions.map(r => r.name)])].sort();
+  const allRegions = [...new Set([...regions.map(r => r.name), ...truthRegions.map(r => r.name), ...["North Central", "North East", "North West", "South East", "South South", "South West"]])].sort();
   const allCountries = [...new Set([...neighborhoodCountries.map(c => c.name), ...truthCountries.map(c => c.name)])].sort();
+
+  // Build lgasByState from both DB and static data
+  const lgasByState = lgas.reduce((acc: Record<string, string[]>, l) => {
+    const stateName = (l as any).state_name;
+    if (stateName) {
+      if (!acc[stateName]) acc[stateName] = [];
+      acc[stateName].push((l as any).name);
+    }
+    return acc;
+  }, {} as Record<string, string[]>);
+  // Merge static Nigerian LGAs
+  for (const [state, stateLgas] of Object.entries(NIGERIA_LGAS)) {
+    if (!lgasByState[state]) lgasByState[state] = [];
+    lgasByState[state] = [...new Set([...lgasByState[state], ...stateLgas])].sort();
+  }
 
   return {
     countries: allCountries.length > 0 ? allCountries : ["Nigeria"],
     regions: allRegions,
     states: allStates,
     lgas: allLgas,
+    lgasByState,
     communities: allCommunities,
     villages: villages.map(v => v.name),
   };

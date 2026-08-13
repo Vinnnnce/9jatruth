@@ -4,7 +4,7 @@ import { csrfCheck } from "@/lib/security";
 import { z } from "zod";
 
 /**
- * GET /api/truths/[id]/comments — List comments for a truth
+ * GET /api/truths/[id]/comments — List comments for a truth with like counts
  */
 export async function GET(
   request: Request,
@@ -17,7 +17,8 @@ export async function GET(
 
   const sql = getDb();
   const rows = (await sql`
-    SELECT id, truth_id, user_hash, content, parent_comment_id, status, created_at, updated_at
+    SELECT id, truth_id, user_hash, content, image_url, sticker_id, gift_id,
+           parent_comment_id, like_count, reply_count, status, created_at, updated_at
     FROM feed_comments
     WHERE truth_id = ${truthId} AND status = 'active'
     ORDER BY created_at ASC
@@ -29,7 +30,12 @@ export async function GET(
     truthId: r.truth_id,
     userHash: r.user_hash,
     content: r.content,
+    imageUrl: r.image_url,
+    stickerId: r.sticker_id,
+    giftId: r.gift_id,
     parentCommentId: r.parent_comment_id,
+    likeCount: r.like_count,
+    replyCount: r.reply_count,
     status: r.status,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -37,12 +43,15 @@ export async function GET(
 }
 
 const commentSchema = z.object({
-  content: z.string().min(1).max(500),
+  content: z.string().min(1).max(5000),
+  imageUrl: z.string().url().optional().or(z.literal("")),
+  stickerId: z.string().max(100).optional(),
+  giftId: z.string().max(100).optional(),
   parentCommentId: z.number().int().positive().optional(),
 });
 
 /**
- * POST /api/truths/[id]/comments — Add a comment
+ * POST /api/truths/[id]/comments — Add a rich comment
  */
 export async function POST(
   request: Request,
@@ -72,20 +81,32 @@ export async function POST(
   }
 
   const sql = getDb();
+
+  // If replying, increment parent's reply count
+  if (parsed.data.parentCommentId) {
+    await sql`UPDATE feed_comments SET reply_count = reply_count + 1 WHERE id = ${parsed.data.parentCommentId}`;
+  }
+
   const rows = (await sql`
-    INSERT INTO feed_comments (truth_id, user_hash, content, parent_comment_id, status, created_at, updated_at)
-    VALUES (${truthId}, ${userHash}, ${content}, ${parsed.data.parentCommentId || null}, 'active', NOW(), NOW())
-    RETURNING id, truth_id, user_hash, content, parent_comment_id, status, created_at, updated_at
+    INSERT INTO feed_comments (truth_id, user_hash, content, image_url, sticker_id, gift_id, parent_comment_id, like_count, reply_count, status, created_at, updated_at)
+    VALUES (${truthId}, ${userHash}, ${content}, ${parsed.data.imageUrl || null}, ${parsed.data.stickerId || null}, ${parsed.data.giftId || null}, ${parsed.data.parentCommentId || null}, 0, 0, 'active', NOW(), NOW())
+    RETURNING id, truth_id, user_hash, content, image_url, sticker_id, gift_id, parent_comment_id, like_count, reply_count, status, created_at, updated_at
   `) as unknown as any[];
 
+  const r = rows[0];
   return Response.json({
-    id: rows[0].id,
-    truthId: rows[0].truth_id,
-    userHash: rows[0].user_hash,
-    content: rows[0].content,
-    parentCommentId: rows[0].parent_comment_id,
-    status: rows[0].status,
-    createdAt: rows[0].created_at,
-    updatedAt: rows[0].updated_at,
+    id: r.id,
+    truthId: r.truth_id,
+    userHash: r.user_hash,
+    content: r.content,
+    imageUrl: r.image_url,
+    stickerId: r.sticker_id,
+    giftId: r.gift_id,
+    parentCommentId: r.parent_comment_id,
+    likeCount: r.like_count,
+    replyCount: r.reply_count,
+    status: r.status,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   }, { status: 201 });
 }

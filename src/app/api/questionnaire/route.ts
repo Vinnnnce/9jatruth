@@ -55,9 +55,24 @@ export async function POST(request: Request) {
       .map(([key, val]) => `${key.replace(/_/g, " ")}: ${String(val)}`)
       .join("; ");
     const feedContent = `📋 Questionnaire Response: ${summaryText.slice(0, 400)}`;
+
+    // Resolve or create a neighborhood for the questionnaire feed post
+    let neighborhoodId = 1;
+    try {
+      const existingNbh = await sql`SELECT id FROM neighborhoods WHERE name ILIKE 'questionnaire' LIMIT 1` as unknown as any[];
+      if (existingNbh.length > 0) {
+        neighborhoodId = existingNbh[0].id;
+      } else {
+        const createdNbh = await sql`INSERT INTO neighborhoods (name, region, geo_hash, lat, lng) VALUES ('Questionnaire', 'General', 'questionnaire_0', 0.0, 0.0) RETURNING id` as unknown as any[];
+        neighborhoodId = createdNbh[0].id;
+      }
+    } catch {
+      // Fall back to neighborhood_id = 1 if it exists, or let the insert fail gracefully
+    }
+
     await sql`
       INSERT INTO micro_truths (neighborhood_id, category, content, trust_score, decay_factor, verification_chain, user_hash, status, ip_hash, ip_region, ip_city, state_name, region_name)
-      VALUES (1, 'safety', ${feedContent}, 50, 1.0, '[]', ${ipLocation.ipHash ?? clerkUserId ?? "anonymous"}, 'pending', ${ipLocation.ipHash ?? null}, ${ipLocation.ipRegion ?? null}, ${ipLocation.ipCity ?? null}, ${ipLocation.ipRegion ?? null}, ${ipLocation.ipRegion ?? null})
+      VALUES (${neighborhoodId}, 'safety', ${feedContent}, 50, 1.0, '[]', ${ipLocation.ipHash ?? clerkUserId ?? "anonymous"}, 'pending', ${ipLocation.ipHash ?? null}, ${ipLocation.ipRegion ?? null}, ${ipLocation.ipCity ?? null}, ${ipLocation.ipRegion ?? null}, ${ipLocation.ipRegion ?? null})
     `;
   } catch (e) {
     console.error("[questionnaire] Could not create feed post:", e);

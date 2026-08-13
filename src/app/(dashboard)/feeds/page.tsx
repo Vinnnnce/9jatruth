@@ -20,10 +20,16 @@ import {
   Brain, Loader2, Sparkles, Zap, Fuel, Car, Tag,
   TrendingUp, TrendingDown, Minus,
   Building2, Gauge, CloudRain, Store, AlertTriangle, Wifi,
-  MessageCircle, Share2, Flag,
+  MessageCircle, Share2, Flag, Heart, BarChart3,
 } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
 import { useUser } from "@/lib/use-user-safe";
+import { NewsFeed } from "@/components/news-feed";
+import { FeedComments } from "@/components/feed-comments";
+import { PollCard } from "@/components/poll-card";
+import { motion } from "framer-motion";
+import { ClipboardList, Send as SendIcon } from "lucide-react";
+import { NIGERIA_STATES, getLgasForState } from "@/lib/nigeria-locations";
 
 // ─── Types ───
 
@@ -79,6 +85,14 @@ type Suggestion = {
   createdAt: string;
   score: number;
   reason: string;
+};
+
+type QuestionnaireQuestion = {
+  id: number;
+  question: string;
+  type: string;
+  options?: string[];
+  required?: boolean;
 };
 
 // ─── Category metadata with Soke brand colors ───
@@ -147,16 +161,14 @@ export default function Feeds() {
   const { recordEvent } = useBrowsingTracker();
   const trackedRef = useRef<Set<number>>(new Set());
 
-  // Geo filters for feeds
+  // Geo filters for feeds (state and lga only)
   const [geoFilter, setGeoFilter] = useState({
-    country: "",
-    region: "",
     state: "",
     lga: "",
   });
 
-  // Fetch geo hierarchy for filter dropdowns
-  const { data: geoHierarchy } = useQuery<{ countries: string[]; regions: string[]; states: string[]; lgas: string[] }>({
+  // Fetch geo hierarchy for filter dropdowns (states and lgas only)
+  const { data: geoHierarchy } = useQuery<{ states: string[]; lgas: string[] }>({
     queryKey: ["/api/geo/hierarchy"],
   });
 
@@ -166,8 +178,6 @@ export default function Feeds() {
     queryFn: async ({ queryKey }) => {
       const [, filter] = queryKey as [string, typeof geoFilter];
       const params = new URLSearchParams();
-      if (filter.country) params.set("country", filter.country);
-      if (filter.region) params.set("region", filter.region);
       if (filter.state) params.set("state", filter.state);
       if (filter.lga) params.set("lga", filter.lga);
       const qs = params.toString();
@@ -180,6 +190,32 @@ export default function Feeds() {
     refetchOnWindowFocus: true,
   });
 
+  // Fetch recent truths directly (not just neighborhood-grouped)
+  const { data: recentTruths } = useQuery({
+    queryKey: ["/api/truths", geoFilter],
+    queryFn: async ({ queryKey }) => {
+      const [, filter] = queryKey as [string, typeof geoFilter];
+      const params = new URLSearchParams({ limit: "50" });
+      if (filter.state) params.set("state", filter.state);
+      if (filter.lga) params.set("lga", filter.lga);
+      const res = await apiRequest("GET", `/api/truths?${params.toString()}`);
+      return res.json();
+    },
+    enabled: isLoaded,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
+  });
+
+  // Fetch active polls
+  const { data: pollsData } = useQuery({
+    queryKey: ["/api/polls"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/polls?limit=5");
+      return res.json();
+    },
+    enabled: isLoaded,
+  });
+
   // Fetch AI suggestions
   const { data: suggestionsData } = useQuery<{ suggestions: Suggestion[] }>({
     queryKey: ["/api/feed/suggestions"],
@@ -188,6 +224,23 @@ export default function Feeds() {
       return res.json();
     },
     enabled: isLoaded && isSignedIn,
+  });
+
+  // Fetch active questionnaire questions
+  const { data: questionnaireData } = useQuery<{ questions: QuestionnaireQuestion[] }>({
+    queryKey: ["/api/questionnaire/manage"],
+  });
+
+  const submitAnswerMutation = useMutation({
+    mutationFn: (data: { questionId: number; answer: string }) =>
+      apiRequest("POST", "/api/questionnaire/manage/answer", data),
+    onSuccess: () => {
+      toast({ title: "Answer submitted" });
+      queryClient.invalidateQueries({ queryKey: ["/api/questionnaire/manage"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to submit answer", variant: "destructive" });
+    },
   });
 
   useEffect(() => {
@@ -241,37 +294,21 @@ export default function Feeds() {
         <div className="rounded-xl p-3 space-y-2 bg-card border border-border">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-medium uppercase text-muted-foreground">Filter by Location</span>
-            {(geoFilter.region || geoFilter.state || geoFilter.lga) && (
+            {(geoFilter.state || geoFilter.lga) && (
               <button
-                onClick={() => setGeoFilter({ country: "", region: "", state: "", lga: "" })}
+                onClick={() => setGeoFilter({ state: "", lga: "" })}
                 className="text-[10px] text-primary hover:underline"
               >Clear</button>
             )}
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <select
-              value={geoFilter.country}
-              onChange={(e) => setGeoFilter(f => ({ ...f, country: e.target.value, region: "", state: "", lga: "" }))}
-              className="h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
-            >
-              <option value="">All Countries</option>
-              {(geoHierarchy?.countries || []).map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select
-              value={geoFilter.region}
-              onChange={(e) => setGeoFilter(f => ({ ...f, region: e.target.value, state: "", lga: "" }))}
-              className="h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
-            >
-              <option value="">All Regions</option>
-              {(geoHierarchy?.regions || []).map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
+          <div className="grid grid-cols-2 gap-2">
             <select
               value={geoFilter.state}
               onChange={(e) => setGeoFilter(f => ({ ...f, state: e.target.value, lga: "" }))}
               className="h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
             >
               <option value="">All States</option>
-              {(geoHierarchy?.states || []).map(s => <option key={s} value={s}>{s}</option>)}
+              {(geoHierarchy?.states?.length ? geoHierarchy.states : NIGERIA_STATES).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <select
               value={geoFilter.lga}
@@ -279,7 +316,7 @@ export default function Feeds() {
               className="h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
             >
               <option value="">All L.G.A</option>
-              {(geoHierarchy?.lgas || []).map(l => <option key={l} value={l}>{l}</option>)}
+              {(geoFilter.state ? getLgasForState(geoFilter.state) : (geoHierarchy?.lgas || [])).map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </div>
         </div>
@@ -294,6 +331,67 @@ export default function Feeds() {
             Auto-refreshing every 5s · Live
           </span>
         </div>
+
+        {/* ─── Recent Posts (direct truth feed) ─── */}
+        {recentTruths?.truths && recentTruths.truths.length > 0 && (
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <Newspaper className="h-4 w-4 text-primary" />
+              Recent Posts
+              <span className="text-[10px] text-muted-foreground font-normal">
+                ({recentTruths.truths.length})
+              </span>
+            </h2>
+            <div className="grid gap-2">
+              {recentTruths.truths.slice(0, 15).map((truth: any) => (
+                <Card key={truth.id} className="border-border hover:border-primary/30 transition-colors">
+                  <CardContent className="p-3 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {truth.category && (
+                          <Badge variant="secondary" className="text-[9px]">
+                            {truth.category}
+                          </Badge>
+                        )}
+                        {truth.neighborhoodName && (
+                          <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                            <MapPin className="h-2.5 w-2.5" />
+                            {truth.neighborhoodName}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[9px] text-muted-foreground">
+                        {new Date(truth.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-foreground line-clamp-2">{truth.content}</p>
+                    <div className="flex items-center gap-3 pt-1">
+                      <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                        <ShieldCheck className="h-2.5 w-2.5" />
+                        Trust: {truth.trustScore ?? 50}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ─── Active Polls ─── */}
+        {pollsData?.polls && pollsData.polls.length > 0 && (
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <BarChart3 className="h-4 w-4 text-primary" />
+              Active Polls
+            </h2>
+            <div className="grid gap-2">
+              {pollsData.polls.map((poll: any) => (
+                <PollCard key={poll.id} pollId={poll.id} />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ─── Additional dashboard widgets row (POS, Weather, Scam Alerts) ─── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -389,7 +487,105 @@ export default function Feeds() {
             ))}
           </div>
         )}
+
+        {/* ─── News Section ─── */}
+        <div className="pt-2">
+          <NewsFeed />
+        </div>
+
+        {/* ─── Questionnaire Section ─── */}
+        {questionnaireData?.questions && questionnaireData.questions.length > 0 && (
+          <div className="rounded-2xl p-4 space-y-3 bg-card border border-border">
+            <div className="flex items-center gap-2">
+              <ClipboardList className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold text-foreground">Active Questionnaire</h2>
+            </div>
+            <div className="space-y-3">
+              {questionnaireData.questions.map((q, i) => (
+                <motion.div
+                  key={q.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: i * 0.08 }}
+                  className="rounded-xl border border-border p-3 space-y-2"
+                >
+                  <p className="text-xs font-medium text-foreground">
+                    {q.question}
+                    {q.required && <span className="text-red-500 ml-0.5">*</span>}
+                  </p>
+                  <QuestionnaireItem
+                    question={q}
+                    onSubmit={(answer) => submitAnswerMutation.mutate({ questionId: q.id, answer })}
+                    isPending={submitAnswerMutation.isPending}
+                  />
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+// ─── Questionnaire Item (inline answer) ───
+
+function QuestionnaireItem({
+  question,
+  onSubmit,
+  isPending,
+}: {
+  question: QuestionnaireQuestion;
+  onSubmit: (answer: string) => void;
+  isPending: boolean;
+}) {
+  const [answer, setAnswer] = useState("");
+
+  const handleSubmit = () => {
+    if (!answer.trim()) return;
+    onSubmit(answer.trim());
+    setAnswer("");
+  };
+
+  if (question.options && question.options.length > 0) {
+    return (
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-1.5">
+          {question.options.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => onSubmit(opt)}
+              disabled={isPending}
+              className="rounded-md border border-border px-2.5 py-1 text-[11px] hover:border-primary/30 hover:bg-primary/5 transition-colors disabled:opacity-50"
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-2">
+      <input
+        value={answer}
+        onChange={(e) => setAnswer(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !isPending) handleSubmit();
+        }}
+        placeholder="Your answer..."
+        className="flex-1 h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
+      />
+      <Button
+        size="sm"
+        onClick={handleSubmit}
+        disabled={isPending || !answer.trim()}
+        className="h-8 px-3 text-xs gap-1"
+      >
+        <SendIcon className="h-3 w-3" />
+        Submit
+      </Button>
     </div>
   );
 }
@@ -641,7 +837,6 @@ function ReportDialog({
   const meta = CATEGORY_META[report.category] || CATEGORY_META.safety;
   const Icon = meta.icon;
   const { toast } = useToast();
-  const [showComments, setShowComments] = useState(false);
   const [reportSubmitted, setReportSubmitted] = useState(false);
 
   const handleShare = async () => {
@@ -703,15 +898,14 @@ function ReportDialog({
         <AIPredictionSection truthId={report.id} />
         {/* Actions */}
         <div className="flex items-center gap-0.5 pt-2 border-t border-border">
+          <LikeButton truthId={report.id} />
           <Button size="sm" variant="ghost" onClick={() => onVerify("corroborate")} disabled={isPending} className="h-8 w-8 p-0" title="Corroborate" aria-label="Corroborate">
             <ThumbsUp className="h-4 w-4 text-green-500" />
           </Button>
           <Button size="sm" variant="ghost" onClick={() => onVerify("dispute")} disabled={isPending} className="h-8 w-8 p-0" title="Dispute" aria-label="Dispute">
             <ThumbsDown className="h-4 w-4 text-red-500" />
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => setShowComments(s => !s)} className="h-8 w-8 p-0" title="Comment" aria-label="Comment">
-            <MessageCircle className="h-4 w-4 text-muted-foreground" />
-          </Button>
+          <FeedComments truthId={report.id} commentCount={0} setCommentCount={() => {}} />
           <Button size="sm" variant="ghost" onClick={handleShare} className="h-8 w-8 p-0" title="Share" aria-label="Share">
             <Share2 className="h-4 w-4 text-muted-foreground" />
           </Button>
@@ -719,7 +913,6 @@ function ReportDialog({
             <Flag className={`h-4 w-4 ${reportSubmitted ? "text-red-500" : "text-muted-foreground"}`} />
           </Button>
         </div>
-        {showComments && <InlineComments truthId={report.id} />}
       </div>
     </DialogContent>
   );
@@ -921,71 +1114,63 @@ function AIPredictionSection({ truthId }: { truthId: number }) {
   );
 }
 
-// ─── Inline Comments ───
+// ─── Like Button with Counter ───
 
-function InlineComments({ truthId }: { truthId: number }) {
-  const [comments, setComments] = useState<Array<{ id: number; userHash: string; content: string; createdAt: string }>>([]);
-  const [newComment, setNewComment] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+function LikeButton({ truthId }: { truthId: number }) {
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const res = await apiRequest("GET", `/api/truths/${truthId}/comments`);
-        if (active) setComments(await res.json());
+        const res = await apiRequest("GET", `/api/truths/${truthId}/like`);
+        if (active && res.ok) {
+          const data = await res.json();
+          setLiked(data.liked ?? false);
+          setLikeCount(data.likeCount ?? 0);
+        }
       } catch { /* ignore */ }
       finally { if (active) setLoading(false); }
     })();
     return () => { active = false; };
   }, [truthId]);
 
-  const handleSubmit = async () => {
-    if (!newComment.trim()) return;
-    setSubmitting(true);
+  const toggleLike = async () => {
     try {
-      const res = await apiRequest("POST", `/api/truths/${truthId}/comments`, { content: newComment.trim() });
-      const data = await res.json();
-      setComments(prev => [...prev, data]);
-      setNewComment("");
-    } catch {
-      // Comment failed - likely not signed in
-    } finally {
-      setSubmitting(false);
-    }
+      const res = await apiRequest("POST", `/api/truths/${truthId}/like`);
+      if (res.ok) {
+        const data = await res.json();
+        setLiked(data.liked ?? !liked);
+        setLikeCount(data.likeCount ?? likeCount);
+      }
+    } catch { /* ignore */ }
   };
 
+  if (loading) {
+    return (
+      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" disabled>
+        <Heart className="h-4 w-4 text-muted-foreground" />
+      </Button>
+    );
+  }
+
   return (
-    <div className="space-y-2 pt-1 border-t border-border">
-      {loading ? (
-        <p className="text-[10px] text-muted-foreground">Loading comments...</p>
-      ) : comments.length === 0 ? (
-        <p className="text-[10px] text-muted-foreground">No comments yet. Be the first to comment.</p>
-      ) : (
-        <div className="space-y-1.5 max-h-40 overflow-y-auto">
-          {comments.map(c => (
-            <div key={c.id} className="rounded-md p-1.5 bg-muted/30">
-              <p className="text-[10px] text-muted-foreground">
-                {c.userHash?.slice(0, 8) || "Anonymous"} · {timeAgo(c.createdAt)}
-              </p>
-              <p className="text-xs text-foreground">{c.content}</p>
-            </div>
-          ))}
-        </div>
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={toggleLike}
+      className="h-8 px-2 gap-1"
+      title="Like"
+      aria-label="Like"
+    >
+      <motion.span whileTap={{ scale: 1.3 }}>
+        <Heart className={`h-4 w-4 ${liked ? "text-red-500 fill-red-500" : "text-muted-foreground"}`} />
+      </motion.span>
+      {likeCount > 0 && (
+        <span className="text-[10px] font-medium text-muted-foreground">{likeCount}</span>
       )}
-      <div className="flex gap-1.5">
-        <input
-          value={newComment}
-          onChange={e => setNewComment(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter" && !submitting) handleSubmit(); }}
-          placeholder="Write a comment..."
-          className="flex-1 h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
-        />
-        <Button size="sm" onClick={handleSubmit} disabled={submitting || !newComment.trim()} className="h-8 px-3 text-xs">
-          {submitting ? <Loader2 className="h-3 w-3 animate-spin" /> : "Post"}
-        </Button>
-      </div>
-    </div>
+    </Button>
   );
 }

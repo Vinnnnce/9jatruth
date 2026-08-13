@@ -87,6 +87,8 @@ import {
   Loader2,
   Sparkles,
   MessageSquare,
+  X,
+  Package,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -202,6 +204,40 @@ type SystemHealth = {
   stats?: { totalTruths: number; totalNeighborhoods: number; activeDevices: number };
 };
 
+type RewardRedemption = {
+  id: number;
+  userHash: string;
+  rewardType: string;
+  rewardCategory: string;
+  amount: number;
+  status: string;
+  description?: string | null;
+  recipientPhone?: string | null;
+  recipientName?: string | null;
+  networkProvider?: string | null;
+  giftCardCode?: string | null;
+  voucherCode?: string | null;
+  voucherStoreName?: string | null;
+  adminNotes?: string | null;
+  processedBy?: string | null;
+  processedAt?: string | null;
+  createdAt: string;
+};
+
+type RewardRedemptionsResponse = {
+  redemptions: RewardRedemption[];
+  stats: {
+    total: number;
+    pending: number;
+    approved: number;
+    fulfilled: number;
+    denied: number;
+    totalFulfilledAmount: number;
+  };
+  limit: number;
+  offset: number;
+};
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -220,6 +256,14 @@ const CHART_COLORS = [
 ];
 
 const ROLE_OPTIONS = ["user", "admin", "org_admin"];
+
+const REWARD_STATUS_OPTIONS = [
+  { value: "all", label: "All Statuses" },
+  { value: "pending", label: "Pending" },
+  { value: "approved", label: "Approved" },
+  { value: "denied", label: "Denied" },
+  { value: "fulfilled", label: "Fulfilled" },
+] as const;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -248,6 +292,15 @@ function statusBadgeClass(status: string): string {
   if (status === "suspended" || status === "degraded" || status === "down")
     return "bg-red-500/15 text-red-600 dark:text-red-400 hover:bg-red-500/20";
   return "bg-muted text-muted-foreground";
+}
+
+function rewardStatusBadgeVariant(
+  status: string
+): "default" | "secondary" | "outline" | "destructive" {
+  if (status === "fulfilled") return "default";
+  if (status === "approved") return "secondary";
+  if (status === "denied") return "destructive";
+  return "outline";
 }
 
 function shortHash(hash?: string | null): string {
@@ -309,6 +362,7 @@ export default function AdminDashboard() {
   const [userSearch, setUserSearch] = useState("");
   const [truthSearch, setTruthSearch] = useState("");
   const [geoFilters, setGeoFilters] = useState<GeoFilters>(EMPTY_FILTERS);
+  const [rewardStatusFilter, setRewardStatusFilter] = useState<string>("all");
 
   // Profile — super admin gate
   const { data: profile, isLoading: profileLoading, isError: profileError } = useQuery<UserProfile>({
@@ -378,6 +432,52 @@ export default function AdminDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       toast({ title: "User updated", description: "The user record was updated successfully." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // Reward redemptions list (filtered by status)
+  const rewardsQueryKey = useMemo(() => {
+    const params = new URLSearchParams();
+    if (rewardStatusFilter && rewardStatusFilter !== "all") {
+      params.set("status", rewardStatusFilter);
+    }
+    const qs = params.toString();
+    return qs ? `/api/admin/rewards?${qs}` : "/api/admin/rewards";
+  }, [rewardStatusFilter]);
+
+  const {
+    data: rewardsData,
+    isLoading: rewardsLoading,
+    isError: rewardsError,
+  } = useQuery<RewardRedemptionsResponse>({
+    queryKey: [rewardsQueryKey],
+    enabled: isSuperAdmin,
+    retry: 1,
+  });
+
+  const redemptions = rewardsData?.redemptions ?? [];
+
+  // Reward redemption status mutation (approve/deny/fulfill)
+  const updateRedemptionMutation = useMutation({
+    mutationFn: async ({
+      id,
+      status,
+    }: {
+      id: number;
+      status: "approved" | "denied" | "fulfilled";
+    }) => {
+      const res = await apiRequest("PUT", `/api/admin/rewards/${id}`, { status });
+      return res.json();
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/rewards"] });
+      toast({
+        title: `Redemption ${vars.status}`,
+        description: `Redemption #${vars.id} has been ${vars.status}.`,
+      });
     },
     onError: (err: Error) => {
       toast({ title: "Update failed", description: err.message, variant: "destructive" });
@@ -1433,6 +1533,193 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Reward Redemption Management */}
+          <Card className="border-border">
+            <CardHeader className="pb-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+              <CardTitle className="text-sm font-display flex items-center gap-2">
+                <Coins className="h-4 w-4 text-primary" />
+                Reward Redemptions
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-[10px]">
+                  {rewardsData?.stats.total ?? redemptions.length} total
+                </Badge>
+                <div className="w-40">
+                  <Select
+                    value={rewardStatusFilter}
+                    onValueChange={(value) => setRewardStatusFilter(value)}
+                  >
+                    <SelectTrigger
+                      className="h-8 text-xs"
+                      data-testid="select-reward-status"
+                    >
+                      <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {REWARD_STATUS_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {rewardsError ? (
+                <div className="rounded-xl p-4 bg-card border border-red-500/30 flex items-center gap-3">
+                  <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">Failed to load redemptions</p>
+                    <p className="text-xs text-muted-foreground">The admin rewards API may be unavailable.</p>
+                  </div>
+                </div>
+              ) : rewardsLoading ? (
+                <div className="space-y-2">
+                  {[...Array(5)].map((_, i) => (
+                    <Skeleton key={i} className="h-12" />
+                  ))}
+                </div>
+              ) : redemptions.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table data-testid="table-redemptions">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>User</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Category</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {redemptions.map((r) => {
+                        const isPending = r.status === "pending";
+                        const mutating =
+                          updateRedemptionMutation.isPending &&
+                          updateRedemptionMutation.variables?.id === r.id;
+                        return (
+                          <TableRow key={r.id} data-testid={`row-redemption-${r.id}`}>
+                            <TableCell className="font-medium">
+                              <code className="text-[10px] text-muted-foreground font-mono">
+                                {shortHash(r.userHash)}
+                              </code>
+                            </TableCell>
+                            <TableCell className="text-xs capitalize">
+                              {r.rewardType || "—"}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {r.rewardCategory || "—"}
+                            </TableCell>
+                            <TableCell className="text-xs tabular-nums">
+                              {r.amount ?? 0}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={rewardStatusBadgeVariant(r.status)}
+                                className="text-[9px] capitalize"
+                              >
+                                {r.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground max-w-[16rem]">
+                              <span className="line-clamp-2">{r.description || "—"}</span>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {fmtDate(r.createdAt)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {isPending ? (
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 px-2 text-xs"
+                                    disabled={mutating}
+                                    onClick={() =>
+                                      updateRedemptionMutation.mutate({
+                                        id: r.id,
+                                        status: "approved",
+                                      })
+                                    }
+                                    data-testid={`button-approve-${r.id}`}
+                                  >
+                                    {mutating &&
+                                    updateRedemptionMutation.variables?.status ===
+                                      "approved" ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <CheckCircle2 className="h-3 w-3" />
+                                    )}
+                                    Approve
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 px-2 text-xs"
+                                    disabled={mutating}
+                                    onClick={() =>
+                                      updateRedemptionMutation.mutate({
+                                        id: r.id,
+                                        status: "denied",
+                                      })
+                                    }
+                                    data-testid={`button-deny-${r.id}`}
+                                  >
+                                    {mutating &&
+                                    updateRedemptionMutation.variables?.status ===
+                                      "denied" ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <X className="h-3 w-3" />
+                                    )}
+                                    Deny
+                                  </Button>
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    className="h-7 px-2 text-xs"
+                                    disabled={mutating}
+                                    onClick={() =>
+                                      updateRedemptionMutation.mutate({
+                                        id: r.id,
+                                        status: "fulfilled",
+                                      })
+                                    }
+                                    data-testid={`button-fulfill-${r.id}`}
+                                  >
+                                    {mutating &&
+                                    updateRedemptionMutation.variables?.status ===
+                                      "fulfilled" ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Package className="h-3 w-3" />
+                                    )}
+                                    Fulfill
+                                  </Button>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground">
+                                  {r.processedAt ? fmtDate(r.processedAt) : "—"}
+                                </span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <EmptyState icon={Coins} message="No reward redemptions found." />
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -431,6 +431,31 @@ export async function ensureDbInitialized() {
     console.log("[Soke] Geo hierarchy reference data initialized (regions & states)");
   }
 
+  // Seed LGAs for Nigerian states
+  const existingLgas = await sql`SELECT COUNT(*) as count FROM lgas`;
+  if ((existingLgas as any)[0].count === 0) {
+    const lgaData: Record<string, string[]> = {
+      Lagos: ["Agege", "Ajeromi-Ifelodun", "Alimosho", "Amuwo-Odofin", "Apapa", "Badagry", "Epe", "Eti-Osa", "Ibeju-Lekki", "Ifako-Ijaiye", "Ikeja", "Ikorodu", "Kosofe", "Lagos Island", "Lagos Mainland", "Mushin", "Ojo", "Oshodi-Isolo", "Shomolu", "Surulere"],
+      Ogun: ["Abeokuta North", "Abeokuta South", "Ado-Odo/Ota", "Egbado North", "Egbado South", "Ewekoro", "Ifo", "Ijebu East", "Ijebu North", "Ijebu North East", "Ijebu Ode", "Ikenne", "Imeko-Afon", "Ipokia", "Obafemi-Owode", "Odeda", "Odogbolu", "Remo North", "Shagamu", "Yewa South"],
+      Oyo: ["Afijio", "Akinyele", "Atiba", "Atisbo", "Egbeda", "Ibadan North", "Ibadan North East", "Ibadan North West", "Ibadan South East", "Ibadan South West", "Ibarapa Central", "Ibarapa East", "Ibarapa North", "Ido", "Irepo", "Iseyin", "Itesiwaju", "Iwajowa", "Kajola", "Lagelu", "Ogbomoso North", "Ogbomoso South", "Ogo Oluwa", "Olorunsogo", "Oluyole", "Ona Ara", "Orelope", "Ori Ire", "Surulere", "Saki East", "Saki West", "Iseyin"],
+      FCT: ["Abaji", "Bwari", "Gwagwalada", "Kuje", "Kwali", "Municipal Area Council"],
+      Rivers: ["Abua-Odual", "Ahoada East", "Ahoada West", "Akuku-Toru", "Andoni", "Asari-Toru", "Bonny", "Degema", "Eleme", "Emuoha", "Etche", "Gokana", "Ikwerre", "Khana", "Obio-Akpor", "Ogba-Egbema-Ndoni", "Ogu-Bolo", "Okirika", "Omuma", "Opobo-Nkoro", "Oyigbo", "Port Harcourt", "Tai"],
+      Enugu: ["Aninri", "Awgu", "Enugu East", "Enugu North", "Enugu South", "Ezeagu", "Igbo Etiti", "Igbo Eze North", "Igbo Eze South", "Isi Uzo", "Nkanu East", "Nkanu West", "Nsukka", "Oji River", "Udenu", "Udi", "Uzo Uwani"],
+      Kano: ["Ajingi", "Albasu", "Bagwai", "Bebeji", "Bichi", "Bunkure", "Dala", "Dambatta", "Dawakin Kudu", "Dawakin Tofa", "Doguwa", "Fagge", "Gabasawa", "Garko", "Garun Mallam", "Gaya", "Gezawa", "Gwale", "Gwarzo", "Kabo", "Kano Municipal", "Karaye", "Kibiya", "Kiru", "Kumbotso", "Kunchi", "Kura", "Madobi", "Makoda", "Minjibir", "Nasarawa", "Rano", "Rimin Gado", "Rogo", "Shanono", "Sumaila", "Takai", "Tarauni", "Tofa", "Tsanyawa", "Tudun Wada", "Ungogo", "Warawa", "Wudil"],
+      Kaduna: ["Birnin Gwari", "Chikun", "Giwa", "Igabi", "Ikara", "Jaba", "Jema'a", "Kachia", "Kaduna North", "Kaduna South", "Kagarko", "Kajuru", "Kaura", "Kauru", "Kubau", "Kudan", "Lere", "Makarfi", "Sabon Gari", "Sanga", "Soba", "Zaria"],
+    };
+    for (const [stateName, lgaNames] of Object.entries(lgaData)) {
+      const stateRow = (await sql`SELECT id FROM states WHERE name = ${stateName}`) as any;
+      const stateId = stateRow[0]?.id;
+      if (stateId) {
+        for (const lgaName of lgaNames) {
+          await sql`INSERT INTO lgas (name, state_id) VALUES (${lgaName}, ${stateId})`;
+        }
+      }
+    }
+    console.log("[Soke] LGA reference data initialized");
+  }
+
   // Seed neighborhoods with geo hierarchy (reference data only — no demo posts)
   const existing = await sql`SELECT COUNT(*) as count FROM neighborhoods`;
   if ((existing as any)[0].count === 0) {
@@ -481,7 +506,12 @@ export async function ensureDbInitialized() {
     truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE,
     user_hash TEXT NOT NULL,
     content TEXT NOT NULL,
+    image_url TEXT,
+    sticker_id TEXT,
+    gift_id TEXT,
     parent_comment_id INTEGER REFERENCES feed_comments(id) ON DELETE CASCADE,
+    like_count INTEGER NOT NULL DEFAULT 0,
+    reply_count INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -498,6 +528,23 @@ export async function ensureDbInitialized() {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
   await sql`CREATE INDEX IF NOT EXISTS idx_feed_shares_truth ON feed_shares(truth_id)`;
+
+  // Add rich comment columns to feed_comments (idempotent)
+  await sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS image_url TEXT`;
+  await sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS sticker_id TEXT`;
+  await sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS gift_id TEXT`;
+  await sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS like_count INTEGER NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS reply_count INTEGER NOT NULL DEFAULT 0`;
+
+  // Feed comment likes table
+  await sql`CREATE TABLE IF NOT EXISTS feed_comment_likes (
+    id SERIAL PRIMARY KEY,
+    comment_id INTEGER NOT NULL REFERENCES feed_comments(id) ON DELETE CASCADE,
+    user_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(comment_id, user_hash)
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_feed_comment_likes_comment ON feed_comment_likes(comment_id)`;
 
   // User subscriptions
   await sql`CREATE TABLE IF NOT EXISTS user_subscriptions (
@@ -668,6 +715,312 @@ export async function ensureDbInitialized() {
   )`;
   await sql`CREATE INDEX IF NOT EXISTS idx_questionnaire_status ON questionnaire_responses(status)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_questionnaire_created ON questionnaire_responses(created_at DESC)`;
+
+  // ─── NEW: News System Tables ───
+
+  await sql`CREATE TABLE IF NOT EXISTS news_articles (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(300) NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    excerpt TEXT,
+    content TEXT NOT NULL,
+    cover_image_url TEXT,
+    media_urls TEXT NOT NULL DEFAULT '[]',
+    category TEXT NOT NULL DEFAULT 'general',
+    tags TEXT NOT NULL DEFAULT '[]',
+    author_id INTEGER,
+    author_name TEXT NOT NULL,
+    author_type TEXT NOT NULL DEFAULT 'agency',
+    organization_id INTEGER,
+    state TEXT,
+    lga TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    verification_badge TEXT,
+    trust_score INTEGER NOT NULL DEFAULT 50,
+    view_count INTEGER NOT NULL DEFAULT 0,
+    like_count INTEGER NOT NULL DEFAULT 0,
+    comment_count INTEGER NOT NULL DEFAULT 0,
+    accuracy_bonus INTEGER NOT NULL DEFAULT 0,
+    published_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_news_status ON news_articles(status)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_news_category ON news_articles(category)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_news_org ON news_articles(organization_id)`;
+
+  // Ensure all columns exist (for tables created before all columns were added)
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS accuracy_bonus INTEGER NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS author_id TEXT`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS verification_badge TEXT`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS trust_score INTEGER NOT NULL DEFAULT 50`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS like_count INTEGER NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS comment_count INTEGER NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS media_urls TEXT NOT NULL DEFAULT '[]'`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS cover_image_url TEXT`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS tags TEXT NOT NULL DEFAULT '[]'`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS state TEXT`;
+  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS lga TEXT`;
+
+  await sql`CREATE TABLE IF NOT EXISTS news_comments (
+    id SERIAL PRIMARY KEY,
+    article_id INTEGER NOT NULL,
+    user_hash TEXT NOT NULL,
+    author_name TEXT NOT NULL,
+    author_avatar TEXT,
+    content TEXT NOT NULL,
+    image_url TEXT,
+    sticker_id TEXT,
+    gift_id TEXT,
+    parent_comment_id INTEGER REFERENCES news_comments(id) ON DELETE CASCADE,
+    like_count INTEGER NOT NULL DEFAULT 0,
+    reply_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_news_comments_article ON news_comments(article_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_news_comments_user ON news_comments(user_hash)`;
+
+  await sql`CREATE TABLE IF NOT EXISTS news_likes (
+    id SERIAL PRIMARY KEY,
+    article_id INTEGER NOT NULL,
+    user_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(article_id, user_hash)
+  )`;
+
+  await sql`CREATE TABLE IF NOT EXISTS comment_likes (
+    id SERIAL PRIMARY KEY,
+    comment_id INTEGER NOT NULL,
+    user_hash TEXT NOT NULL,
+    article_id INTEGER NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(comment_id, user_hash)
+  )`;
+
+  // ─── NEW: Rewards System Tables ───
+
+  await sql`CREATE TABLE IF NOT EXISTS reward_categories (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    icon TEXT,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+
+  await sql`CREATE TABLE IF NOT EXISTS reward_redemptions (
+    id SERIAL PRIMARY KEY,
+    user_hash TEXT NOT NULL,
+    reward_type TEXT NOT NULL,
+    reward_category TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    description TEXT NOT NULL,
+    recipient_phone TEXT,
+    recipient_name TEXT,
+    network_provider TEXT,
+    gift_card_code TEXT,
+    voucher_store_name TEXT,
+    voucher_code TEXT,
+    admin_notes TEXT,
+    processed_by TEXT,
+    processed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_redemptions_user ON reward_redemptions(user_hash)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_redemptions_status ON reward_redemptions(status)`;
+
+  await sql`CREATE TABLE IF NOT EXISTS gift_cards (
+    id SERIAL PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    type TEXT NOT NULL,
+    brand TEXT NOT NULL,
+    face_value INTEGER NOT NULL,
+    balance INTEGER NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL DEFAULT 'NGN',
+    expiry_date TIMESTAMPTZ NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    redeemed_by TEXT,
+    redeemed_at TIMESTAMPTZ,
+    created_by TEXT NOT NULL,
+    metadata TEXT NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_gift_cards_status ON gift_cards(status)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_gift_cards_type ON gift_cards(type)`;
+
+  await sql`CREATE TABLE IF NOT EXISTS store_vouchers (
+    id SERIAL PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    store_name TEXT NOT NULL,
+    store_type TEXT NOT NULL DEFAULT 'general',
+    description TEXT,
+    discount_type TEXT NOT NULL DEFAULT 'fixed',
+    discount_value INTEGER NOT NULL,
+    min_purchase INTEGER NOT NULL DEFAULT 0,
+    max_discount INTEGER,
+    valid_from TIMESTAMPTZ NOT NULL,
+    valid_until TIMESTAMPTZ NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    used_by TEXT,
+    used_at TIMESTAMPTZ,
+    partner_business TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_vouchers_store ON store_vouchers(store_name)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_vouchers_status ON store_vouchers(status)`;
+
+  // ─── NEW: Telecom Transactions Table ───
+
+  await sql`CREATE TABLE IF NOT EXISTS telecom_transactions (
+    id SERIAL PRIMARY KEY,
+    user_hash TEXT NOT NULL,
+    phone_number TEXT NOT NULL,
+    network_provider TEXT NOT NULL,
+    service_type TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    plan_code TEXT,
+    plan_name TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    provider_ref TEXT,
+    provider TEXT,
+    error_message TEXT,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    ledger_entry_id INTEGER,
+    redemption_id INTEGER,
+    processed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_telecom_user ON telecom_transactions(user_hash)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_telecom_status ON telecom_transactions(status)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_telecom_phone ON telecom_transactions(phone_number)`;
+
+  // ─── NEW: Audit Logs Table ───
+
+  await sql`CREATE TABLE IF NOT EXISTS audit_logs (
+    id SERIAL PRIMARY KEY,
+    actor_id TEXT NOT NULL,
+    actor_name TEXT NOT NULL,
+    actor_role TEXT NOT NULL,
+    action TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id INTEGER,
+    description TEXT NOT NULL,
+    old_values TEXT,
+    new_values TEXT,
+    ip_address TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_logs(actor_id)`;
+
+  // ─── NEW: Questionnaire Management Table ───
+
+  await sql`CREATE TABLE IF NOT EXISTS questionnaires (
+    id SERIAL PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    questions TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+
+  // ─── NEW: Feedback Schedule Table ───
+
+  await sql`CREATE TABLE IF NOT EXISTS feedback_schedules (
+    id SERIAL PRIMARY KEY,
+    user_hash TEXT NOT NULL UNIQUE,
+    clerk_user_id TEXT,
+    signup_date TIMESTAMPTZ NOT NULL,
+    first_prompt_shown BOOLEAN NOT NULL DEFAULT FALSE,
+    first_prompt_date TIMESTAMPTZ,
+    last_prompt_date TIMESTAMPTZ,
+    next_prompt_date TIMESTAMPTZ,
+    feedback_count INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+
+  // ─── NEW: News Accuracy Incentives Table ───
+
+  await sql`CREATE TABLE IF NOT EXISTS news_incentives (
+    id SERIAL PRIMARY KEY,
+    article_id INTEGER NOT NULL,
+    user_hash TEXT NOT NULL,
+    incentive_type TEXT NOT NULL,
+    amount INTEGER NOT NULL DEFAULT 0,
+    badge_name TEXT,
+    trust_boost INTEGER NOT NULL DEFAULT 0,
+    reason TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_incentives_article ON news_incentives(article_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_incentives_user ON news_incentives(user_hash)`;
+
+  // Polls
+  await sql`CREATE TABLE IF NOT EXISTS polls (
+    id SERIAL PRIMARY KEY,
+    question TEXT NOT NULL,
+    content_type VARCHAR(20) DEFAULT 'truth' NOT NULL,
+    content_id INTEGER,
+    created_by VARCHAR(64) NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    expires_at TIMESTAMPTZ,
+    total_votes INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE TABLE IF NOT EXISTS poll_options (
+    id SERIAL PRIMARY KEY,
+    poll_id INTEGER REFERENCES polls(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    vote_count INTEGER DEFAULT 0,
+    display_order INTEGER DEFAULT 0
+  )`;
+  await sql`CREATE TABLE IF NOT EXISTS poll_votes (
+    id SERIAL PRIMARY KEY,
+    poll_id INTEGER REFERENCES polls(id) ON DELETE CASCADE,
+    option_id INTEGER REFERENCES poll_options(id) ON DELETE CASCADE,
+    user_hash VARCHAR(64) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(poll_id, user_hash)
+  )`;
+
+  // Scheduled content
+  await sql`CREATE TABLE IF NOT EXISTS scheduled_content (
+    id SERIAL PRIMARY KEY,
+    content_type VARCHAR(20) NOT NULL,
+    payload JSONB NOT NULL,
+    scheduled_at TIMESTAMPTZ NOT NULL,
+    status VARCHAR(20) DEFAULT 'scheduled',
+    created_by VARCHAR(64) NOT NULL,
+    published_ref_id INTEGER,
+    error_message TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_scheduled_status ON scheduled_content(status, scheduled_at)`;
+
+  // Seed default reward categories
+  const existingCats = await sql`SELECT COUNT(*) as count FROM reward_categories`;
+  if ((existingCats as any)[0].count === 0) {
+    const cats = [
+      { name: 'Airtime', description: 'Mobile phone airtime top-up', icon: 'Smartphone' },
+      { name: 'Data', description: 'Mobile data bundles', icon: 'Wifi' },
+      { name: 'Gift Cards', description: 'Digital gift cards for various brands', icon: 'Gift' },
+      { name: 'Shopping Vouchers', description: 'Discount vouchers for stores and markets', icon: 'ShoppingBag' },
+      { name: 'Cash', description: 'Cash rewards to bank account', icon: 'Wallet' },
+    ];
+    for (const c of cats) {
+      await sql`INSERT INTO reward_categories (name, description, icon) VALUES (${c.name}, ${c.description}, ${c.icon})`;
+    }
+  }
 
   initialized = true;
 }

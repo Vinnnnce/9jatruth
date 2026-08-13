@@ -1,14 +1,19 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/components/hooks/use-toast";
 import {
   User, ShieldCheck, Coins, Send, Award, TrendingUp, Clock,
-  Zap, Fuel, Car, Tag, Shield,
+  Zap, Fuel, Car, Tag, Shield, AlertTriangle, Loader2, Trash2,
 } from "lucide-react";
 
 type RewardLedger = {
@@ -300,6 +305,92 @@ export default function Profile() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ─── Danger Zone ─── */}
+      <DangerZone />
     </div>
+  );
+}
+
+function DangerZone() {
+  const router = useRouter();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [confirmText, setConfirmText] = useState("");
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const deleteMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", "/api/account"),
+    onSuccess: () => {
+      toast({ title: "Account deleted", description: "Your account has been permanently deleted." });
+      queryClient.clear();
+      router.push("/");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to delete account", description: err.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <Card className="border-destructive/30">
+      <CardHeader>
+        <CardTitle className="text-sm font-600 flex items-center gap-1.5 text-destructive">
+          <AlertTriangle className="h-4 w-4" />
+          Danger Zone
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Deleting your account is permanent. Your posts will be anonymized but remain visible.
+          Your personal data (profile, rewards, browsing history) will be permanently removed.
+        </p>
+        {!showConfirm ? (
+          <Button
+            variant="destructive"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setShowConfirm(true)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete My Account
+          </Button>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs font-500">
+              Type <span className="font-700 text-destructive">DELETE</span> to confirm:
+            </p>
+            <Input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="DELETE"
+              className="max-w-xs"
+            />
+            <div className="flex gap-2">
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={confirmText !== "DELETE" || deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate()}
+                className="gap-1.5"
+              >
+                {deleteMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+                Permanently Delete
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setShowConfirm(false); setConfirmText(""); }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

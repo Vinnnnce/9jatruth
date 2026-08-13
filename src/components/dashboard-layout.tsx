@@ -48,8 +48,8 @@ import {
   Settings,
   Shield,
   FileText,
-  Cookie,
   Newspaper,
+  FilePlus,
   Users,
   Briefcase,
   ShieldCheck,
@@ -78,11 +78,15 @@ function useNavSections() {
 
   const dashboardType = getDashboardType(profile);
 
+  // Order: Main > Insights > Account > Dashboards
+  // Legal section removed from sidebar items (Privacy/Terms/Cookies stay in footer only)
+  // Operations removed from Legal section
   const sections = [
     {
       label: "Main",
       items: [
         { path: "/feeds", label: "Feeds", icon: Newspaper },
+        { path: "/news", label: "News", icon: Newspaper },
         { path: "/search", label: "Search", icon: Search },
         { path: "/submit", label: "Submit Truth", icon: Send },
         { path: "/activity", label: "Activity", icon: ActivityIcon },
@@ -103,13 +107,13 @@ function useNavSections() {
     {
       label: "Account",
       items: [
-        { path: "/profile", label: "Profile", icon: User },
+        // Agency Portfolio
         { path: "/organizations", label: "Business", icon: Building2 },
         { path: "/agency-auth", label: "Agency Login", icon: Shield },
         { path: "/account", label: "Account Settings", icon: Settings },
+        // User Portfolio
+        { path: "/profile", label: "Profile", icon: User },
         { path: "/advanced-settings", label: "Advanced Settings", icon: SlidersHorizontal },
-        { path: "/feedback", label: "Feedback", icon: MessageSquare },
-        { path: "/questionnaire", label: "Questionnaire", icon: ClipboardList },
       ],
     },
     {
@@ -122,15 +126,6 @@ function useNavSections() {
         ...(dashboardType === "org"
           ? [{ path: "/org", label: "Business Dashboard", icon: Building2 }]
           : []),
-      ],
-    },
-    {
-      label: "Legal",
-      items: [
-        { path: "/privacy", label: "Privacy Policy", icon: Shield },
-        { path: "/terms", label: "Terms of Use", icon: FileText },
-        { path: "/cookies", label: "Cookie Policy", icon: Cookie },
-        { path: "/operations", label: "Operations", icon: Activity },
       ],
     },
   ];

@@ -1,118 +1,80 @@
-# API Routes Summary — Next.js App Router Port
+# Backend API Routes — Build Summary
 
-This document summarizes all API route handlers created under `src/app/api/` as part of porting the Express backend (`soke/server/routes.ts`) to Next.js App Router Route Handlers.
+All backend API routes for the Soke platform have been built and verified. TypeScript compiles with **zero errors**.
 
-## Shared Infrastructure
+## Files Created (36 route files)
 
-### `src/lib/api-helpers.ts`
-Shared helpers used by every route handler:
-- `getUserId(request)` — gets the Clerk user ID via `auth()` from `@clerk/nextjs/server`, hashes it (SHA-256, truncated) into a stable `dev_XXXX` userHash, with a dev fallback (`dev_1d6e`) when unauthenticated. Replaces the old `X-Visitor-Id`-based `getUserIdentity`.
-- `getClerkUserId()` — returns the raw Clerk user ID (or null) for the current request.
-- `getClientIp(request)` — extracts client IP from `x-forwarded-for`, `x-real-ip`, or `cf-connecting-ip` headers.
-- `hashIp(ip)` — SHA-256 hash of an IP for privacy-preserving storage.
-- `getIpLocation(request)` — privacy-preserving IP geolocation via ipapi.co (hashed IP + region/city/coords).
-- `sanitizeText(text)` — strips HTML tags, `javascript:` URIs, and inline event handlers.
-- `validate(schema, value)` — Zod validation returning `{ success, data }` or `{ success, error }`.
-- `validationErrorResponse(error)` — builds a 400 JSON Response, mapping Zod issues to `{ path, message }`.
-- `requireClerkAuth()` — returns the clerk user id or a 401 Response.
-- `mapZodIssues(issues)` — maps a Zod issue array to `{ path, message }`.
+### 1. News API Routes (`src/app/api/news/`)
+- `route.ts` — GET (list published articles with filters: category, state, lga, tag, search) / POST (create article with auth, Zod validation, auto-slug, author lookup from platform_users)
+- `[id]/route.ts` — GET (single article, increments view_count) / PUT (update article, dynamic field updates) / DELETE (delete article)
+- `[id]/comments/route.ts` — GET (list comments with like counts, paginated) / POST (create comment with rich content: content, imageUrl, stickerId, giftId, parentCommentId; resolves author name/avatar from Clerk)
+- `[id]/like/route.ts` — POST (toggle like on article, updates like_count)
+- `[id]/comments/[commentId]/like/route.ts` — POST (toggle like on comment, uses comment_likes table)
+- `create/route.ts` — POST (create article with media upload support — accepts JSON or multipart/form-data with file uploads, validates image/video types and sizes)
+- `verify/route.ts` — POST (admin verify article, awards accuracy incentives to reward_ledger + device_profiles, creates audit log)
+- `feed/route.ts` — GET (news feed for feeds page — returns published articles with verification badges, sorted by verified first)
 
-### `src/lib/neon-storage.ts`
-A comprehensive storage + service layer that ports the `NeonStorage` class (`soke/server/storage-neon.ts`) and the supporting service/model logic (`soke/server/services/*` and `soke/server/models/*`) to use the Neon serverless tagged-template SQL client from `@/lib/db` (`getDb()`). Every function assumes `ensureDbInitialized()` has been called by the route handler. Includes:
-- Row mappers (snake_case DB → camelCase app) for neighborhoods, truths, organizations, agency accounts, snapshots, predictions, rewards, devices.
-- Core storage: `getNeighborhoods`, `getNeighborhood`, `getTruths`, `getTruthsNearby`, `getTruth`, `createTruth`, `getDeviceProfile`, `upsertDeviceProfile`, `verifyTruth`, `getVerifications`, `getSnapshots`, `getSnapshot`, `getPredictions`, `createPrediction`, `getRewardBalance`, `getRewardLedger`, `redeemReward`, `getTrends`, `getAlerts`, `getLeaderboard`, `search`, `getActivity`, `getHealth`.
-- Organizations & agency accounts: `getOrganizations`, `getOrganization`, `createOrganization`, `getAgencyAccountByEmail/ById/ByClerkId`, `createAgencyAccount`, `updateAgencyAccount`, `updateOrganizationProfile`.
-- Ingestion: `ingestBatch` (sanitization, dedup, trust scoring).
-- Mesh sync: `handleSyncPush`, `handleSyncPull`, `getSyncStatus`.
-- Push notifications: `registerSubscription`, `unsubscribe`, `getVapidPublicKey`, `isPushConfigured`.
-- Gamification: `getGamificationProfile`, `levelFromXP`, `xpToNextLevel`.
-- Geo-clustering: `getClustersForNeighborhood`, `getHeatmapData`, `findClustersNearby`, `encodeGeohash`.
-- AI models (ported pure logic + DB-fetching wrappers): `runReportVerification`, `runLocationConsistency`, `runTimeDecayModel`, `batchDecayTruths`, `runPatternDetection`, `runPredictiveOutageModel`.
-- Prediction generation: `runAllPredictions`.
-- Auth helpers: `hashPassword` / `verifyPassword` (bcrypt).
-- Platform users (Clerk-synced): `upsertPlatformUser`, `getPlatformUserByClerkId`, `getPlatformUserOrgId`.
-- Admin / Org management: `getAdminStats`, `getPlatformUsers`, `updatePlatformUser`, `getOrgMembers`, `addOrgMember`, `updateOrgMember`, `deleteOrgMember`, `getVacancies`, `createVacancy`, `updateVacancy`, `deleteVacancy`, `getVacancyApplications`, `createVacancyApplication`.
+### 2. Rewards API Routes (`src/app/api/rewards/`)
+- `categories/route.ts` — GET (list all active reward categories)
+- `redeem/route.ts` — POST (supports airtime, data, giftcard, voucher, cash; validates type-specific fields; checks balance; deducts from device_profiles; creates ledger entry + redemption record)
+- `redemptions/route.ts` — GET (list user's redemption history with pagination and status filter)
+- `redemptions/[id]/route.ts` — GET (single redemption detail; users see own, admin sees any) / PUT (admin approve/deny/fulfill; refunds on deny; creates audit log)
+- `gift-cards/route.ts` — GET (list available gift cards) / POST (admin generate gift cards using generateGiftCardCode)
+- `gift-cards/[id]/route.ts` — GET (gift card detail) / PUT (redeem gift card; row-level locking; credits reward balance)
+- `vouchers/route.ts` — GET (list available vouchers) / POST (admin create vouchers using generateVoucherCode)
+- `vouchers/[id]/route.ts` — GET (voucher detail) / PUT (redeem voucher; calculates fixed/percentage discount; row-level locking)
 
-## Ported Route Handlers (Express → Next.js)
+### 3. Telecom API Routes (`src/app/api/telecom/`)
+- `purchase/route.ts` — POST (purchase airtime/data using purchaseAirtimeOrData; validates phone number with validatePhoneNumber; auto-detects network with detectNetwork; creates telecom_transactions record; updates linked redemption)
+- `transactions/route.ts` — GET (list user's telecom transactions with pagination and status filter)
+- `transactions/[id]/route.ts` — GET (single transaction detail)
+- `data-plans/route.ts` — GET (list available data plans per network using DATA_PLANS)
+- `verify/route.ts` — POST (verify transaction status using verifyTransaction; updates transaction status)
 
-| Express Route | Next.js File | Method(s) |
-|---|---|---|
-| `/api/neighborhoods` | `neighborhoods/route.ts` | GET |
-| `/api/neighborhoods/:id` | `neighborhoods/[id]/route.ts` | GET |
-| `/api/truths` | `truths/route.ts` | GET, POST |
-| `/api/truths/nearby` | `truths/nearby/route.ts` | GET |
-| `/api/truths/:id` | `truths/[id]/route.ts` | GET |
-| `/api/truths/:id/verify` | `truths/[id]/verify/route.ts` | POST |
-| `/api/truths/:id/verifications` | `truths/[id]/verifications/route.ts` | GET |
-| `/api/dashboard` | `dashboard/route.ts` | GET |
-| `/api/dashboard/:neighborhoodId` | `dashboard/[neighborhoodId]/route.ts` | GET |
-| `/api/predictions` | `predictions/route.ts` | GET |
-| `/api/predictions/generate` | `predictions/generate/route.ts` | POST |
-| `/api/rewards/balance` | `rewards/balance/route.ts` | GET |
-| `/api/rewards/ledger` | `rewards/ledger/route.ts` | GET |
-| `/api/rewards/redeem` | `rewards/redeem/route.ts` | POST |
-| `/api/trends` | `trends/route.ts` | GET |
-| `/api/search` | `search/route.ts` | GET |
-| `/api/activity` | `activity/route.ts` | GET |
-| `/api/alerts` | `alerts/route.ts` | GET |
-| `/api/leaderboard` | `leaderboard/route.ts` | GET |
-| `/api/health` | `health/route.ts` | GET |
-| `/api/track/ip` | `track/ip/route.ts` | GET |
-| `/api/ingest/batch` | `ingest/batch/route.ts` | POST |
-| `/api/sync/push` | `sync/push/route.ts` | POST |
-| `/api/sync/pull` | `sync/pull/route.ts` | GET |
-| `/api/sync/status` | `sync/status/route.ts` | GET |
-| `/api/push/subscribe` | `push/subscribe/route.ts` | POST |
-| `/api/push/unsubscribe` | `push/unsubscribe/route.ts` | POST |
-| `/api/push/vapid-key` | `push/vapid-key/route.ts` | GET |
-| `/api/gamification/profile` | `gamification/profile/route.ts` | GET |
-| `/api/geo/clusters` | `geo/clusters/route.ts` | GET |
-| `/api/geo/nearby` | `geo/nearby/route.ts` | GET |
-| `/api/models/verify-report` | `models/verify-report/route.ts` | POST |
-| `/api/models/location-check` | `models/location-check/route.ts` | POST |
-| `/api/models/time-decay/:truthId` | `models/time-decay/[truthId]/route.ts` | GET |
-| `/api/models/batch-decay` | `models/batch-decay/route.ts` | POST |
-| `/api/models/pattern-detect` | `models/pattern-detect/route.ts` | POST |
-| `/api/models/predictive-outage` | `models/predictive-outage/route.ts` | POST |
-| `/api/auth/agency/register` | `auth/agency/register/route.ts` | POST |
-| `/api/auth/agency/login` | `auth/agency/login/route.ts` | POST |
-| `/api/auth/logout` | `auth/logout/route.ts` | POST |
-| `/api/auth/me` | `auth/me/route.ts` | GET |
-| `/api/account/settings` | `account/settings/route.ts` | PATCH |
-| `/api/organizations` | `organizations/route.ts` | GET, POST |
-| `/api/organizations/:id` | `organizations/[id]/route.ts` | GET |
-| `/api/organizations/me/truths` | `organizations/me/truths/route.ts` | POST |
+### 4. Comments API Routes (`src/app/api/comments/`)
+- `[commentId]/like/route.ts` — POST (toggle like on a comment, returns new like count; uses comment_likes table)
+- `[commentId]/replies/route.ts` — GET (list replies to a comment via parent_comment_id; paginated)
 
-## New Dashboard Routes
+### 5. Questionnaire API Routes (`src/app/api/questionnaire/`)
+- `manage/route.ts` — GET (list all questionnaires, admin only) / POST (admin create questionnaire with questions array; full question schema validation)
+- `manage/[id]/route.ts` — GET / PUT (dynamic field updates) / DELETE (all admin only; audit logging)
 
-| Route | Next.js File | Method(s) | Purpose |
-|---|---|---|---|
-| `/api/admin/stats` | `admin/stats/route.ts` | GET | Platform-wide stats (users, orgs, truths, rewards) — admin-only |
-| `/api/admin/users` | `admin/users/route.ts` | GET | List all platform users — admin-only |
-| `/api/admin/users/:id` | `admin/users/[id]/route.ts` | PATCH | Update user role/status — admin-only |
-| `/api/org/members` | `org/members/route.ts` | GET, POST | List / invite org members |
-| `/api/org/members/:id` | `org/members/[id]/route.ts` | PATCH, DELETE | Update / remove member |
-| `/api/org/vacancies` | `org/vacancies/route.ts` | GET, POST | List / create vacancies |
-| `/api/org/vacancies/:id` | `org/vacancies/[id]/route.ts` | PATCH, DELETE | Update / delete vacancy |
-| `/api/org/vacancies/:id/applications` | `org/vacancies/[id]/applications/route.ts` | GET, POST | List / submit applications |
-| `/api/user/profile` | `user/profile/route.ts` | GET | Current user profile (auto-creates platform_users row) |
-| `/api/webhook/clerk` | `webhook/clerk/route.ts` | POST | Clerk webhook — svix signature verification, upserts platform_users |
+### 6. Feedback API Routes (`src/app/api/feedback/`)
+- `schedule/route.ts` — GET (check if feedback prompt should show — 3-day initial delay, 30-day interval, max 12 prompts) / POST (record feedback submission, auto-creates/updates schedule)
+- `schedule/check/route.ts` — GET (check feedback schedule status for current user)
 
-## Conventions Applied
+### 7. Audit Log API Routes (`src/app/api/audit/`)
+- `logs/route.ts` — GET (list audit logs with filters: entityType, actorId, action, dateRange; admin only)
+- `logs/[id]/route.ts` — GET (single audit log detail; admin only)
 
-1. **Neon SQL client**: Every handler calls `await ensureDbInitialized()` at the start, then uses the `getDb()` tagged-template client via `@/lib/neon-storage`.
-2. **Clerk auth**: `getUserId()` (async, via `await auth()`) replaces the old `getUserIdentity`/`X-Visitor-Id` flow; the Clerk user ID is hashed to a `dev_XXXX` userHash. `getClerkUserId()` is used for routes that need the raw Clerk identity.
-3. **Agency auth** (`requireAgencyAuth` in Express): replaced by Clerk `auth()` — routes look up `agency_accounts.clerk_user_id` to resolve the organization. The `organizations/me/truths` endpoint takes `organizationId` from the authenticated account, never the request body.
-4. **Admin / org routes**: gated on the caller's `platform_users.is_admin` (admin) or `platform_users.organization_id` (org) — both populated by the Clerk webhook.
-5. **Next.js 15 params**: all dynamic route handlers use `params: Promise<{...}>` and `await params`.
-6. **Clerk webhook**: verified with `svix` (`Webhook.verify`); handles `user.created`, `user.updated`, `user.deleted`.
-7. **Validation**: Zod schemas (reused from `@shared/schema`) via the shared `validate` / `validationErrorResponse` helpers.
-8. **Errors**: original HTTP status codes and messages preserved (404 not found, 403 own-truth/self-verify, 409 duplicate verify, 400 insufficient balance, etc.).
+### 8. Admin API Routes (`src/app/api/admin/`)
+- `rewards/route.ts` — GET (list all reward redemptions for admin dashboard with summary stats)
+- `rewards/[id]/route.ts` — PUT (approve/deny/fulfill redemption with audit log; refunds on deny)
+- `news/route.ts` — GET (list all news articles for admin with filters)
+- `news/[id]/route.ts` — PUT (verify/reject/archive/publish/unpublish article with incentive logic; awards accuracy bonus to reward_ledger)
+- `telecom/route.ts` — GET (list all telecom transactions with summary stats)
+- `audit/route.ts` — GET (list audit logs with filters)
 
-## File Counts
-- Route handler files: **55**
-- Shared lib files: **2** (`api-helpers.ts`, `neon-storage.ts`)
-- Total new TypeScript files: **57**
+### 9. Media Upload API Route (`src/app/api/media/`)
+- `upload/route.ts` — POST (handle image and video upload; max 60s video/60MB; images 10MB; writes to public/uploads with date-based directory structure; returns public URL)
 
-## Type Checking
-All new files pass `tsc --noEmit` with zero errors. (Pre-existing errors in unrelated frontend files — missing radix/optional packages and stale hook imports — are out of scope for this port.)
+## Patterns Followed (consistent with existing codebase)
+
+Every route follows the established patterns:
+- **`await ensureDbInitialized()`** called first in every handler
+- **`const sql = getDb()`** for raw SQL queries via Neon tagged template
+- Imports from `@/lib/db`, `@/lib/api-helpers`, `@/lib/security`
+- **Zod validation** for all request bodies and query params (using `validate()` / `validationErrorResponse()`)
+- **`getClerkUserId()`** for auth checks (returns 401 if not authenticated)
+- **`getUserId()`** for user hash (privacy-preserving SHA-256 of Clerk ID)
+- **`csrfCheck(request)`** on all mutating routes (POST/PUT/DELETE)
+- **`isSuperAdmin()`** from `@/lib/admin-auth` for all admin-only routes (returns 403)
+- **`Response.json()`** for all responses with proper status codes
+- **`sanitizeText()`** for user-provided text content
+- **Audit logging** in admin routes that modify state (rewards, news, questionnaires, gift cards, vouchers)
+- **Telecom library** (`@/lib/telecom.ts`) used for all telecom operations: `purchaseAirtimeOrData`, `verifyTransaction`, `DATA_PLANS`, `detectNetwork`, `validatePhoneNumber`, `generateGiftCardCode`, `generateVoucherCode`
+
+## Verification
+
+- TypeScript: `tsc --noEmit` passes with **zero errors** (using project's TypeScript 5.6.3)
+- All 36 files present and non-empty
