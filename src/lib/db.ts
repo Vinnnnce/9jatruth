@@ -833,6 +833,15 @@ export async function ensureDbInitialized() {
     processed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
   )`;
+  // Ensure all columns exist on reward_redemptions (for tables created before all columns were added)
+  await sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS reward_category TEXT`;
+  await sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS recipient_name TEXT`;
+  await sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS network_provider TEXT`;
+  await sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS gift_card_code TEXT`;
+  await sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS voucher_code TEXT`;
+  await sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS voucher_store_name TEXT`;
+  await sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS admin_notes TEXT`;
+  await sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS processed_by TEXT`;
   await sql`CREATE INDEX IF NOT EXISTS idx_redemptions_user ON reward_redemptions(user_hash)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_redemptions_status ON reward_redemptions(status)`;
 
