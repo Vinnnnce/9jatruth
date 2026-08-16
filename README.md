@@ -1,4 +1,4 @@
-# Soke — Eyes on the Street
+# 9jatruth — Eyes on the Street
 
 Community-driven truth reporting platform for Nigeria. Built with Next.js 15, Neon PostgreSQL, Clerk authentication, and Prisma.
 
