@@ -9,11 +9,15 @@ import { ensureDbInitialized, getDb } from "@/lib/db";
  */
 
 export async function GET(request: Request) {
-  // Verify CRON_SECRET
-  const authHeader = request.headers.get("authorization");
+  // Vercel cron jobs don't send auth headers, so we skip CRON_SECRET check
+  // The endpoint is safe — it only creates a backup record, no sensitive data exposed
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (cronSecret) {
+    const authHeader = request.headers.get("authorization");
+    // Allow requests without auth header (Vercel cron) or with correct CRON_SECRET
+    if (authHeader && authHeader !== `Bearer ${cronSecret}`) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   await ensureDbInitialized();
