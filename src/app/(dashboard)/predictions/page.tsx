@@ -101,7 +101,7 @@ export default function Predictions() {
         </div>
         <div className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-1.5">
           <Cpu className="h-3.5 w-3.5 text-primary" />
-          <span className="text-xs font-mono text-muted-foreground">soke-ai-v2</span>
+          <span className="text-xs font-mono text-muted-foreground">9jatruth-ai-v2</span>
         </div>
       </div>
 
@@ -253,7 +253,7 @@ export default function Predictions() {
             <div className="flex items-center gap-2 rounded-md bg-muted/30 px-3 py-2">
               <Cpu className="h-3.5 w-3.5 text-purple-glow" />
               <span className="text-xs">Model registry with A/B testing enabled</span>
-              <Badge variant="secondary" className="text-[9px] ml-auto">soke-ai-v2</Badge>
+              <Badge variant="secondary" className="text-[9px] ml-auto">9jatruth-ai-v2</Badge>
             </div>
           </div>
         </CardContent>

@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { MapPin, Navigation, Sparkles, Star, Loader2 } from "lucide-react";
+import { MapPin, Navigation, Sparkles, Star, Loader2, Mountain, Brain } from "lucide-react";
+import { SenseEdgePanel } from "@/components/senseedge-panel";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
@@ -57,6 +58,12 @@ const CATEGORY_FILTERS = [
 
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_API_KEY;
 const MAPTILER_STYLE = `https://api.maptiler.com/maps/hybrid/style.json?key=${MAPTILER_KEY}`;
+const MAPTILER_3D_STYLE = `https://api.maptiler.com/maps/hybrid/style.json?key=${MAPTILER_KEY}`;
+// MapTiler terrain DEM source for 3D elevation
+const MAPTILER_TERRAIN_URL = `https://api.maptiler.com/tiles/terrain-rgb/terrain-rgb.json?key=${MAPTILER_KEY}`;
+
+// senseEDGE: AI-powered geo intelligence layer using existing prediction + cluster endpoints
+const SENSEEDGE_ENABLED = true;
 
 const statusColors: Record<string, string> = {
   on: "#22c55e", available: "#22c55e", low: "#22c55e",
@@ -77,6 +84,8 @@ export default function GeoMap() {
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<DashboardData | null>(null);
   const [activeCategory, setActiveCategory] = useState("all");
   const [selectedPlace, setSelectedPlace] = useState<NearbyPlace | null>(null);
+  const [view3D, setView3D] = useState(false);
+  const [showSenseEdge, setShowSenseEdge] = useState(false);
 
   const { data: nearbyData, isLoading: nearbyLoading } = useQuery({
     queryKey: ["/api/maps/nearby", selectedNeighborhood?.neighborhood.id, activeCategory],
@@ -159,15 +168,32 @@ export default function GeoMap() {
             {MAPTILER_KEY ? (
               <div className="rounded-lg overflow-hidden" style={{ height: "450px" }} data-testid="google-map">
                 <Map
-                  key={selected.neighborhood.id}
+                  key={`${selected.neighborhood.id}-${view3D}`}
                   initialViewState={{
                     longitude: center.lng,
                     latitude: center.lat,
                     zoom: 14,
+                    pitch: view3D ? 60 : 0,
+                    bearing: view3D ? 20 : 0,
                   }}
                   mapStyle={MAPTILER_STYLE}
                   mapLib={maplibregl}
                   style={{ width: "100%", height: "100%" }}
+                  onLoad={(e) => {
+                    if (view3D && MAPTILER_KEY) {
+                      try {
+                        const map = e.target as any;
+                        map.addSource("terrain-rgb", {
+                          type: "raster-dem",
+                          url: MAPTILER_TERRAIN_URL,
+                          tileSize: 256,
+                        });
+                        map.setTerrain({ source: "terrain-rgb", exaggeration: 1.5 });
+                      } catch {
+                        // Terrain source may already exist or fail silently
+                      }
+                    }
+                  }}
                 >
                   <FullscreenControl position="top-right" />
                   <NavigationControl position="top-right" />
@@ -279,6 +305,30 @@ export default function GeoMap() {
                 </Button>
               ))}
             </div>
+
+            {/* 3D & senseEDGE toggles */}
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              <Button
+                size="sm"
+                variant={view3D ? "default" : "outline"}
+                onClick={() => setView3D(!view3D)}
+                className="h-7 text-[10px] gap-1 px-2"
+                data-testid="btn-3d-toggle"
+              >
+                <Mountain className="h-3 w-3" />
+                {view3D ? "3D Terrain On" : "3D Terrain"}
+              </Button>
+              <Button
+                size="sm"
+                variant={showSenseEdge ? "default" : "outline"}
+                onClick={() => setShowSenseEdge(!showSenseEdge)}
+                className="h-7 text-[10px] gap-1 px-2"
+                data-testid="btn-senseedge-toggle"
+              >
+                <Brain className="h-3 w-3" />
+                senseEDGE AI
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -346,6 +396,16 @@ export default function GeoMap() {
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {/* senseEDGE AI Intelligence Layer */}
+      {showSenseEdge && selected && (
+        <SenseEdgePanel
+          lat={selected.neighborhood.lat}
+          lng={selected.neighborhood.lng}
+          neighborhoodId={selected.neighborhood.id}
+          enabled={SENSEEDGE_ENABLED}
+        />
       )}
 
       {/* Nearby places list */}

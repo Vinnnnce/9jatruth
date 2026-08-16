@@ -81,7 +81,7 @@ export async function ensureDbInitialized() {
     confidence INTEGER NOT NULL DEFAULT 50,
     timeframe TEXT NOT NULL,
     trend TEXT NOT NULL DEFAULT 'stable',
-    model_version TEXT NOT NULL DEFAULT 'soke-heuristic-v1',
+    model_version TEXT NOT NULL DEFAULT '9jatruth-heuristic-v1',
     created_at TIMESTAMPTZ DEFAULT NOW()
   )`;
 
@@ -428,7 +428,7 @@ export async function ensureDbInitialized() {
       const regionId = regionRow[0]?.id;
       await sql`INSERT INTO states (name, region_id) VALUES (${s.name}, ${regionId})`;
     }
-    console.log("[Soke] Geo hierarchy reference data initialized (regions & states)");
+    console.log("[9jatruth] Geo hierarchy reference data initialized (regions & states)");
   }
 
   // Seed LGAs for Nigerian states
@@ -453,7 +453,7 @@ export async function ensureDbInitialized() {
         }
       }
     }
-    console.log("[Soke] LGA reference data initialized");
+    console.log("[9jatruth] LGA reference data initialized");
   }
 
   // Seed neighborhoods with geo hierarchy (reference data only — no demo posts)
@@ -472,7 +472,7 @@ export async function ensureDbInitialized() {
     for (const n of neighborhoods) {
       await sql`INSERT INTO neighborhoods (name, region, geo_hash, lat, lng, state, lga, community, village) VALUES (${n.name}, ${n.region}, ${n.geoHash}, ${n.lat}, ${n.lng}, ${n.state}, ${n.lga}, ${n.community}, ${n.village})`;
     }
-    console.log("[Soke] Reference data initialized (neighborhoods with geo hierarchy, no demo posts)");
+    console.log("[9jatruth] Reference data initialized (neighborhoods with geo hierarchy, no demo posts)");
   }
 
   // Notifications table

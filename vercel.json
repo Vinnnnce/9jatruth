@@ -20,7 +20,7 @@
   ],
   "headers": [
     {
-      "source": "/soke-app.apk",
+      "source": "/9jatruth-app.apk",
       "headers": [
         {
           "key": "Content-Type",
@@ -28,7 +28,7 @@
         },
         {
           "key": "Content-Disposition",
-          "value": "attachment; filename=soke-app.apk"
+          "value": "attachment; filename=9jatruth-app.apk"
         }
       ]
     }

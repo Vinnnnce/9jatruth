@@ -36,6 +36,7 @@ import {
   CheckCircle2,
   FileText,
   Loader2,
+  Trash2,
 } from "lucide-react";
 
 // ─── Types ───
@@ -120,6 +121,18 @@ export function NewsAdmin() {
     },
     onError: (err: Error) => {
       toast({ title: "Action failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteArticleMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/news/${id}`),
+    onSuccess: () => {
+      toast({ title: "Article deleted", description: "The article has been permanently removed." });
+      queryClient.invalidateQueries({ queryKey: ["/api/news/admin"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/news/feed"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -256,6 +269,24 @@ export function NewsAdmin() {
                       >
                         <Award className="h-3 w-3 text-amber-500" />
                         Award
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[10px] gap-1 text-red-500 hover:text-red-600"
+                        disabled={deleteArticleMutation.isPending && deleteArticleMutation.variables === article.id}
+                        onClick={() => {
+                          if (confirm(`Permanently delete "${article.title}"?\n\nThis cannot be undone.`)) {
+                            deleteArticleMutation.mutate(article.id);
+                          }
+                        }}
+                      >
+                        {deleteArticleMutation.isPending && deleteArticleMutation.variables === article.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3 w-3" />
+                        )}
+                        Delete
                       </Button>
                     </div>
                   </motion.div>

@@ -1,6 +1,6 @@
 # Backend API Routes — Build Summary
 
-All backend API routes for the Soke platform have been built and verified. TypeScript compiles with **zero errors**.
+All backend API routes for the 9jatruth platform have been built and verified. TypeScript compiles with **zero errors**.
 
 ## Files Created (36 route files)
 

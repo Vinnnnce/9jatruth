@@ -12,7 +12,7 @@ export default function SignUpPage() {
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="w-full max-w-md">
           <div className="mb-8 text-center">
-            <h1 className="text-2xl font-bold text-foreground">Join Soke</h1>
+            <h1 className="text-2xl font-bold text-foreground">Join 9jatruth</h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Authentication is not yet configured.
             </p>
@@ -35,7 +35,7 @@ export default function SignUpPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-foreground">Join Soke</h1>
+          <h1 className="text-2xl font-bold text-foreground">Join 9jatruth</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Create an account to start reporting and verifying truths
           </p>

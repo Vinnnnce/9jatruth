@@ -14,12 +14,12 @@ const sections: Section[] = [
   {
     title: "1. Acceptance and Formation of Agreement",
     content:
-      "These Terms of Use (\"Terms\") constitute a legally binding agreement between you (\"User\", \"you\", \"your\") and Soke (\"we\", \"us\", \"our\", or \"the Platform\") governing your access to and use of the Soke platform, including all associated websites, mobile applications, application programming interfaces, and services (collectively, the \"Services\"). By accessing, browsing, registering an account, or otherwise using the Services, you acknowledge that you have read, understood, and agree to be bound by these Terms in their entirety. If you do not agree to these Terms, you must immediately cease all use of the Services. If you are entering into this agreement on behalf of an organisation, you represent and warrant that you possess the requisite authority to bind that organisation.",
+      "These Terms of Use (\"Terms\") constitute a legally binding agreement between you (\"User\", \"you\", \"your\") and 9jatruth (\"we\", \"us\", \"our\", or \"the Platform\") governing your access to and use of the 9jatruth platform, including all associated websites, mobile applications, application programming interfaces, and services (collectively, the \"Services\"). By accessing, browsing, registering an account, or otherwise using the Services, you acknowledge that you have read, understood, and agree to be bound by these Terms in their entirety. If you do not agree to these Terms, you must immediately cease all use of the Services. If you are entering into this agreement on behalf of an organisation, you represent and warrant that you possess the requisite authority to bind that organisation.",
   },
   {
     title: "2. Description and Nature of Services",
     content:
-      "Soke is a community-driven platform for the real-time reporting, verification, and dissemination of hyperlocal conditions, including but not limited to power supply, fuel availability, traffic, commodity prices, and safety, within neighbourhoods and local government areas. The Services further encompass: a news publishing and editorial system; trust-scoring and AI-assisted authenticity verification; gamification and a rewards redemption programme (airtime, data bundles, gift cards, and shopping vouchers); location-based feed filtering; and agency and organisation dashboards. The Services are provided on an \"as is\" and \"as available\" basis. We reserve the right to modify, suspend, or discontinue any feature of the Services at any time without liability, upon reasonable notice where feasible.",
+      "9jatruth is a community-driven platform for the real-time reporting, verification, and dissemination of hyperlocal conditions, including but not limited to power supply, fuel availability, traffic, commodity prices, and safety, within neighbourhoods and local government areas. The Services further encompass: a news publishing and editorial system; trust-scoring and AI-assisted authenticity verification; gamification and a rewards redemption programme (airtime, data bundles, gift cards, and shopping vouchers via VTPass and Africa's Talking); location-based feed filtering; interactive maps with 3D terrain visualisation and senseEDGE geo intelligence; media editing tools (image filters, adjustments, and video trimming); questionnaire and feedback collection; and agency and organisation dashboards. The Services are provided on an \"as is\" and \"as available\" basis. We reserve the right to modify, suspend, or discontinue any feature of the Services at any time without liability, upon reasonable notice where feasible.",
   },
   {
     title: "3. Eligibility and Account Registration",
@@ -43,7 +43,7 @@ const sections: Section[] = [
   {
     title: "5. Intellectual Property and Licensing",
     content:
-      "All right, title, and interest in and to the Services, including the Platform's source code, design, logos, trademarks, trade names, graphics, and underlying technology, are and remain the exclusive property of Soke or its licensors, and are protected by the laws of the Federal Republic of Nigeria and international intellectual property conventions. You retain ownership of all content you submit (\"User Content\"). By submitting User Content, you grant Soke a worldwide, non-exclusive, royalty-free, sub-licensable, and transferable licence to host, store, use, reproduce, modify, adapt, publish, translate, process, analyse, display, and distribute such User Content for the purposes of operating, improving, and securing the Services, including trust scoring, AI authenticity analysis, pattern detection, and aggregated analytics. You represent and warrant that you possess all rights necessary to grant this licence and that your User Content does not infringe the rights of any third party.",
+      "All right, title, and interest in and to the Services, including the Platform's source code, design, logos, trademarks, trade names, graphics, and underlying technology, are and remain the exclusive property of 9jatruth or its licensors, and are protected by the laws of the Federal Republic of Nigeria and international intellectual property conventions. You retain ownership of all content you submit (\"User Content\"). By submitting User Content, you grant 9jatruth a worldwide, non-exclusive, royalty-free, sub-licensable, and transferable licence to host, store, use, reproduce, modify, adapt, publish, translate, process, analyse, display, and distribute such User Content for the purposes of operating, improving, and securing the Services, including trust scoring, AI authenticity analysis, pattern detection, and aggregated analytics. You represent and warrant that you possess all rights necessary to grant this licence and that your User Content does not infringe the rights of any third party.",
   },
   {
     title: "6. User-Generated Content and Moderation",
@@ -53,12 +53,12 @@ const sections: Section[] = [
   {
     title: "7. Trust Scores, Verification, and Automated Processing",
     content:
-      "Trust scores are computed using automated models incorporating report verification, location consistency, temporal decay, and pattern detection. Scores are dynamic and subject to change without notice. AI authenticity checks and predictions are generated by machine-learning models and are probabilistic in nature. Soke does not guarantee the accuracy, reliability, or completeness of any trust score, AI output, or report, and shall not be liable for any action taken or omitted in reliance thereon. You acknowledge that automated processing may inform moderation decisions, and that human review is available upon reasonable request.",
+      "Trust scores are computed using automated models incorporating report verification, location consistency, temporal decay, and pattern detection. Scores are dynamic and subject to change without notice. AI authenticity checks and predictions are generated by machine-learning models and are probabilistic in nature. 9jatruth does not guarantee the accuracy, reliability, or completeness of any trust score, AI output, or report, and shall not be liable for any action taken or omitted in reliance thereon. You acknowledge that automated processing may inform moderation decisions, and that human review is available upon reasonable request.",
   },
   {
     title: "8. Rewards, Credits, and Redemption",
     content:
-      "The rewards programme allows eligible users to earn credits for verified truth submissions and corroborations, and to redeem such credits for airtime, data bundles, gift cards, and shopping vouchers. Credits have no monetary value, are non-transferable, and constitute a limited licence to participate in the rewards programme, not a property right or financial instrument. Redemption is subject to availability, eligibility verification by third-party telecommunications providers and payment processors, and applicable terms. We reserve the right to modify credit values, redemption options, and programme terms, or to suspend or terminate the rewards programme, at any time. Fraudulent or manipulative attempts to obtain credits or redemptions will result in forfeiture, account termination, and, where applicable, referral to law enforcement.",
+      "The rewards programme allows eligible users to earn credits for verified truth submissions and corroborations, and to redeem such credits for airtime, data bundles, gift cards, and shopping vouchers fulfilled through third-party telecommunications providers (VTPass and Africa's Talking). Credits have no monetary value, are non-transferable, and constitute a limited licence to participate in the rewards programme, not a property right or financial instrument. Redemption is subject to availability, eligibility verification by third-party telecommunications providers and payment processors, and applicable terms. We reserve the right to modify credit values, redemption options, and programme terms, or to suspend or terminate the rewards programme, at any time. Fraudulent or manipulative attempts to obtain credits or redemptions will result in forfeiture, account termination, and, where applicable, referral to law enforcement.",
   },
   {
     title: "9. Third-Party Services and Links",
@@ -73,12 +73,12 @@ const sections: Section[] = [
   {
     title: "11. Limitation of Liability",
     content:
-      "To the fullest extent permitted by law, in no event shall Soke, its officers, directors, employees, agents, affiliates, or licensors be liable for any indirect, incidental, special, consequential, exemplary, or punitive damages, or any loss of profits, data, goodwill, or other intangible losses, arising out of or in connection with your use of, or inability to use, the Services, whether based on warranty, contract, tort (including negligence), statute, or any other legal theory, and whether or not we have been advised of the possibility of such damages. Our aggregate liability for all claims arising out of or relating to the Services shall not exceed the greater of (a) the amount you have paid to us in the preceding twelve (12) months, or (b) one hundred thousand Nigerian Naira (₦100,000). Nothing in these Terms shall exclude or limit liability that cannot be excluded or limited under applicable law.",
+      "To the fullest extent permitted by law, in no event shall 9jatruth, its officers, directors, employees, agents, affiliates, or licensors be liable for any indirect, incidental, special, consequential, exemplary, or punitive damages, or any loss of profits, data, goodwill, or other intangible losses, arising out of or in connection with your use of, or inability to use, the Services, whether based on warranty, contract, tort (including negligence), statute, or any other legal theory, and whether or not we have been advised of the possibility of such damages. Our aggregate liability for all claims arising out of or relating to the Services shall not exceed the greater of (a) the amount you have paid to us in the preceding twelve (12) months, or (b) one hundred thousand Nigerian Naira (₦100,000). Nothing in these Terms shall exclude or limit liability that cannot be excluded or limited under applicable law.",
   },
   {
     title: "12. Indemnification",
     content:
-      "You agree to indemnify, defend, and hold harmless Soke, its officers, directors, employees, agents, and affiliates from and against any and all claims, damages, losses, liabilities, costs, and expenses (including reasonable legal fees) arising out of or in connection with: (a) your User Content; (b) your breach or alleged breach of these Terms; (c) your violation of any law or the rights of any third party; or (d) your misuse of the Services. We reserve the right, at our own expense, to assume the exclusive defence and control of any matter subject to indemnification, in which case you will cooperate with us in asserting any available defences.",
+      "You agree to indemnify, defend, and hold harmless 9jatruth, its officers, directors, employees, agents, and affiliates from and against any and all claims, damages, losses, liabilities, costs, and expenses (including reasonable legal fees) arising out of or in connection with: (a) your User Content; (b) your breach or alleged breach of these Terms; (c) your violation of any law or the rights of any third party; or (d) your misuse of the Services. We reserve the right, at our own expense, to assume the exclusive defence and control of any matter subject to indemnification, in which case you will cooperate with us in asserting any available defences.",
   },
   {
     title: "13. Dispute Resolution and Arbitration",
@@ -110,7 +110,7 @@ const sections: Section[] = [
     list: [
       "Severability: If any provision of these Terms is held to be invalid or unenforceable, the remaining provisions shall remain in full force and effect.",
       "Waiver: No failure or delay by us in exercising any right shall constitute a waiver thereof.",
-      "Entire Agreement: These Terms, together with the Privacy Policy and Cookie Policy, constitute the entire agreement between you and Soke regarding the Services.",
+      "Entire Agreement: These Terms, together with the Privacy Policy and Cookie Policy, constitute the entire agreement between you and 9jatruth regarding the Services.",
       "Assignment: You may not assign or transfer these Terms without our prior written consent; we may assign them freely.",
       "Notices: We may provide notices via the Platform or to the email address associated with your account.",
       "Force Majeure: We shall not be liable for any failure or delay in performance due to circumstances beyond our reasonable control.",
@@ -119,7 +119,7 @@ const sections: Section[] = [
   {
     title: "19. Contact",
     content:
-      "For any legal inquiries, notices, or communications concerning these Terms, please contact us through the Platform's support channels. Notices to Soke shall be deemed delivered when received at the designated contact point.",
+      "For any legal inquiries, notices, or communications concerning these Terms, please contact us through the Platform's support channels. Notices to 9jatruth shall be deemed delivered when received at the designated contact point.",
     link: { href: "/privacy", label: "Privacy Policy" },
   },
 ];
@@ -136,7 +136,7 @@ export default function TermsOfUse() {
         </div>
         <div>
           <h1 className="text-2xl font-display font-700 gradient-text">Terms of Use</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Last updated: August 12, 2026</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Last updated: August 16, 2026</p>
         </div>
       </div>
 

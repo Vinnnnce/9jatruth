@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, parseApiError } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +21,7 @@ import { useToast } from "@/components/hooks/use-toast";
 import {
   Send, CheckCircle2, Info, MapPin, LocateFixed, Building2, Navigation, Coins, ShieldCheck, User,
   Clock, BarChart3, Plus, X, Upload, Image as ImageIcon, Video, RotateCw, RotateCcw, Crop,
-  Wand2, Trash2, Film, AlertTriangle, Loader2, Scissors,
+  Wand2, Trash2, Film, AlertTriangle, Loader2, Scissors, Sun, Contrast, Palette, Rainbow,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Slider } from "@/components/ui/slider";
@@ -50,6 +50,13 @@ const FILTERS = [
   { value: "sepia", label: "Sepia", css: "sepia(1)" },
   { value: "brighten", label: "Brighten", css: "brightness(1.4)" },
   { value: "contrast", label: "Contrast", css: "contrast(1.5)" },
+  { value: "vivid", label: "Vivid", css: "saturate(1.8) contrast(1.2)" },
+  { value: "cool", label: "Cool", css: "hue-rotate(180deg) saturate(1.3)" },
+  { value: "warm", label: "Warm", css: "sepia(0.4) saturate(1.5) brightness(1.1)" },
+  { value: "vintage", label: "Vintage", css: "sepia(0.5) contrast(1.2) brightness(0.9) saturate(1.3)" },
+  { value: "noir", label: "Noir", css: "grayscale(1) contrast(1.4) brightness(0.85)" },
+  { value: "fade", label: "Fade", css: "contrast(0.85) brightness(1.1) saturate(0.8)" },
+  { value: "invert", label: "Invert", css: "invert(1)" },
 ] as const;
 
 const ACCEPTED_MEDIA = "image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm";
@@ -71,6 +78,11 @@ type MediaItem = {
   trimEnd: number;
   overLimit: boolean;
   thumbDataUrl: string | null;
+  // Adjustment sliders (0-200, 100 = neutral)
+  brightness: number;
+  contrast: number;
+  saturate: number;
+  hueRotate: number;
 };
 
 function fmtTime(s: number): string {
@@ -295,7 +307,7 @@ export default function SubmitTruth() {
       queryClient.invalidateQueries({ queryKey: ["/api/schedule"] });
     },
     onError: (err: Error) => {
-      toast({ title: "Failed to schedule", description: err.message, variant: "destructive" });
+      toast({ title: "Failed to schedule", description: parseApiError(err), variant: "destructive" });
     },
   });
 
@@ -309,8 +321,8 @@ export default function SubmitTruth() {
       setPollQuestion("");
       setPollOptions(["", ""]);
     },
-    onError: () => {
-      toast({ title: "Poll creation failed", variant: "destructive" });
+    onError: (err: Error) => {
+      toast({ title: "Poll creation failed", description: parseApiError(err), variant: "destructive" });
     },
   });
 
@@ -375,6 +387,10 @@ export default function SubmitTruth() {
         trimEnd: 0,
         overLimit: false,
         thumbDataUrl: null,
+        brightness: 100,
+        contrast: 100,
+        saturate: 100,
+        hueRotate: 0,
       };
       setMediaItems((prev) => [...prev, item]);
 
@@ -423,12 +439,13 @@ export default function SubmitTruth() {
     }
   };
 
-  /** Render image with rotation + filter + crop aspect to a canvas, return blob */
+  /** Render image with rotation + filter + crop aspect + adjustments to a canvas, return blob */
   const renderImageToCanvas = (
     img: HTMLImageElement,
     rotation: number,
     filterCss: string,
-    aspectRatio: number | null
+    aspectRatio: number | null,
+    adjustments?: { brightness: number; contrast: number; saturate: number; hueRotate: number }
   ): HTMLCanvasElement => {
     const swap = rotation === 90 || rotation === 270;
     const naturalW = swap ? img.naturalHeight : img.naturalWidth;
@@ -456,7 +473,16 @@ export default function SubmitTruth() {
     canvas.width = outW;
     canvas.height = outH;
     const ctx = canvas.getContext("2d")!;
-    if (filterCss !== "none") ctx.filter = filterCss;
+    // Build combined filter string: preset filter + manual adjustments
+    const parts: string[] = [];
+    if (filterCss !== "none") parts.push(filterCss);
+    if (adjustments) {
+      if (adjustments.brightness !== 100) parts.push(`brightness(${adjustments.brightness}%)`);
+      if (adjustments.contrast !== 100) parts.push(`contrast(${adjustments.contrast}%)`);
+      if (adjustments.saturate !== 100) parts.push(`saturate(${adjustments.saturate}%)`);
+      if (adjustments.hueRotate !== 0) parts.push(`hue-rotate(${adjustments.hueRotate}deg)`);
+    }
+    if (parts.length > 0) ctx.filter = parts.join(" ");
     ctx.translate(outW / 2, outH / 2);
     ctx.rotate((rotation * Math.PI) / 180);
     // Draw centered; account for swap of dimensions and the crop offset
@@ -473,13 +499,14 @@ export default function SubmitTruth() {
     file: File,
     rotation: number,
     filter: string,
-    aspectRatio: string
+    aspectRatio: string,
+    adjustments?: { brightness: number; contrast: number; saturate: number; hueRotate: number }
   ) => {
     const ratio = ASPECT_RATIOS.find((a) => a.value === aspectRatio)?.ratio ?? null;
     const filterCss = FILTERS.find((f) => f.value === filter)?.css ?? "none";
     try {
       const img = await loadImage(file);
-      const canvas = renderImageToCanvas(img, rotation, filterCss, ratio);
+      const canvas = renderImageToCanvas(img, rotation, filterCss, ratio, adjustments);
       const blob: Blob = await new Promise((resolve) =>
         canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.85)
       );
@@ -491,7 +518,8 @@ export default function SubmitTruth() {
           return {
             ...m,
             editedPreview,
-            hasEdits: rotation !== 0 || filter !== "none" || aspectRatio !== "free",
+            hasEdits: rotation !== 0 || filter !== "none" || aspectRatio !== "free" ||
+              !!(adjustments && (adjustments.brightness !== 100 || adjustments.contrast !== 100 || adjustments.saturate !== 100 || adjustments.hueRotate !== 0)),
           };
         })
       );
@@ -523,21 +551,33 @@ export default function SubmitTruth() {
     if (!item) return;
     const rotation = (item.rotation + (dir === "right" ? 90 : 270)) % 360;
     updateMedia(id, { rotation });
-    applyImageEdits(id, item.file, rotation, item.filter, item.aspectRatio);
+    applyImageEdits(id, item.file, rotation, item.filter, item.aspectRatio, { brightness: item.brightness, contrast: item.contrast, saturate: item.saturate, hueRotate: item.hueRotate });
   };
 
   const handleFilterChange = (id: string, filter: string) => {
     const item = mediaItems.find((m) => m.id === id);
     if (!item) return;
     updateMedia(id, { filter });
-    applyImageEdits(id, item.file, item.rotation, filter, item.aspectRatio);
+    applyImageEdits(id, item.file, item.rotation, filter, item.aspectRatio, { brightness: item.brightness, contrast: item.contrast, saturate: item.saturate, hueRotate: item.hueRotate });
   };
 
   const handleAspectChange = (id: string, aspectRatio: string) => {
     const item = mediaItems.find((m) => m.id === id);
     if (!item) return;
     updateMedia(id, { aspectRatio });
-    applyImageEdits(id, item.file, item.rotation, item.filter, aspectRatio);
+    applyImageEdits(id, item.file, item.rotation, item.filter, aspectRatio, { brightness: item.brightness, contrast: item.contrast, saturate: item.saturate, hueRotate: item.hueRotate });
+  };
+
+  const handleAdjustmentChange = (id: string, key: "brightness" | "contrast" | "saturate" | "hueRotate", value: number) => {
+    const item = mediaItems.find((m) => m.id === id);
+    if (!item) return;
+    updateMedia(id, { [key]: value } as Partial<MediaItem>);
+    applyImageEdits(id, item.file, item.rotation, item.filter, item.aspectRatio, { 
+      brightness: key === "brightness" ? value : item.brightness, 
+      contrast: key === "contrast" ? value : item.contrast, 
+      saturate: key === "saturate" ? value : item.saturate, 
+      hueRotate: key === "hueRotate" ? value : item.hueRotate 
+    });
   };
 
   const handleTrimChange = (id: string, start: number, end: number) => {
@@ -897,6 +937,61 @@ export default function SubmitTruth() {
                           Edits applied
                         </p>
                       )}
+                      {/* Adjustment sliders */}
+                      <div className="space-y-1 pt-1 border-t border-border/50">
+                        <div className="flex items-center gap-1.5">
+                          <Sun className="h-2.5 w-2.5 text-amber-500 shrink-0" />
+                          <span className="text-[9px] text-muted-foreground w-16">Brightness</span>
+                          <Slider
+                            value={[m.brightness]}
+                            min={0}
+                            max={200}
+                            step={5}
+                            onValueChange={(v) => handleAdjustmentChange(m.id, "brightness", v[0])}
+                            className="flex-1"
+                          />
+                          <span className="text-[9px] text-muted-foreground w-7 text-right tabular-nums">{m.brightness}%</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Contrast className="h-2.5 w-2.5 text-blue-500 shrink-0" />
+                          <span className="text-[9px] text-muted-foreground w-16">Contrast</span>
+                          <Slider
+                            value={[m.contrast]}
+                            min={0}
+                            max={200}
+                            step={5}
+                            onValueChange={(v) => handleAdjustmentChange(m.id, "contrast", v[0])}
+                            className="flex-1"
+                          />
+                          <span className="text-[9px] text-muted-foreground w-7 text-right tabular-nums">{m.contrast}%</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Palette className="h-2.5 w-2.5 text-purple-500 shrink-0" />
+                          <span className="text-[9px] text-muted-foreground w-16">Saturation</span>
+                          <Slider
+                            value={[m.saturate]}
+                            min={0}
+                            max={200}
+                            step={5}
+                            onValueChange={(v) => handleAdjustmentChange(m.id, "saturate", v[0])}
+                            className="flex-1"
+                          />
+                          <span className="text-[9px] text-muted-foreground w-7 text-right tabular-nums">{m.saturate}%</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Rainbow className="h-2.5 w-2.5 text-green-500 shrink-0" />
+                          <span className="text-[9px] text-muted-foreground w-16">Hue</span>
+                          <Slider
+                            value={[m.hueRotate]}
+                            min={0}
+                            max={360}
+                            step={10}
+                            onValueChange={(v) => handleAdjustmentChange(m.id, "hueRotate", v[0])}
+                            className="flex-1"
+                          />
+                          <span className="text-[9px] text-muted-foreground w-7 text-right tabular-nums">{m.hueRotate}°</span>
+                        </div>
+                      </div>
                     </div>
                   )}
 

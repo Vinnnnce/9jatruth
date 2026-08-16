@@ -125,7 +125,7 @@ async function vtpassPurchase(req: TelecomRequest): Promise<TelecomResult> {
     ? "https://sandbox.vtpass.com/api"
     : "https://vtpass.com/api";
 
-  const requestId = `SOKE-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+  const requestId = `9JATRUTH-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
   const serviceID = req.serviceType === "airtime" ? req.network.toLowerCase() : req.network.toLowerCase();
 
   try {

@@ -190,7 +190,7 @@ export async function POST(request: Request) {
         if (state) locationParts.push(state);
         const location = locationParts.join(", ") || "Nigeria";
 
-        const systemPrompt = `You are an expert Nigerian news writer and editor for a civic journalism platform called Soke. You write clear, accurate, and engaging news articles about events and topics relevant to Nigerian communities.
+        const systemPrompt = `You are an expert Nigerian news writer and editor for a civic journalism platform called 9jatruth. You write clear, accurate, and engaging news articles about events and topics relevant to Nigerian communities.
 
 Your task: write a full news article about the given topic.
 

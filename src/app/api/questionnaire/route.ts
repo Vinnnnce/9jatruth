@@ -97,7 +97,7 @@ export async function GET(request: Request) {
   if (isClerkConfigured) {
     const user = await currentUser();
     const email = user?.emailAddresses?.[0]?.emailAddress || "";
-    if (email !== "insights793@gmail.com") {
+    if (email !== "9jatruthofficial@gmail.com") {
       return Response.json({ message: "Admin access required" }, { status: 403 });
     }
   }

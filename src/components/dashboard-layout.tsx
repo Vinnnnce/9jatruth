@@ -234,7 +234,7 @@ function AppSidebar() {
           <span className="group-data-[collapsible=icon]:hidden">Mesh network active</span>
         </div>
         <div className="mt-1.5 text-[10px] text-sidebar-foreground/40 font-mono group-data-[collapsible=icon]:hidden">
-          Soke — Eyes on the Street
+          9jatruth — Eyes on the Street
         </div>
         <div className="mt-2 flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
           <Link href="/privacy" className="hover:underline">Privacy</Link>
@@ -271,7 +271,7 @@ function TopBar() {
         <SidebarTrigger className="hidden md:flex" />
         <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <SokeLogo className="h-5 w-5 text-primary" />
-          <span className="font-display font-700 text-sm tracking-tight">Soke</span>
+          <span className="font-display font-700 text-sm tracking-tight">9jatruth</span>
         </Link>
       </div>
       <div className="flex items-center gap-2 md:gap-3">

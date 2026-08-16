@@ -1798,7 +1798,7 @@ export async function runAllPredictions() {
 
   if (isKimiConfigured()) {
     const model = getKimiModel();
-    const systemPrompt = `You are an AI analyst for Soke, a community truth-reporting platform for Nigerian neighborhoods. Analyze the provided neighborhood data and generate actionable predictions about infrastructure and safety conditions. Each prediction should include category, prediction text, confidence (0-100), timeframe, and trend (up/down/stable/risk).`;
+    const systemPrompt = `You are an AI analyst for 9jatruth, a community truth-reporting platform for Nigerian neighborhoods. Analyze the provided neighborhood data and generate actionable predictions about infrastructure and safety conditions. Each prediction should include category, prediction text, confidence (0-100), timeframe, and trend (up/down/stable/risk).`;
 
     for (const neighborhood of allNeighborhoods) {
       const snapshot = allSnapshots.find((s) => s.neighborhoodId === neighborhood.id);
@@ -2551,7 +2551,7 @@ export async function generatePostSuggestions(opts: {
   let sourceModel = "heuristic";
 
   if (isKimiConfigured() && topSuggestions.length > 0 && profile) {
-    const systemPrompt = "You are a recommendation AI for Soke, a community truth platform. Given a user's browsing profile and candidate posts, enhance the recommendation reasons to be more personal and engaging. Keep reasons under 100 characters.";
+    const systemPrompt = "You are a recommendation AI for 9jatruth, a community truth platform. Given a user's browsing profile and candidate posts, enhance the recommendation reasons to be more personal and engaging. Keep reasons under 100 characters.";
 
     const userPrompt = `User profile: ${JSON.stringify({
       topCategories: profile.topCategories,
@@ -2805,7 +2805,7 @@ export async function generateWeeklyReviews() {
 
   if (isKimiConfigured() && reviews.length > 0) {
     const model = getKimiModel();
-    const systemPrompt = "You are an analytics AI for Soke, a community truth platform. Generate concise, insightful weekly review summaries for users. Keep each summary under 200 characters. Focus on engagement patterns and actionable insights.";
+    const systemPrompt = "You are an analytics AI for 9jatruth, a community truth platform. Generate concise, insightful weekly review summaries for users. Keep each summary under 200 characters. Focus on engagement patterns and actionable insights.";
 
     for (const review of reviews.slice(0, 50)) {
       const userPrompt = `Generate a weekly review summary for this user:
@@ -3111,7 +3111,7 @@ export async function generateLocationBasedPredictions(userLocation: {
     };
 
     if (isKimiConfigured()) {
-      const systemPrompt = `You are an AI analyst for Soke, a community truth platform for Nigerian neighborhoods. Analyze the provided data including recent reports and historical time-series patterns. Generate 1-3 accurate, actionable predictions about what's likely to happen in this area. Consider seasonal patterns, recurring events, and current trends.`;
+      const systemPrompt = `You are an AI analyst for 9jatruth, a community truth platform for Nigerian neighborhoods. Analyze the provided data including recent reports and historical time-series patterns. Generate 1-3 accurate, actionable predictions about what's likely to happen in this area. Consider seasonal patterns, recurring events, and current trends.`;
 
       const userPrompt = `Analyze this neighborhood data and generate predictions as a JSON array:
 ${JSON.stringify(context, null, 2)}
@@ -3184,7 +3184,7 @@ Base predictions on:
           confidence: Math.round(confidence),
           timeframe: "next 24h",
           trend,
-          modelVersion: "soke-heuristic-v2",
+          modelVersion: "9jatruth-heuristic-v2",
         });
         predictions.push(created);
       }

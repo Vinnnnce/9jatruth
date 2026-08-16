@@ -4,7 +4,7 @@ export function SokeLogo({ className = "h-8 w-8" }: { className?: string }) {
   return (
     <Image
       src="/logo.png"
-      alt="Soke Logo"
+      alt="9jatruth Logo"
       width={64}
       height={64}
       className={className}
@@ -18,7 +18,7 @@ export function SokeLogoFull({ className = "h-7" }: { className?: string }) {
     <div className="flex items-center gap-2.5">
       <SokeLogo className="h-7 w-7" />
       <div className="flex flex-col leading-none">
-        <span className={`font-display font-700 text-sm tracking-tight`}>Soke</span>
+        <span className={`font-display font-700 text-sm tracking-tight`}>9jatruth</span>
         <span className="text-[10px] text-muted-foreground tracking-wider uppercase">Eyes on the Street</span>
       </div>
     </div>

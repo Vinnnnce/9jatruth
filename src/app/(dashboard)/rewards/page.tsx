@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, parseApiError } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -240,7 +240,7 @@ export default function Rewards() {
       setSelectedPlan("");
     },
     onError: (err: Error) => {
-      toast({ title: "Redemption failed", description: err.message, variant: "destructive" });
+      toast({ title: "Redemption failed", description: parseApiError(err), variant: "destructive" });
     },
   });
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, parseApiError } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,7 +20,7 @@ import {
   Brain, Loader2, Sparkles, Zap, Fuel, Car, Tag,
   TrendingUp, TrendingDown, Minus,
   Building2, Gauge, CloudRain, Store, AlertTriangle, Wifi,
-  MessageCircle, Share2, Flag, Heart, BarChart3,
+  MessageCircle, Share2, Flag, Heart, BarChart3, Trash2,
 } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
 import { useUser } from "@/lib/use-user-safe";
@@ -95,7 +95,7 @@ type QuestionnaireQuestion = {
   required?: boolean;
 };
 
-// ─── Category metadata with Soke brand colors ───
+// ─── Category metadata with 9jatruth brand colors ───
 
 const CATEGORY_META: Record<string, { icon: typeof Zap; color: string; dot: string; label: string }> = {
   power:    { icon: Zap,   color: "text-warm-orange", dot: "bg-orange-500", label: "Power" },
@@ -262,6 +262,31 @@ export default function Feeds() {
     },
   });
 
+  // Delete truth/post
+  const deleteTruthMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/truths/${id}`),
+    onSuccess: () => {
+      toast({ title: "Post deleted" });
+      queryClient.invalidateQueries({ queryKey: ["/api/truths"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feed/snapshots"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Delete failed", description: parseApiError(err), variant: "destructive" });
+    },
+  });
+
+  // Delete poll
+  const deletePollMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/polls/${id}`),
+    onSuccess: () => {
+      toast({ title: "Poll deleted" });
+      queryClient.invalidateQueries({ queryKey: ["/api/polls"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Delete failed", description: parseApiError(err), variant: "destructive" });
+    },
+  });
+
   if (isLoading) {
     return (
       <div className="min-h-screen p-4 md:p-6 max-w-7xl mx-auto space-y-4">
@@ -370,6 +395,20 @@ export default function Feeds() {
                         <ShieldCheck className="h-2.5 w-2.5" />
                         Trust: {truth.trustScore ?? 50}
                       </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 w-5 p-0 ml-auto text-muted-foreground hover:text-red-500"
+                        disabled={deleteTruthMutation.isPending && deleteTruthMutation.variables === truth.id}
+                        onClick={() => {
+                          if (confirm("Delete this post? This cannot be undone.")) {
+                            deleteTruthMutation.mutate(truth.id);
+                          }
+                        }}
+                        data-testid={`button-delete-truth-${truth.id}`}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -843,7 +882,7 @@ function ReportDialog({
     const url = typeof window !== "undefined" ? `${window.location.origin}/feeds?truth=${report.id}` : `/feeds?truth=${report.id}`;
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
-        await navigator.share({ title: "Soke Truth Report", text: report.content.slice(0, 100), url });
+        await navigator.share({ title: "9jatruth Truth Report", text: report.content.slice(0, 100), url });
       } catch { /* user cancelled */ }
     } else if (typeof navigator !== "undefined" && navigator.clipboard) {
       try {

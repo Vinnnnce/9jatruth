@@ -165,7 +165,7 @@ export default function PortfolioPage() {
             My Portfolio
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Your contributions, rewards, and profile on Soke
+            Your contributions, rewards, and profile on 9jatruth
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">

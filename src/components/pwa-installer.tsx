@@ -81,7 +81,7 @@ export function PWAInstaller() {
               <div className="flex items-center gap-2">
                 <Download className="h-4 w-4 text-primary" />
                 <div>
-                  <p className="text-sm font-medium">Install Soke App</p>
+                  <p className="text-sm font-medium">Install 9jatruth App</p>
                   <p className="text-[10px] text-muted-foreground">
                     Quick access from your home screen
                   </p>

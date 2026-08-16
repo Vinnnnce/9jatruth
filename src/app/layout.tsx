@@ -11,7 +11,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const jetBrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
-  title: "Soke — Nigeria Digital Ecosystem",
+  title: "9jatruth — Nigeria Digital Ecosystem",
   description: "Community-driven truth reporting platform for Nigeria",
   manifest: "/manifest.webmanifest",
   icons: {

@@ -39,14 +39,14 @@ interface Question {
 const DEFAULT_QUESTIONS: Question[] = [
   {
     id: "usage_frequency",
-    question: "How often do you use Soke?",
+    question: "How often do you use 9jatruth?",
     type: "radio",
     options: ["Multiple times a day", "Once a day", "A few times a week", "Once a week", "Rarely"],
     required: true,
   },
   {
     id: "primary_use",
-    question: "What is your primary use for Soke?",
+    question: "What is your primary use for 9jatruth?",
     type: "select",
     options: ["Check community truths", "Report local issues", "View predictions", "Browse feeds", "Community engagement"],
     required: true,
@@ -60,13 +60,13 @@ const DEFAULT_QUESTIONS: Question[] = [
   },
   {
     id: "trust_level",
-    question: "How much do you trust the truth reports on Soke?",
+    question: "How much do you trust the truth reports on 9jatruth?",
     type: "rating",
     required: true,
   },
   {
     id: "would_recommend",
-    question: "Would you recommend Soke to others?",
+    question: "Would you recommend 9jatruth to others?",
     type: "boolean",
     required: true,
   },
@@ -74,7 +74,7 @@ const DEFAULT_QUESTIONS: Question[] = [
     id: "improvement_suggestion",
     question: "What would you like to see improved or added?",
     type: "textarea",
-    placeholder: "Share your ideas for improving Soke...",
+    placeholder: "Share your ideas for improving 9jatruth...",
     required: false,
   },
 ];
@@ -157,7 +157,7 @@ export default function QuestionnairePage() {
           <h1 className="text-xl font-display font-700">Questionnaire</h1>
         </div>
         <p className="text-sm text-muted-foreground">
-          Help us improve Soke. Your responses appear in the feeds section and are sent to the admin dashboard.
+          Help us improve 9jatruth. Your responses appear in the feeds section and are sent to the admin dashboard.
         </p>
       </motion.div>
 
@@ -172,7 +172,7 @@ export default function QuestionnairePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-display">Soke User Experience Survey</CardTitle>
+          <CardTitle className="text-sm font-display">9jatruth User Experience Survey</CardTitle>
           <CardDescription className="text-xs">
             Your feedback shapes the future of the platform.
           </CardDescription>

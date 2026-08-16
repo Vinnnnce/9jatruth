@@ -5,7 +5,7 @@
  */
 
 // The designated super admin email
-export const SUPER_ADMIN_EMAIL = "insights793@gmail.com";
+export const SUPER_ADMIN_EMAIL = "9jatruthofficial@gmail.com";
 
 /**
  * Check if a Clerk user email matches the super admin.

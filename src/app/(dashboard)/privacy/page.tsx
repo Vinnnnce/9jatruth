@@ -14,7 +14,7 @@ const sections: Section[] = [
   {
     title: "1. Introduction and Scope",
     content:
-      "Soke (\"we\", \"us\", \"our\", or \"the Platform\") is a community-driven truth-reporting and information-sharing platform operated under the laws of the Federal Republic of Nigeria. This Privacy Policy, drafted in accordance with the Nigeria Data Protection Act, 2023 (\"NDPA\") and the General Data Protection Regulation (EU) 2016/679 (\"GDPR\"), governs the collection, processing, storage, transfer, and disclosure of personal data of users (\"Data Subjects\", \"you\", \"your\") who access or utilise the Platform. By registering an account, submitting content, or otherwise interacting with the Platform, you acknowledge that you have read, understood, and consented to the data practices described herein. This Policy is incorporated by reference into, and forms an integral part of, our Terms of Use.",
+      "9jatruth (\"we\", \"us\", \"our\", or \"the Platform\") is a community-driven truth-reporting and information-sharing platform operated under the laws of the Federal Republic of Nigeria. This Privacy Policy, drafted in accordance with the Nigeria Data Protection Act, 2023 (\"NDPA\") and the General Data Protection Regulation (EU) 2016/679 (\"GDPR\"), governs the collection, processing, storage, transfer, and disclosure of personal data of users (\"Data Subjects\", \"you\", \"your\") who access or utilise the Platform. By registering an account, submitting content, or otherwise interacting with the Platform, you acknowledge that you have read, understood, and consented to the data practices described herein. This Policy is incorporated by reference into, and forms an integral part of, our Terms of Use.",
   },
   {
     title: "2. Legal Basis for Processing",
@@ -129,7 +129,7 @@ export default function PrivacyPolicy() {
         </div>
         <div>
           <h1 className="text-2xl font-display font-700 gradient-text">Privacy Policy</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Last updated: August 12, 2026</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Last updated: August 16, 2026</p>
         </div>
       </div>
 

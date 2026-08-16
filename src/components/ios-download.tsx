@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Apple, X, Download } from "lucide-react";
 
 // Placeholder App Store / TestFlight link
-const IOS_APP_URL = "https://apps.apple.com/app/soke/id000000000";
+const IOS_APP_URL = "https://apps.apple.com/app/9jatruth/id000000000";
 
 function isIOS(): boolean {
   if (typeof navigator === "undefined" || typeof window === "undefined") return false;
@@ -25,7 +25,7 @@ export function IosDownload() {
   useEffect(() => {
     if (!isIOS()) return;
     try {
-      const stored = window.localStorage.getItem("soke_ios_banner_dismissed");
+      const stored = window.localStorage.getItem("9jatruth_ios_banner_dismissed");
       if (stored === "1") {
         setDismissed(true);
         return;
@@ -42,7 +42,7 @@ export function IosDownload() {
     setShow(false);
     setDismissed(true);
     try {
-      window.localStorage.setItem("soke_ios_banner_dismissed", "1");
+      window.localStorage.setItem("9jatruth_ios_banner_dismissed", "1");
     } catch {
       // ignore
     }
@@ -63,7 +63,7 @@ export function IosDownload() {
               <Apple className="h-5 w-5 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium leading-tight">Get the Soke app</p>
+              <p className="text-sm font-medium leading-tight">Get the 9jatruth app</p>
               <p className="text-[10px] text-muted-foreground">Download for iOS for the full experience</p>
             </div>
             <motion.a

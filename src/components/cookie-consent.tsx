@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Cookie, X, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const STORAGE_KEY = "soke_cookie_consent";
+const STORAGE_KEY = "9jatruth_cookie_consent";
 
 export default function CookieConsent() {
   const [visible, setVisible] = useState(false);
@@ -52,7 +52,7 @@ export default function CookieConsent() {
           </button>
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Soke uses cookies to improve your experience, analyze traffic, and provide community features.
+          9jatruth uses cookies to improve your experience, analyze traffic, and provide community features.
           By continuing to browse, you agree to our use of cookies.
         </p>
         <div className="flex items-center gap-2">

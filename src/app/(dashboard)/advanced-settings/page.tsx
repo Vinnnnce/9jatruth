@@ -27,7 +27,7 @@ export default function AdvancedSettingsPage() {
     mutationFn: async (data: any) => {
       // Save to localStorage for now
       if (typeof window !== "undefined") {
-        localStorage.setItem("soke_advanced_settings", JSON.stringify(data));
+        localStorage.setItem("9jatruth_advanced_settings", JSON.stringify(data));
       }
       return new Promise(resolve => setTimeout(() => resolve({ success: true }), 300));
     },
@@ -141,7 +141,7 @@ export default function AdvancedSettingsPage() {
           <div className="flex items-center justify-between">
             <div>
               <Label className="text-sm">Location Tracking</Label>
-              <p className="text-xs text-muted-foreground">Allow Soke to use your location for nearby feeds</p>
+              <p className="text-xs text-muted-foreground">Allow 9jatruth to use your location for nearby feeds</p>
             </div>
             <Switch
               checked={settings.locationTracking}

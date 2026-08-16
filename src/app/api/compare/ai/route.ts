@@ -93,7 +93,7 @@ export async function POST(request: Request) {
   let aiAnalysis: string | null = null;
 
   if (isKimiConfigured()) {
-    const systemPrompt = `You are a neighborhood comparison analyst for Soke, a community truth platform. Compare two neighborhoods side-by-side based on their live conditions and metrics. Provide:
+    const systemPrompt = `You are a neighborhood comparison analyst for 9jatruth, a community truth platform. Compare two neighborhoods side-by-side based on their live conditions and metrics. Provide:
 1. Overall comparison summary (which neighborhood is better overall and why)
 2. Category-by-category breakdown (Power, Fuel, Traffic, Prices, Safety)
 3. Risk assessment for each neighborhood

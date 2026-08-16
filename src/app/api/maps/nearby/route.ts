@@ -123,7 +123,7 @@ export async function GET(request: Request) {
   // Optional AI analysis
   let aiAnalysis: string | null = null;
   if (useAI && isKimiConfigured() && allPlaces.length > 0) {
-    const systemPrompt = `You are a location intelligence AI for Soke, a community platform. Analyze the nearby places data and provide insights about:
+    const systemPrompt = `You are a location intelligence AI for 9jatruth, a community platform. Analyze the nearby places data and provide insights about:
 1. Safety assessment (proximity to police, hospitals, security)
 2. Essential services availability (pharmacies, hospitals, fuel)
 3. Commercial activity (restaurants, hotels, supermarkets)

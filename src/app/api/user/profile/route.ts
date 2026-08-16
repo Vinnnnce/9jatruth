@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
   const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
   if (!isClerkConfigured) {
-    const adminEmail = process.env.SUPER_ADMIN_EMAIL || "insights793@gmail.com";
+    const adminEmail = process.env.SUPER_ADMIN_EMAIL || "9jatruthofficial@gmail.com";
     return Response.json({
       id: "dev-admin",
       clerkUserId: "dev-admin",

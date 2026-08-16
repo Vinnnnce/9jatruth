@@ -280,7 +280,7 @@ export async function verifyTruth(truth: TruthForAnalysis): Promise<Verification
   try {
     const { isKimiConfigured, generateKimiText } = await import("@/lib/kimi");
     if (isKimiConfigured()) {
-      const systemPrompt = `You are an AI truth verification analyst for Soke, a community truth-reporting platform. Analyze the following truth report for authenticity. Consider content specificity, source credibility, community signals, and temporal patterns. Provide a concise verdict (authentic/suspicious/unverified), a confidence score (0-100), and a brief explanation.`;
+      const systemPrompt = `You are an AI truth verification analyst for 9jatruth, a community truth-reporting platform. Analyze the following truth report for authenticity. Consider content specificity, source credibility, community signals, and temporal patterns. Provide a concise verdict (authentic/suspicious/unverified), a confidence score (0-100), and a brief explanation.`;
 
       const userPrompt = `Analyze this truth report for authenticity:
 

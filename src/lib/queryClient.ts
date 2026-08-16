@@ -12,6 +12,36 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+/**
+ * Parse a server error message from an apiRequest Error.
+ * The error message format is "STATUS: {\"message\":\"...\",\"errors\":[...]}
+ * or "STATUS: plain text". This extracts a clean, user-facing message.
+ */
+export function parseApiError(error: Error | unknown): string {
+  const msg = error instanceof Error ? error.message : String(error);
+  const idx = msg.indexOf(":");
+  let body = idx > 0 ? msg.substring(idx + 1).trim() : msg;
+  try {
+    const parsed = JSON.parse(body);
+    if (parsed.message && Array.isArray(parsed.errors) && parsed.errors.length > 0) {
+      // Validation error — show field-specific messages
+      const fieldErrors = parsed.errors
+        .map((e: { path?: string; message?: string }) => {
+          const field = e.path ? e.path.replace(/_/g, " ") : "";
+          return field ? `${field}: ${e.message}` : e.message;
+        })
+        .join("; ");
+      return `${parsed.message} — ${fieldErrors}`;
+    }
+    if (parsed.message) return parsed.message;
+    if (parsed.error) return parsed.error;
+  } catch {
+    // Not JSON — return cleaned text
+  }
+  // Strip leading status code if present
+  return body.replace(/^\d{3}:\s*/, "") || msg;
+}
+
 export async function apiRequest(
   method: string,
   url: string,

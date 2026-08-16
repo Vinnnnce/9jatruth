@@ -61,7 +61,7 @@ export async function POST(
   let aiPowered = false;
 
   if (isKimiConfigured()) {
-    const systemPrompt = `You are an AI prediction analyst for Soke, a community truth-reporting platform. Given a truth report and its context, predict:
+    const systemPrompt = `You are an AI prediction analyst for 9jatruth, a community truth-reporting platform. Given a truth report and its context, predict:
 1. What is the likely next condition (will it improve, worsen, or stay the same)?
 2. What is the risk level (low, moderate, high)?
 3. A confidence score (0-100)

@@ -6,12 +6,12 @@ import { X, ChevronRight, ChevronLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const TOUR_KEY = "soke_tour_completed";
+const TOUR_KEY = "9jatruth_tour_completed";
 
 const TOUR_STEPS = [
   {
-    title: "Welcome to Soke",
-    description: "Soke — Eyes on the Street is a community-powered platform for reporting and tracking local conditions across Nigeria. Let's take a quick tour.",
+    title: "Welcome to 9jatruth",
+    description: "9jatruth — Eyes on the Street is a community-powered platform for reporting and tracking local conditions across Nigeria. Let's take a quick tour.",
     icon: "👋",
   },
   {
@@ -51,7 +51,7 @@ const TOUR_STEPS = [
   },
   {
     title: "Stay Safe, Stay Informed",
-    description: "Soke is powered by community contributions. Every report counts. Thank you for being part of the movement.",
+    description: "9jatruth is powered by community contributions. Every report counts. Thank you for being part of the movement.",
     icon: "🛡️",
   },
 ];

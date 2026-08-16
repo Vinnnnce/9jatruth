@@ -10,7 +10,16 @@ import { csrfCheck } from "@/lib/security";
 import { z } from "zod";
 
 const redeemSchema = z.object({
-  rewardType: z.enum(["airtime", "data", "giftcard", "voucher", "cash"]),
+  rewardType: z.enum(["airtime", "data", "giftcard", "gift-card", "giftcards", "gift-cards", "voucher", "vouchers", "cash"]).transform((val) => {
+    // Normalize legacy/variant values to canonical enum
+    const map: Record<string, string> = {
+      "gift-card": "giftcard",
+      "giftcards": "giftcard",
+      "gift-cards": "giftcard",
+      "vouchers": "voucher",
+    };
+    return (map[val] || val) as "airtime" | "data" | "giftcard" | "voucher" | "cash";
+  }),
   rewardCategory: z.string().trim().min(1).max(100),
   amount: z.coerce.number().int().positive().max(100000),
   description: z.string().trim().min(1).max(300),
@@ -44,6 +53,29 @@ export async function POST(request: Request) {
     body = await request.json();
   } catch {
     return Response.json({ message: "Invalid JSON" }, { status: 400 });
+  }
+
+  // Defensive normalization before Zod validation
+  if (body) {
+    // Normalize rewardType: strip spaces, hyphens, and lowercase
+    if (typeof body.rewardType === "string") {
+      const normalized = body.rewardType.toLowerCase().trim();
+      const typeMap: Record<string, string> = {
+        "gift-card": "giftcard", "giftcards": "giftcard", "gift-cards": "giftcard",
+        "gift card": "giftcard", "vouchers": "voucher",
+        "air-time": "airtime", "data-bundle": "data",
+      };
+      body.rewardType = typeMap[normalized] || normalized;
+    }
+    // Normalize amount: strip currency symbols and commas
+    if (typeof body.amount === "string") {
+      const cleaned = body.amount.replace(/[^\d.]/g, "");
+      body.amount = cleaned ? Number(cleaned) : undefined;
+    }
+    // Ensure rewardCategory is a non-empty string
+    if (!body.rewardCategory || (typeof body.rewardCategory === "string" && !body.rewardCategory.trim())) {
+      body.rewardCategory = body.rewardType || "general";
+    }
   }
 
   const parsed = validate(redeemSchema, body);

@@ -19,25 +19,25 @@ type Section = {
 
 const cookieItems: CookieItem[] = [
   {
-    name: "soke_agency_token",
+    name: "9jatruth_agency_token",
     badge: "Essential",
     badgeColor: "bg-green-500/15 text-green-600",
     desc: "An httpOnly, Secure cookie containing a JWT authentication token for agency and user accounts. Expires after 7 days. Strictly necessary for login and session management; cannot be disabled without breaking core functionality.",
   },
   {
-    name: "soke_cookie_consent",
+    name: "9jatruth_cookie_consent",
     badge: "Functional",
     badgeColor: "bg-blue-500/15 text-blue-600",
     desc: "A localStorage flag storing your cookie consent preference (accepted or declined). No personal data is stored. Retained until you clear browser storage or withdraw consent.",
   },
   {
-    name: "soke_seen_quick_tips",
+    name: "9jatruth_seen_quick_tips",
     badge: "Functional",
     badgeColor: "bg-blue-500/15 text-blue-600",
     desc: "A localStorage flag indicating whether you have viewed the quick navigation tips. Used to display onboarding content only to new users. No personal data is stored.",
   },
   {
-    name: "soke_ios_banner_dismissed",
+    name: "9jatruth_ios_banner_dismissed",
     badge: "Functional",
     badgeColor: "bg-blue-500/15 text-blue-600",
     desc: "A localStorage flag recording dismissal of the iOS download banner. Prevents repeated display. No personal data is stored.",
@@ -54,7 +54,7 @@ const sections: Section[] = [
   {
     title: "1. Introduction and Legal Framework",
     content:
-      "This Cookie Policy forms part of, and is incorporated by reference into, our Terms of Use and Privacy Policy. It explains how Soke (\"we\", \"us\", \"our\") uses cookies and similar tracking technologies, in compliance with the Nigeria Data Protection Act, 2023 (\"NDPA\"), the General Data Protection Regulation (EU) 2016/679 (\"GDPR\"), and the Privacy and Electronic Communications Directive (Directive 2002/58/EC, as amended by the ePrivacy Directive). We are committed to transparency regarding the technologies deployed on our Platform and to providing you with meaningful control over your data.",
+      "This Cookie Policy forms part of, and is incorporated by reference into, our Terms of Use and Privacy Policy. It explains how 9jatruth (\"we\", \"us\", \"our\") uses cookies and similar tracking technologies, in compliance with the Nigeria Data Protection Act, 2023 (\"NDPA\"), the General Data Protection Regulation (EU) 2016/679 (\"GDPR\"), and the Privacy and Electronic Communications Directive (Directive 2002/58/EC, as amended by the ePrivacy Directive). We are committed to transparency regarding the technologies deployed on our Platform and to providing you with meaningful control over your data.",
   },
   {
     title: "2. What Are Cookies and Similar Technologies",
@@ -79,7 +79,7 @@ const sections: Section[] = [
   {
     title: "5. Third-Party Cookies",
     content:
-      "We do not use third-party tracking, advertising, or analytics cookies. Where third-party services (such as authentication providers like Clerk) are integrated, they may set their own essential cookies strictly necessary for their function. These third parties are bound by their own privacy and cookie policies. We do not share cookie data with third parties for marketing or commercial profiling purposes. Telecommunications providers and payment processors involved in rewards redemption do not set cookies on the Platform; any data exchange occurs server-side via secure APIs.",
+      "We do not use third-party tracking, advertising, or analytics cookies. Where third-party services (such as authentication providers like Clerk) are integrated, they may set their own essential cookies strictly necessary for their function. These third parties are bound by their own privacy and cookie policies. We do not share cookie data with third parties for marketing or commercial profiling purposes. Telecommunications providers (VTPass, Africa's Talking) and payment processors involved in rewards redemption do not set cookies on the Platform; any data exchange occurs server-side via secure APIs. Web push notifications use VAPID-encrypted channels and do not store personal data in cookies.",
   },
   {
     title: "6. Consent and Consent Management",
@@ -94,7 +94,7 @@ const sections: Section[] = [
   {
     title: "8. Browser Geolocation",
     content:
-      "We use the browser Geolocation API, rather than cookies, to determine your approximate location for the purpose of displaying nearby posts and feeds. This requires your explicit, granular permission, which may be granted or revoked at any time through your browser's site settings. Geolocation is not stored in cookies; precise coordinates are processed transiently and never persisted in raw form. For further information, see our Privacy Policy.",
+      "We use the browser Geolocation API, rather than cookies, to determine your approximate location for the purpose of displaying nearby posts, feeds, map features, and truth report submission. This requires your explicit, granular permission, which may be granted or revoked at any time through your browser's site settings. Geolocation is not stored in cookies; precise coordinates are processed transiently and never persisted in raw form. The neighbourhood/area selection feature uses your device GPS when permission is granted, with IP-based fallback for approximate positioning. For further information, see our Privacy Policy.",
   },
   {
     title: "9. Cookie Retention",
@@ -125,7 +125,7 @@ export default function CookiePolicy() {
         </div>
         <div>
           <h1 className="text-2xl font-display font-700 gradient-text">Cookie Policy</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Last updated: August 12, 2026</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Last updated: August 16, 2026</p>
         </div>
       </div>
 

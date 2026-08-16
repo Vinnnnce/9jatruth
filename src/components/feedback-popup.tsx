@@ -129,7 +129,7 @@ export function FeedbackPopup() {
                 </div>
                 <div>
                   <h3 className="text-sm font-display font-700">We value your feedback</h3>
-                  <p className="text-[10px] text-muted-foreground">Help us improve Soke</p>
+                  <p className="text-[10px] text-muted-foreground">Help us improve 9jatruth</p>
                 </div>
               </div>
               <Button

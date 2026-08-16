@@ -102,7 +102,7 @@ export default function NewsArticlePage() {
 
   const handleShare = async (platform: string) => {
     const url = typeof window !== "undefined" ? window.location.href : "";
-    const text = article?.title || "Soke News";
+    const text = article?.title || "9jatruth News";
     if (platform === "copy") {
       try {
         await navigator.clipboard.writeText(url);

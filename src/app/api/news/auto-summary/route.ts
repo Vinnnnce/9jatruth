@@ -114,9 +114,9 @@ async function generateDailySummary(sql: any) {
   });
 
   // 4. Generate AI summary (or fallback to template)
-  const systemPrompt = `You are an expert Nigerian news editor for the Soke platform. You write clear, engaging, and accurate news summaries from citizen reports. You structure articles with a headline, summary, and categorized sections. You use HTML formatting for the article body.`;
+  const systemPrompt = `You are an expert Nigerian news editor for the 9jatruth platform. You write clear, engaging, and accurate news summaries from citizen reports. You structure articles with a headline, summary, and categorized sections. You use HTML formatting for the article body.`;
 
-  const userPrompt = `Today is ${today}. Below is a summary of ${recentTruths.length} citizen reports from the last 24 hours on the Soke platform:
+  const userPrompt = `Today is ${today}. Below is a summary of ${recentTruths.length} citizen reports from the last 24 hours on the 9jatruth platform:
 
 ${JSON.stringify(summaryData, null, 2)}
 
@@ -186,7 +186,7 @@ Base your summary ONLY on the data provided. Do not invent information. Highligh
       ${articleData.title}, ${slug}, ${articleData.excerpt}, ${articleData.content},
       NULL, ${JSON.stringify([])}, ${articleData.category || "general"},
       ${JSON.stringify(articleData.tags || ["daily-summary"])},
-      'Soke AI Daily Digest', 'system',
+      '9jatruth AI Daily Digest', 'system',
       NULL, 'All', 'All',
       'published', TRUE, 'ai-verified', 100, 0, 0, 0, 0, NOW(), NOW(), NOW()
     ) RETURNING id
@@ -210,10 +210,10 @@ function buildTemplateSummary(
   const categories = summaryData.map((s) => s.category).join(", ");
   const topCategory = summaryData.sort((a, b) => b.count - a.count)[0];
 
-  const title = `Soke Daily Digest: ${totalReports} Citizen Reports Across Nigeria — ${today}`;
+  const title = `9jatruth Daily Digest: ${totalReports} Citizen Reports Across Nigeria — ${today}`;
   const excerpt = `Today's summary covers ${totalReports} citizen reports. Most reported: ${topCategory?.category || "general"} (${topCategory?.count || 0} reports). Key areas: ${summaryData.map((s) => s.topStates).join("; ")}.`;
 
-  let content = `<p><em>Generated automatically by Soke AI from citizen reports in the last 24 hours.</em></p>\n\n`;
+  let content = `<p><em>Generated automatically by 9jatruth AI from citizen reports in the last 24 hours.</em></p>\n\n`;
   content += `<p><strong>${totalReports} reports</strong> were submitted across Nigeria today, covering ${categories}.</p>\n\n`;
 
   for (const cat of summaryData) {

@@ -1,6 +1,6 @@
 # Dashboards Summary
 
-Three new Next.js App Router dashboard pages were added to the Soke platform under
+Three new Next.js App Router dashboard pages were added to the 9jatruth platform under
 `src/app/(dashboard)/`. All pages are client components (`"use client"`), use the
 shared `DashboardLayout` (via the existing `(dashboard)/layout.tsx`), TanStack Query
 for data fetching/mutations, `apiRequest` from `@/lib/queryClient`, and `useToast`

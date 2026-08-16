@@ -1,4 +1,4 @@
-# Soke API Contract — Feed Interactions, Location, Analytics
+# 9jatruth API Contract — Feed Interactions, Location, Analytics
 
 ## Feed Interactions
 

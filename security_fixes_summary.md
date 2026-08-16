@@ -1,7 +1,7 @@
 # Security Audit & Fixes Summary
 
 Date: 2026-08-08
-App: Soke (Next.js 15 App Router, Clerk auth, Drizzle/Neon Postgres)
+App: 9jatruth (Next.js 15 App Router, Clerk auth, Drizzle/Neon Postgres)
 
 This document summarizes all authentication, authorization, CSRF, and mass-assignment
 hardening applied to the API routes. Only API route files, `src/lib/neon-storage.ts`,

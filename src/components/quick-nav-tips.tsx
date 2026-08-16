@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Send, ListChecks, TrendingUp, MapPin, Building2, Trophy, Bell, Zap, ChevronRight, Lightbulb } from "lucide-react";
 
-const STORAGE_KEY = "soke_seen_quick_tips";
+const STORAGE_KEY = "9jatruth_seen_quick_tips";
 
 const tips = [
   { icon: Send, title: "Submit Reports", description: "Report real-time conditions in your area — power outages, fuel prices, traffic, safety issues.", color: "text-amber-500" },
@@ -65,7 +65,7 @@ export function QuickNavigationTips() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Lightbulb className="h-5 w-5 text-amber-500" />
-            {step === 0 ? "Welcome to Soke!" : "Quick Tips"}
+            {step === 0 ? "Welcome to 9jatruth!" : "Quick Tips"}
           </DialogTitle>
         </DialogHeader>
 

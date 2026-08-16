@@ -141,7 +141,7 @@ export function FeedInteractions({
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({
-          title: "Soke Truth Report",
+          title: "9jatruth Truth Report",
           text: truth.userHash ? `Report from ${truth.userHash.slice(0, 8)}` : "Truth report",
           url,
         });

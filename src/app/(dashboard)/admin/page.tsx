@@ -4,7 +4,7 @@
  * Admin Super Dashboard — Rebuild
  *
  * Email-gated platform administration for the super admin
- * (insights793@gmail.com). Combines powerful analytics (stat cards,
+ * (9jatruthofficial@gmail.com). Combines powerful analytics (stat cards,
  * recharts bar/pie charts), geo-hierarchical filters, IP tracking tables
  * for users and posts/truths, an organizations overview, a recent activity
  * feed, and a system health tab.
@@ -46,6 +46,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -89,6 +91,9 @@ import {
   MessageSquare,
   X,
   Package,
+  Trash2,
+  Plus,
+  ClipboardList,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -438,6 +443,66 @@ export default function AdminDashboard() {
     },
   });
 
+  // Delete truth/post from admin
+  const deleteTruthMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/truths/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/truths"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
+      toast({ title: "Post deleted", description: "The truth post has been removed." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // Delete news article from admin
+  const deleteNewsMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/news/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/news"] });
+      toast({ title: "Article deleted", description: "The news article has been removed." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // Delete poll from admin
+  const deletePollMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/polls/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Poll deleted", description: "The poll has been removed." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // Delete questionnaire from admin
+  const deleteQuestionnaireMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/questionnaire/manage/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/questionnaire/manage"] });
+      toast({ title: "Questionnaire deleted", description: "The questionnaire has been removed." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    },
+  });
+
   // Reward redemptions list (filtered by status)
   const rewardsQueryKey = useMemo(() => {
     const params = new URLSearchParams();
@@ -460,14 +525,14 @@ export default function AdminDashboard() {
 
   const redemptions = rewardsData?.redemptions ?? [];
 
-  // Reward redemption status mutation (approve/deny/fulfill)
+  // Reward redemption status mutation (approve/deny/fulfill/revert to pending)
   const updateRedemptionMutation = useMutation({
     mutationFn: async ({
       id,
       status,
     }: {
       id: number;
-      status: "approved" | "denied" | "fulfilled";
+      status: "pending" | "approved" | "denied" | "fulfilled";
     }) => {
       const res = await apiRequest("PUT", `/api/admin/rewards/${id}`, { status });
       return res.json();
@@ -590,7 +655,7 @@ export default function AdminDashboard() {
             <h1 className="text-xl font-display font-700">Access Denied</h1>
             <p className="text-sm text-muted-foreground">
               This dashboard is restricted to the designated super admin
-              (insights793@gmail.com). If you believe this is a mistake, contact
+              (9jatruthofficial@gmail.com). If you believe this is a mistake, contact
               your platform administrator.
             </p>
           </CardContent>
@@ -1183,6 +1248,7 @@ export default function AdminDashboard() {
                         <TableHead>Trust</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Created</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1246,6 +1312,26 @@ export default function AdminDashboard() {
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
                             {timeAgo(t.createdAt)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
+                              disabled={deleteTruthMutation.isPending && deleteTruthMutation.variables === t.id}
+                              onClick={() => {
+                                if (confirm(`Delete this truth post?\n\n"${t.content.slice(0, 80)}..."\n\nThis cannot be undone.`)) {
+                                  deleteTruthMutation.mutate(t.id);
+                                }
+                              }}
+                              data-testid={`button-delete-truth-${t.id}`}
+                            >
+                              {deleteTruthMutation.isPending && deleteTruthMutation.variables === t.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1706,9 +1792,32 @@ export default function AdminDashboard() {
                                   </Button>
                                 </div>
                               ) : (
-                                <span className="text-[10px] text-muted-foreground">
-                                  {r.processedAt ? fmtDate(r.processedAt) : "—"}
-                                </span>
+                                <div className="flex items-center justify-end gap-1">
+                                  <Select
+                                    value={r.status}
+                                    onValueChange={(value) =>
+                                      updateRedemptionMutation.mutate({
+                                        id: r.id,
+                                        status: value as "pending" | "approved" | "denied" | "fulfilled",
+                                      })
+                                    }
+                                  >
+                                    <SelectTrigger
+                                      className="h-7 w-28 text-xs"
+                                      data-testid={`select-reward-status-${r.id}`}
+                                      disabled={mutating}
+                                    >
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="pending" className="text-xs">Pending</SelectItem>
+                                      <SelectItem value="approved" className="text-xs">Approved</SelectItem>
+                                      <SelectItem value="denied" className="text-xs">Denied</SelectItem>
+                                      <SelectItem value="fulfilled" className="text-xs">Fulfilled</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  {mutating && <Loader2 className="h-3 w-3 animate-spin" />}
+                                </div>
                               )}
                             </TableCell>
                           </TableRow>
@@ -2187,6 +2296,15 @@ type QuestionnaireEntry = {
 };
 
 function FeedbackTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [showBuilder, setShowBuilder] = useState(false);
+  const [qTitle, setQTitle] = useState("");
+  const [qDescription, setQDescription] = useState("");
+  const [qQuestions, setQQuestions] = useState<Array<{ id: string; text: string; type: string; required: boolean; options: string[] }>>([
+    { id: "q1", text: "", type: "text", required: true, options: [] },
+  ]);
+
   const { data: feedback, isLoading: fbLoading } = useQuery<FeedbackEntry[]>({
     queryKey: ["/api/feedback"],
     queryFn: async () => {
@@ -2203,6 +2321,80 @@ function FeedbackTab() {
       return data.responses ?? data;
     },
   });
+  const { data: managedQuestionnaires } = useQuery<any[]>({
+    queryKey: ["/api/questionnaire/manage"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/questionnaire/manage");
+      const data = await res.json();
+      return data.questionnaires ?? [];
+    },
+  });
+
+  const createQuestionnaireMutation = useMutation({
+    mutationFn: async (data: { title: string; description?: string; questions: any[]; status: string }) => {
+      const res = await apiRequest("POST", "/api/questionnaire/manage", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Questionnaire created", description: "The questionnaire is now live for users." });
+      queryClient.invalidateQueries({ queryKey: ["/api/questionnaire/manage"] });
+      setShowBuilder(false);
+      setQTitle("");
+      setQDescription("");
+      setQQuestions([{ id: "q1", text: "", type: "text", required: true, options: [] }]);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to create questionnaire", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteManagedQuestionnaireMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/questionnaire/manage/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Questionnaire deleted" });
+      queryClient.invalidateQueries({ queryKey: ["/api/questionnaire/manage"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const addQuestion = () => {
+    setQQuestions((prev) => [...prev, { id: `q${prev.length + 1}-${Date.now()}`, text: "", type: "text", required: false, options: [] }]);
+  };
+  const removeQuestion = (id: string) => {
+    setQQuestions((prev) => prev.filter((q) => q.id !== id));
+  };
+  const updateQuestion = (id: string, field: string, value: any) => {
+    setQQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, [field]: value } : q)));
+  };
+
+  const handleCreateQuestionnaire = () => {
+    if (!qTitle.trim()) {
+      toast({ title: "Title required", variant: "destructive" });
+      return;
+    }
+    const validQuestions = qQuestions.filter((q) => q.text.trim());
+    if (validQuestions.length === 0) {
+      toast({ title: "At least one question required", variant: "destructive" });
+      return;
+    }
+    createQuestionnaireMutation.mutate({
+      title: qTitle.trim(),
+      description: qDescription.trim() || undefined,
+      questions: validQuestions.map((q) => ({
+        id: q.id,
+        text: q.text.trim(),
+        type: q.type,
+        required: q.required,
+        options: q.type === "single-choice" || q.type === "multiple-choice" ? q.options.filter((o) => o.trim()) : undefined,
+      })),
+      status: "active",
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -2240,6 +2432,151 @@ function FeedbackTab() {
             </div>
           ) : (
             <EmptyState icon={MessageSquare} message="No feedback received yet." />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Questionnaire Builder */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-display flex items-center gap-2">
+            <ClipboardList className="h-4 w-4 text-primary" />
+            Questionnaire Builder
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs ml-auto gap-1"
+              onClick={() => setShowBuilder(!showBuilder)}
+            >
+              <Plus className="h-3 w-3" />
+              {showBuilder ? "Cancel" : "Create Questionnaire"}
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {showBuilder && (
+            <div className="space-y-3 rounded-md border border-border p-3 bg-muted/20">
+              <div className="space-y-1">
+                <Label className="text-xs">Title</Label>
+                <Input
+                  value={qTitle}
+                  onChange={(e) => setQTitle(e.target.value)}
+                  placeholder="e.g. Community Satisfaction Survey"
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Description (optional)</Label>
+                <Input
+                  value={qDescription}
+                  onChange={(e) => setQDescription(e.target.value)}
+                  placeholder="Brief description of this questionnaire"
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Questions</Label>
+                {qQuestions.map((q, idx) => (
+                  <div key={q.id} className="space-y-1.5 rounded-md border border-border/50 p-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground shrink-0">Q{idx + 1}</span>
+                      <Input
+                        value={q.text}
+                        onChange={(e) => updateQuestion(q.id, "text", e.target.value)}
+                        placeholder="Question text"
+                        className="h-8 text-xs flex-1"
+                      />
+                      <Select
+                        value={q.type}
+                        onValueChange={(v) => updateQuestion(q.id, "type", v)}
+                      >
+                        <SelectTrigger className="h-8 text-xs w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="text" className="text-xs">Short Text</SelectItem>
+                          <SelectItem value="textarea" className="text-xs">Long Text</SelectItem>
+                          <SelectItem value="single-choice" className="text-xs">Single Choice</SelectItem>
+                          <SelectItem value="multiple-choice" className="text-xs">Multiple Choice</SelectItem>
+                          <SelectItem value="rating" className="text-xs">Rating (1-5)</SelectItem>
+                          <SelectItem value="boolean" className="text-xs">Yes/No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Checkbox
+                        checked={q.required}
+                        onCheckedChange={(c) => updateQuestion(q.id, "required", c === true)}
+                      />
+                      <span className="text-[9px] text-muted-foreground">Req</span>
+                      {qQuestions.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
+                          onClick={() => removeQuestion(q.id)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                    {(q.type === "single-choice" || q.type === "multiple-choice") && (
+                      <Input
+                        value={q.options.join(", ")}
+                        onChange={(e) => updateQuestion(q.id, "options", e.target.value.split(",").map((s) => s.trim()))}
+                        placeholder="Enter options separated by commas"
+                        className="h-8 text-xs"
+                      />
+                    )}
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={addQuestion}>
+                  <Plus className="h-3 w-3" />
+                  Add Question
+                </Button>
+              </div>
+              <Button
+                size="sm"
+                className="w-full h-9 text-xs gap-1"
+                disabled={createQuestionnaireMutation.isPending}
+                onClick={handleCreateQuestionnaire}
+              >
+                {createQuestionnaireMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ClipboardList className="h-3.5 w-3.5" />
+                )}
+                Publish Questionnaire
+              </Button>
+            </div>
+          )}
+
+          {/* Managed questionnaires list */}
+          {managedQuestionnaires && managedQuestionnaires.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Active Questionnaires</p>
+              {managedQuestionnaires.map((mq: any) => (
+                <div key={mq.id} className="flex items-center justify-between rounded-md bg-muted/30 p-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium truncate">{mq.title}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {mq.questions?.length ?? 0} questions · {mq.status}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
+                    disabled={deleteManagedQuestionnaireMutation.isPending && deleteManagedQuestionnaireMutation.variables === mq.id}
+                    onClick={() => {
+                      if (confirm(`Delete questionnaire "${mq.title}"? This cannot be undone.`)) {
+                        deleteManagedQuestionnaireMutation.mutate(mq.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>

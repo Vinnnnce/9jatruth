@@ -5,7 +5,7 @@ import type { NextRequest } from "next/server";
 const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
 
-const SUPER_ADMIN_EMAIL = "insights793@gmail.com";
+const SUPER_ADMIN_EMAIL = "9jatruthofficial@gmail.com";
 
 // Public routes — accessible without authentication
 const isPublicRoute = createRouteMatcher([
