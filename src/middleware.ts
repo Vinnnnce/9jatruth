@@ -31,6 +31,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/ai/time-series(.*)",  // Historical data is public
   "/api/feedback(.*)",  // POST is public (anyone can submit feedback)
   "/api/questionnaire(.*)",  // POST is public (anyone can submit questionnaire)
+  "/api/backup(.*)",  // Cron-triggered daily backup (protected by CRON_SECRET)
 ]);
 
 // Admin-only API routes — require super admin email

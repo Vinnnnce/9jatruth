@@ -199,7 +199,9 @@ export default function Feeds() {
       if (filter.state) params.set("state", filter.state);
       if (filter.lga) params.set("lga", filter.lga);
       const res = await apiRequest("GET", `/api/truths?${params.toString()}`);
-      return res.json();
+      const data = await res.json();
+      // Normalize: API returns array, but we expect { truths: [...] }
+      return Array.isArray(data) ? { truths: data } : data;
     },
     enabled: isLoaded,
     refetchInterval: 10000,
@@ -415,6 +417,24 @@ export default function Feeds() {
               ))}
             </div>
           </div>
+        )}
+
+        {/* ─── Empty state when no posts ─── */}
+        {(!recentTruths?.truths || recentTruths.truths.length === 0) && (
+          <Card className="border-border border-dashed">
+            <CardContent className="p-6 text-center space-y-2">
+              <Newspaper className="h-8 w-8 text-muted-foreground mx-auto" />
+              <p className="text-sm font-medium text-foreground">No posts yet</p>
+              <p className="text-xs text-muted-foreground">
+                {geoFilter.state || geoFilter.lga
+                  ? `No truth reports found for ${geoFilter.lga ? geoFilter.lga + ", " : ""}${geoFilter.state || "selected location"}. Try a different filter or be the first to report.`
+                  : "Be the first to share a truth report in your area."}
+              </p>
+              <a href="/submit" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                Submit a Report
+              </a>
+            </CardContent>
+          </Card>
         )}
 
         {/* ─── Active Polls ─── */}

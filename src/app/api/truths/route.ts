@@ -18,6 +18,8 @@ const truthsQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).default(50),
   neighborhoodId: z.coerce.number().int().positive().max(1_000_000).optional(),
   category: z.enum(["power", "fuel", "traffic", "prices", "safety", "security", "real-estate", "housing", "patrol-gas-station", "restaurant", "hotel", "school", "pharmacy", "hospital", "supermarket"]).optional(),
+  state: z.string().optional(),
+  lga: z.string().optional(),
 });
 
 export async function GET(request: Request) {
@@ -26,7 +28,7 @@ export async function GET(request: Request) {
   const queryObj = Object.fromEntries(searchParams.entries());
   const parsed = validate(truthsQuerySchema, queryObj);
   if (!parsed.success) return validationErrorResponse(parsed.error);
-  const result = await getTruths(parsed.data.limit, parsed.data.neighborhoodId, parsed.data.category);
+  const result = await getTruths(parsed.data.limit, parsed.data.neighborhoodId, parsed.data.category, parsed.data.state, parsed.data.lga);
   return Response.json(result);
 }
 

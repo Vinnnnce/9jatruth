@@ -16,6 +16,10 @@
     {
       "path": "/api/schedule/process",
       "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/backup",
+      "schedule": "0 2 * * *"
     }
   ],
   "headers": [

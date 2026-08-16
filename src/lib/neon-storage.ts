@@ -244,22 +244,32 @@ export async function getNeighborhood(id: number): Promise<Neighborhood | undefi
 // MicroTruths
 // ═══════════════════════════════════════════════════════════════
 
-export async function getTruths(limit = 50, neighborhoodId?: number, category?: string): Promise<MicroTruth[]> {
+export async function getTruths(limit = 50, neighborhoodId?: number, category?: string, state?: string, lga?: string): Promise<MicroTruth[]> {
   const sql = getDb();
   let rows: SqlRow[];
-  if (neighborhoodId && category) {
-    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id WHERE t.neighborhood_id = ${neighborhoodId} AND t.category = ${category} ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+  const hasStateLga = state || lga;
+  if (hasStateLga && neighborhoodId && category) {
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, n.state, n.lga FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE t.neighborhood_id = ${neighborhoodId} AND t.category = ${category} AND (${state ?? null}::text IS NULL OR n.state = ${state ?? null}) AND (${lga ?? null}::text IS NULL OR n.lga = ${lga ?? null}) ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+  } else if (hasStateLga && neighborhoodId) {
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, n.state, n.lga FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE t.neighborhood_id = ${neighborhoodId} AND (${state ?? null}::text IS NULL OR n.state = ${state ?? null}) AND (${lga ?? null}::text IS NULL OR n.lga = ${lga ?? null}) ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+  } else if (hasStateLga && category) {
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, n.state, n.lga FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE t.category = ${category} AND (${state ?? null}::text IS NULL OR n.state = ${state ?? null}) AND (${lga ?? null}::text IS NULL OR n.lga = ${lga ?? null}) ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+  } else if (hasStateLga) {
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, n.state, n.lga FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE (${state ?? null}::text IS NULL OR n.state = ${state ?? null}) AND (${lga ?? null}::text IS NULL OR n.lga = ${lga ?? null}) ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+  } else if (neighborhoodId && category) {
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE t.neighborhood_id = ${neighborhoodId} AND t.category = ${category} ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
   } else if (neighborhoodId) {
-    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id WHERE t.neighborhood_id = ${neighborhoodId} ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE t.neighborhood_id = ${neighborhoodId} ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
   } else if (category) {
-    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id WHERE t.category = ${category} ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE t.category = ${category} ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
   } else {
-    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
   }
   return rows.map((r) => ({
     ...mapTruth(r),
     orgName: r.org_name ?? null,
     orgVerified: r.org_verified === 1 || r.org_verified === true,
+    neighborhoodName: r.neighborhood_name ?? null,
   })) as any;
 }
 
