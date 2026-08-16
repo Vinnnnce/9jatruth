@@ -1,11 +1,14 @@
 import { ensureDbInitialized, getDb } from "@/lib/db";
 
 /**
- * Daily Database Backup Endpoint
+ * Daily Database Health Snapshot
  * Called by Vercel cron job every day at 2:00 AM UTC
  *
- * Records table statistics into database_backups table.
- * Uses pg_stat_user_tables for fast single-query counts.
+ * Records table statistics into database_backups table for monitoring.
+ * NOTE: This is a health/audit snapshot, NOT a data backup.
+ * Real backups are handled by Neon's built-in PITR (Point-in-Time Recovery)
+ * and scheduled snapshots configured in the Neon Console.
+ * See: https://neon.com/docs/manage/backups
  */
 
 export async function GET(request: Request) {
