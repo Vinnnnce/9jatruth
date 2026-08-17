@@ -13,6 +13,10 @@ import {
 import Link from "next/link";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
 import { LocationPreferences } from "@/components/location-preferences";
+import { PredictiveNotifications } from "@/components/predictive-notifications";
+import { HyperPersonalizedDashboard } from "@/components/hyper-personalized-dashboard";
+import { PredictiveInterface } from "@/components/predictive-interface";
+import { PredictiveNavigation } from "@/components/predictive-navigation";
 
 type DashboardData = Array<{
   neighborhood: { id: number; name: string; region: string; lat: number; lng: number };
@@ -103,6 +107,15 @@ export default function DashboardPage() {
   }
 
   return (
+    <PredictiveInterface
+      categories={[
+        { key: "power", label: "Power" },
+        { key: "fuel", label: "Fuel" },
+        { key: "traffic", label: "Traffic" },
+        { key: "prices", label: "Prices" },
+        { key: "safety", label: "Safety" },
+      ]}
+    >
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold" data-testid="text-dashboard-title">Portfolio</h1>
@@ -196,6 +209,12 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      {/* AI-Powered Personalized Dashboard */}
+      <HyperPersonalizedDashboard />
+
+      {/* Predictive Notifications */}
+      <PredictiveNotifications />
+
       {/* Analytics */}
       <DashboardAnalytics />
 
@@ -280,6 +299,10 @@ export default function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      {/* Predictive Navigation - suggests next actions */}
+      <PredictiveNavigation maxSuggestions={4} />
     </div>
+    </PredictiveInterface>
   );
 }

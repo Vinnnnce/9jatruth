@@ -22,6 +22,7 @@ import {
   Send, CheckCircle2, Info, MapPin, LocateFixed, Building2, Navigation, Coins, ShieldCheck, User,
   Clock, BarChart3, Plus, X, Upload, Image as ImageIcon, Video, RotateCw, RotateCcw, Crop,
   Wand2, Trash2, Film, AlertTriangle, Loader2, Scissors, Sun, Contrast, Palette, Rainbow,
+  ClipboardList,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Slider } from "@/components/ui/slider";
@@ -133,6 +134,13 @@ export default function SubmitTruth() {
   const [pollEnabled, setPollEnabled] = useState(false);
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
+
+  // Questionnaire
+  const [questionnaireEnabled, setQuestionnaireEnabled] = useState(false);
+  const [questionnaireTitle, setQuestionnaireTitle] = useState("");
+  const [questionnaireQuestions, setQuestionnaireQuestions] = useState<Array<{ id: string; text: string; type: 'text' | 'multiple' | 'rating'; options: string[]; required: boolean }>>([
+    { id: 'q1', text: '', type: 'text', options: [], required: true }
+  ]);
 
   // Media upload
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
@@ -323,6 +331,23 @@ export default function SubmitTruth() {
     },
     onError: (err: Error) => {
       toast({ title: "Poll creation failed", description: parseApiError(err), variant: "destructive" });
+    },
+  });
+
+  // Questionnaire submission mutation
+  const submitQuestionnaireMutation = useMutation({
+    mutationFn: async (data: { questionnaireType: string; responses: Record<string, any> }) => {
+      const res = await apiRequest("POST", "/api/questionnaire", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Questionnaire submitted", description: "Your responses have been recorded." });
+      setQuestionnaireEnabled(false);
+      setQuestionnaireTitle("");
+      setQuestionnaireQuestions([{ id: 'q1', text: '', type: 'text', options: [], required: true }]);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Questionnaire failed", description: parseApiError(err), variant: "destructive" });
     },
   });
 
@@ -1177,6 +1202,174 @@ export default function SubmitTruth() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Questionnaire section */}
+          <div className="space-y-2 pt-2 border-t border-border">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="questionnaire-toggle"
+                checked={questionnaireEnabled}
+                onCheckedChange={(v) => setQuestionnaireEnabled(v === true)}
+              />
+              <Label htmlFor="questionnaire-toggle" className="text-xs flex items-center gap-1 cursor-pointer">
+                <ClipboardList className="h-3.5 w-3.5" />
+                Attach a questionnaire
+              </Label>
+            </div>
+            {questionnaireEnabled && (
+              <div className="space-y-3 pl-6">
+                <Input
+                  placeholder="Questionnaire title (e.g., Community Infrastructure Survey)"
+                  value={questionnaireTitle}
+                  onChange={(e) => setQuestionnaireTitle(e.target.value)}
+                  className="h-8 text-xs"
+                />
+                {questionnaireQuestions.map((q, qi) => (
+                  <div key={q.id} className="space-y-1.5 rounded-md border border-border p-2.5 bg-muted/20">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-muted-foreground font-medium shrink-0">Q{qi + 1}</span>
+                      <Input
+                        placeholder="Question text..."
+                        value={q.text}
+                        onChange={(e) => {
+                          const next = [...questionnaireQuestions];
+                          next[qi] = { ...q, text: e.target.value };
+                          setQuestionnaireQuestions(next);
+                        }}
+                        className="h-7 text-xs flex-1"
+                      />
+                      <Select
+                        value={q.type}
+                        onValueChange={(v) => {
+                          const next = [...questionnaireQuestions];
+                          next[qi] = { ...q, type: v as any, options: v === 'multiple' ? (q.options.length > 0 ? q.options : ['', '']) : [] };
+                          setQuestionnaireQuestions(next);
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-[10px] w-auto min-w-[80px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="text">Text</SelectItem>
+                          <SelectItem value="multiple">Multiple</SelectItem>
+                          <SelectItem value="rating">Rating</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {questionnaireQuestions.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => setQuestionnaireQuestions(questionnaireQuestions.filter((_, idx) => idx !== qi))}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                    {q.type === 'multiple' && (
+                      <div className="space-y-1 pl-4">
+                        {q.options.map((opt, oi) => (
+                          <div key={oi} className="flex items-center gap-1">
+                            <Input
+                              placeholder={`Option ${oi + 1}`}
+                              value={opt}
+                              onChange={(e) => {
+                                const next = [...questionnaireQuestions];
+                                const opts = [...q.options];
+                                opts[oi] = e.target.value;
+                                next[qi] = { ...q, options: opts };
+                                setQuestionnaireQuestions(next);
+                              }}
+                              className="h-7 text-xs flex-1"
+                            />
+                            {q.options.length > 2 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() => {
+                                  const next = [...questionnaireQuestions];
+                                  next[qi] = { ...q, options: q.options.filter((_, idx) => idx !== oi) };
+                                  setQuestionnaireQuestions(next);
+                                }}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                        {q.options.length < 6 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 text-[10px] gap-1"
+                            onClick={() => {
+                              const next = [...questionnaireQuestions];
+                              next[qi] = { ...q, options: [...q.options, ''] };
+                              setQuestionnaireQuestions(next);
+                            }}
+                          >
+                            <Plus className="h-3 w-3" />
+                            Add option
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5">
+                      <Checkbox
+                        id={`required-${q.id}`}
+                        checked={q.required}
+                        onCheckedChange={(v) => {
+                          const next = [...questionnaireQuestions];
+                          next[qi] = { ...q, required: v === true };
+                          setQuestionnaireQuestions(next);
+                        }}
+                      />
+                      <Label htmlFor={`required-${q.id}`} className="text-[10px] text-muted-foreground cursor-pointer">Required</Label>
+                    </div>
+                  </div>
+                ))}
+                {questionnaireQuestions.length < 10 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => setQuestionnaireQuestions([...questionnaireQuestions, { id: `q${questionnaireQuestions.length + 1}`, text: '', type: 'text', options: [], required: false }])}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add question
+                  </Button>
+                )}
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="h-8 text-xs gap-1 w-full"
+                  disabled={submitQuestionnaireMutation.isPending || !questionnaireTitle.trim() || questionnaireQuestions.every(q => !q.text.trim())}
+                  onClick={() => {
+                    const responses: Record<string, any> = {};
+                    questionnaireQuestions.forEach((q, i) => {
+                      responses[`question_${i + 1}`] = {
+                        text: q.text,
+                        type: q.type,
+                        options: q.type === 'multiple' ? q.options : undefined,
+                        required: q.required,
+                      };
+                    });
+                    submitQuestionnaireMutation.mutate({
+                      questionnaireType: questionnaireTitle.trim(),
+                      responses,
+                    });
+                  }}
+                >
+                  {submitQuestionnaireMutation.isPending ? (
+                    <><Loader2 className="h-3 w-3 animate-spin" /> Submitting...</>
+                  ) : (
+                    <><Send className="h-3 w-3" /> Submit Questionnaire</>
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Submit row — credits and trust-scored badges inline */}

@@ -29,6 +29,7 @@ export async function POST(request: Request) {
     const clerkUserId = await getClerkUserId();
     const adminHash = await getUserId(request);
 
+    // Allow registration even when Clerk isn't configured (dev/legacy mode)
     const org = await createOrganization({
       name: data.orgName,
       type: data.orgType,
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
       region: data.region || undefined,
       city: data.city || undefined,
       adminHash,
-      clerkUserId,
+      clerkUserId: clerkUserId || undefined,
     });
 
     const passwordHash = await hashPassword(data.password);
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
       email: data.email,
       passwordHash,
       displayName: data.displayName,
-      clerkUserId,
+      clerkUserId: clerkUserId || undefined,
     });
 
     return Response.json(

@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/components/hooks/use-toast";
 import { motion } from "framer-motion";
 import { NewsComments } from "@/components/news-comments";
+import { AIContentSummaries } from "@/components/ai-content-summaries";
 import {
   Heart,
   Share2,
@@ -296,6 +297,13 @@ export default function NewsArticlePage() {
           </Button>
         </div>
       </div>
+
+      {/* ─── AI Summary ─── */}
+      <AIContentSummaries
+        articleId={article.id}
+        title={article.title}
+        content={article.content}
+      />
 
       {/* ─── Comments ─── */}
       <NewsComments articleSlug={article.slug} />

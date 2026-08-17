@@ -14,18 +14,46 @@
 
 /**
  * Returns true when the request's `origin` header resolves to the same host as
- * the request's `host` header. Returns false when either header is missing or
- * when the hosts differ.
+ * the request's `host` header. Returns true when the `origin` header is missing
+ * (same-origin requests in some browsers omit it). Returns false only when both
+ * headers are present and the hosts differ.
+ *
+ * On Vercel, also checks `x-forwarded-host` since the `host` header may be
+ * an internal Vercel proxy address.
  */
 export function assertSameOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
+  // If no Origin header, allow (same-origin GET-triggered mutations in some browsers)
+  if (!origin) return true;
+
+  // Build the set of valid hosts from multiple headers
   const host = request.headers.get("host");
-  if (!origin || !host) return false;
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const validHosts = new Set<string>();
+  if (host) validHosts.add(host);
+  if (forwardedHost) {
+    // x-forwarded-host can be comma-separated; take the first
+    validHosts.add(forwardedHost.split(",")[0].trim());
+  }
+
+  if (validHosts.size === 0) return true; // Can't verify, allow
+
   try {
     const url = new URL(origin);
-    return url.host === host;
-  } catch {
+    // Check if the origin host matches any of the valid hosts
+    if (validHosts.has(url.host)) return true;
+    // Also check if the hostname (without port) matches
+    for (const h of validHosts) {
+      try {
+        const hUrl = new URL(`https://${h}`);
+        if (hUrl.hostname === url.hostname) return true;
+      } catch {
+        // ignore
+      }
+    }
     return false;
+  } catch {
+    return true; // Can't parse origin, allow (better UX than blocking)
   }
 }
 

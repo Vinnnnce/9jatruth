@@ -6,9 +6,14 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
+const TMP_DIR = "/tmp/9jatruth-uploads";
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_VIDEO_SIZE = 60 * 1024 * 1024; // 60MB (max 60s video)
 const MAX_VIDEO_DURATION_SECONDS = 60;
+// On Vercel serverless, the filesystem is read-only except /tmp.
+// For files under this size, return data URLs (base64) which work everywhere.
+// For larger files, try /tmp (ephemeral but works within a request lifecycle).
+const DATA_URL_THRESHOLD = 15 * 1024 * 1024; // 15MB — use data URL for files under this
 
 const ALLOWED_IMAGE_TYPES = [
   "image/jpeg",
@@ -25,10 +30,20 @@ const ALLOWED_VIDEO_TYPES = [
 ];
 
 /**
+ * Check if we're running on Vercel (serverless, read-only filesystem).
+ */
+function isServerless(): boolean {
+  return !!process.env.VERCEL || !!process.env.VERCEL_ENV;
+}
+
+/**
  * POST /api/media/upload — handle image and video upload
  * Max 60s video. Returns the URL.
  *
  * Accepts multipart/form-data with a "file" field.
+ *
+ * On Vercel: returns data URLs (base64) for portable storage.
+ * In development: writes to public/uploads/ and returns the URL path.
  */
 export async function POST(request: Request) {
   await ensureDbInitialized();
@@ -97,44 +112,80 @@ export async function POST(request: Request) {
     }
   }
 
-  // Generate unique filename
+  // Read file buffer
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
+  // Strategy: On serverless (Vercel), use data URLs for portability.
+  // In development, try filesystem first, fall back to data URL.
+  const useDataUrl = isServerless() || file.size <= DATA_URL_THRESHOLD;
+
+  if (useDataUrl) {
+    // Return a data URL (base64) — works everywhere, stored inline in DB
+    const base64 = buffer.toString("base64");
+    const dataUrl = `data:${file.type};base64,${base64}`;
+
+    return Response.json(
+      {
+        success: true,
+        url: dataUrl,
+        fileType: isImage ? "image" : "video",
+        mimeType: file.type,
+        size: file.size,
+        originalName: file.name,
+        storage: "data-url",
+      },
+      { status: 201 }
+    );
+  }
+
+  // For larger files (videos > 15MB), try filesystem in dev or /tmp on Vercel
   const ext = path.extname(file.name) || (isImage ? ".jpg" : ".mp4");
   const hash = crypto.createHash("sha256").update(userHash + Date.now()).digest("hex").slice(0, 16);
-  const dateDir = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  const filename = `${dateDir}/${hash}${ext}`;
-  const filePath = path.join(UPLOAD_DIR, dateDir, path.basename(filename));
+  const dateDir = new Date().toISOString().slice(0, 10);
+  const filename = `${hash}${ext}`;
 
-  // Ensure upload directory exists
+  // Try /tmp first (works on Vercel), then public/uploads (dev)
+  const tmpPath = path.join(TMP_DIR, dateDir, filename);
+  const publicPath = path.join(UPLOAD_DIR, dateDir, filename);
+
+  let savedPath: string | null = null;
+  let savedUrl: string | null = null;
+
+  // Try /tmp (works on Vercel serverless)
   try {
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-  } catch (err) {
-    console.error("[media/upload] Failed to create directory:", err);
-    return Response.json({ message: "Failed to create upload directory" }, { status: 500 });
+    await fs.mkdir(path.dirname(tmpPath), { recursive: true });
+    await fs.writeFile(tmpPath, buffer);
+    savedPath = tmpPath;
+    // /tmp files are ephemeral — return as data URL for persistence
+    const base64 = buffer.toString("base64");
+    savedUrl = `data:${file.type};base64,${base64}`;
+  } catch {
+    // Try public/uploads (development only)
+    try {
+      await fs.mkdir(path.dirname(publicPath), { recursive: true });
+      await fs.writeFile(publicPath, buffer);
+      savedPath = publicPath;
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+      const urlPath = `/uploads/${dateDir}/${filename}`;
+      savedUrl = baseUrl ? `${baseUrl}${urlPath}` : urlPath;
+    } catch (err) {
+      console.error("[media/upload] Failed to write file:", err);
+      // Last resort: return data URL
+      const base64 = buffer.toString("base64");
+      savedUrl = `data:${file.type};base64,${base64}`;
+    }
   }
-
-  // Write file
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    await fs.writeFile(filePath, buffer);
-  } catch (err) {
-    console.error("[media/upload] Failed to write file:", err);
-    return Response.json({ message: "Failed to save file" }, { status: 500 });
-  }
-
-  // Build public URL
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-  const urlPath = `/uploads/${dateDir}/${hash}${ext}`;
-  const url = baseUrl ? `${baseUrl}${urlPath}` : urlPath;
 
   return Response.json(
     {
       success: true,
-      url,
+      url: savedUrl,
       fileType: isImage ? "image" : "video",
       mimeType: file.type,
       size: file.size,
       originalName: file.name,
+      storage: savedPath === publicPath ? "filesystem" : "data-url",
     },
     { status: 201 }
   );

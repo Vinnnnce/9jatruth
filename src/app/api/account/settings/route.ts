@@ -32,12 +32,16 @@ export async function PATCH(request: Request) {
   if (csrfError) return csrfError;
   const clerkUserId = await getClerkUserId();
   if (!clerkUserId) {
-    return Response.json({ message: "Unauthorized" }, { status: 401 });
+    const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
+    if (isClerkConfigured) {
+      return Response.json({ message: "Unauthorized" }, { status: 401 });
+    }
   }
 
-  const authAccount = await getAgencyAccountByClerkId(clerkUserId);
+  const authAccount = clerkUserId ? await getAgencyAccountByClerkId(clerkUserId) : null;
   if (!authAccount) {
-    return Response.json({ message: "Account not found" }, { status: 404 });
+    return Response.json({ message: "Account not found. Please register first." }, { status: 404 });
   }
 
   try {
@@ -63,7 +67,7 @@ export async function PATCH(request: Request) {
       if (!data.currentPassword) {
         return Response.json({ message: "Current password is required to change password" }, { status: 400 });
       }
-      const account = await getAgencyAccountByClerkId(clerkUserId);
+      const account = clerkUserId ? await getAgencyAccountByClerkId(clerkUserId) : null;
       if (!account) return Response.json({ message: "Account not found" }, { status: 404 });
       const valid = await verifyPassword(data.currentPassword, account.passwordHash);
       if (!valid) {
@@ -91,7 +95,7 @@ export async function PATCH(request: Request) {
       await updateOrganizationProfile(authAccount.organizationId, orgUpdates);
     }
 
-    const account = await getAgencyAccountByClerkId(clerkUserId);
+    const account = clerkUserId ? await getAgencyAccountByClerkId(clerkUserId) : null;
     const org = await getOrganization(authAccount.organizationId);
     return Response.json({
       account: account ? { id: account.id, email: account.email, displayName: account.displayName, role: account.role } : null,

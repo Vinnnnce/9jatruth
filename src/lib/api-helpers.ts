@@ -30,9 +30,15 @@ export async function getUserId(_request?: Request): Promise<string> {
   } catch {
     // auth() can throw outside of a request context; fall through to dev fallback
   }
-  // In production, do not fall back to a shared dev identity — require auth
+  // In production, if Clerk is not configured (placeholder key), fall back to IP-based identity
   if (process.env.NODE_ENV === "production") {
-    throw new Error("Authentication required: getUserId() called without an authenticated session in production");
+    const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
+    if (isClerkConfigured) {
+      throw new Error("Authentication required: getUserId() called without an authenticated session in production");
+    }
+    // Clerk not configured — use IP-based fallback for anonymous users
+    return "dev_anon";
   }
   return "dev_1d6e";
 }

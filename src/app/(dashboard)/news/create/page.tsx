@@ -222,7 +222,8 @@ export default function CreateArticlePage() {
         }
         const formData = new FormData();
         formData.append("file", file);
-        fetch("/api/upload", { method: "POST", body: formData })
+        formData.append("duration", String(video.duration));
+        fetch("/api/media/upload", { method: "POST", body: formData })
           .then((r) => r.json())
           .then((d) => {
             if (d.url) {

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { motion, AnimatePresence } from "framer-motion";
+import { BatchAISummaries } from "@/components/ai-content-summaries";
 import {
   Heart,
   MessageCircle,
@@ -216,6 +217,11 @@ export function NewsFeed() {
             ))}
           </AnimatePresence>
         </div>
+      )}
+
+      {/* AI Batch Summaries */}
+      {filtered.length > 0 && (
+        <BatchAISummaries articles={filtered.map(a => ({ id: a.id, title: a.title, content: a.excerpt }))} />
       )}
     </div>
   );
