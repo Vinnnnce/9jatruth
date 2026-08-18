@@ -171,15 +171,17 @@ export default function GeoMapClient() {
       activeCategory,
     ],
     queryFn: async () => {
-      if (!selectedNeighborhood) return null;
-      const n = selectedNeighborhood.neighborhood;
+      // Use the derived selected neighborhood so nearby data loads on first
+      // visit without requiring the user to click a neighborhood button.
+      const n = (selectedNeighborhood || data?.[0])?.neighborhood;
+      if (!n) return null;
       const res = await apiRequest(
         "GET",
         `/api/maps/nearby?lat=${n.lat}&lng=${n.lng}&radius=5000&category=${activeCategory}&ai=true`
       );
       return res.json();
     },
-    enabled: !!selectedNeighborhood,
+    enabled: !!(selectedNeighborhood || data?.[0]),
     retry: 1,
   });
 
@@ -217,6 +219,8 @@ export default function GeoMapClient() {
       } else {
         // Fallback: query the global search API so the search bar returns
         // results even when no nearby data is loaded for the current area.
+        // Results without lat/lng are still shown in the dropdown list but
+        // won't appear as markers on the map.
         try {
           const res = await apiRequest(
             "GET",
@@ -227,19 +231,34 @@ export default function GeoMapClient() {
             ? json
             : json.results || [];
           const mapped: NearbyPlace[] = results
-            .map((r: any) =>
-              normalizePlace({
-                id: String(r.id ?? r.placeId ?? ""),
-                name: r.name || r.title || r.content?.slice(0, 40),
+            .map((r: any) => {
+              const lat = r.lat ?? r.latitude ?? null;
+              const lng = r.lng ?? r.longitude ?? null;
+              return normalizePlace({
+                id: String(r.id ?? r.placeId ?? `search-${Math.random()}`),
+                name: r.name || r.title || (r.content ? String(r.content).slice(0, 40) : "Search result"),
                 category: r.category || r.region || "Search result",
                 icon: "🔎",
-                lat: r.lat ?? r.latitude,
-                lng: r.lng ?? r.longitude,
-                vicinity: r.vicinity || r.region,
-              })
-            )
+                lat: lat ?? undefined,
+                lng: lng ?? undefined,
+                vicinity: r.vicinity || r.region || r.description,
+              });
+            })
             .filter((p): p is NearbyPlace => p !== null);
-          setSearchResults(mapped);
+          // If no results have coordinates, still show them as text-only entries
+          // by assigning them to the map center so they appear in the dropdown.
+          const fallbackMapped = mapped.length > 0
+            ? mapped
+            : results.map((r: any) => ({
+                id: String(r.id ?? `search-${Math.random()}`),
+                name: r.name || r.title || "Search result",
+                category: r.category || r.region || "Search result",
+                icon: "🔎",
+                lat: -1,
+                lng: -1, // invalid coords — won't render as marker but shows in list
+                vicinity: r.vicinity || r.region || r.description,
+              }) as NearbyPlace);
+          setSearchResults(fallbackMapped);
         } catch {
           setSearchResults([]);
         }
@@ -251,6 +270,27 @@ export default function GeoMapClient() {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     };
   }, [searchQuery, nearbyData]);
+
+  // Derive the selected neighborhood and center from data, even before
+  // the user clicks a neighborhood button (loads nearby places on first visit).
+  const selected = selectedNeighborhood || data?.[0] || null;
+  const center = selected
+    ? { lat: selected.neighborhood.lat, lng: selected.neighborhood.lng }
+    : { lat: 0, lng: 0 };
+  const places: NearbyPlace[] =
+    searchResults.length > 0 ? searchResults : nearbyData?.places || [];
+
+  // Validate, normalize, and filter places with valid coordinates.
+  // This fixes both the "undefined" popup bug and the ~1km marker offset
+  // (caused by rendering markers with bad/missing coordinates).
+  // Must be called before any conditional returns to respect hook order.
+  const validPlaces: NearbyPlace[] = useMemo(
+    () =>
+      places
+        .map((p) => normalizePlace(p))
+        .filter((p): p is NearbyPlace => p !== null),
+    [places]
+  );
 
   // Error state with retry
   if (isError) {
@@ -278,7 +318,7 @@ export default function GeoMapClient() {
     );
   }
 
-  if (isLoading || !data || data.length === 0) {
+  if (isLoading || !data || data.length === 0 || !selected) {
     return (
       <div className="p-4 md:p-6 max-w-5xl space-y-6">
         <Skeleton className="h-8 w-48" />
@@ -287,24 +327,10 @@ export default function GeoMapClient() {
     );
   }
 
-  const selected = selectedNeighborhood || data[0];
-  const center = {
-    lat: selected.neighborhood.lat,
-    lng: selected.neighborhood.lng,
-  };
-  const places: NearbyPlace[] =
-    searchResults.length > 0 ? searchResults : nearbyData?.places || [];
+  // selected and center are already computed above (before early returns)
+  const places_unused = places; // already computed above
 
-  // Validate, normalize, and filter places with valid coordinates.
-  // This fixes both the "undefined" popup bug and the ~1km marker offset
-  // (caused by rendering markers with bad/missing coordinates).
-  const validPlaces: NearbyPlace[] = useMemo(
-    () =>
-      places
-        .map((p) => normalizePlace(p))
-        .filter((p): p is NearbyPlace => p !== null),
-    [places]
-  );
+  // validPlaces is already computed above via useMemo
 
   const sidebarContent = (
     <Card className="border-border">
@@ -531,10 +557,10 @@ export default function GeoMapClient() {
                       }
                     }}
                     // Mobile performance: disable rotation by drag (keeps
-                    // pinch-to-zoom smooth), reduce touch pitch sensitivity.
+                    // pinch-to-zoom smooth). touchZoom stays enabled.
                     dragRotate={false}
                     touchPitch={false}
-                    touchZoomRotate={false}
+                    touchZoomRotate={true}
                   >
                     <FullscreenControl position="top-right" />
                     <NavigationControl
