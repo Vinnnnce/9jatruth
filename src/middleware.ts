@@ -3,18 +3,48 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
+const isClerkConfigured =
+  clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
 
 const SUPER_ADMIN_EMAIL = "9jatruthofficial@gmail.com";
 
-// Public routes — accessible without authentication
+// ─── Launch Countdown Gate ───────────────────────────────────
+// The site is gated until Friday, 21 August 2026, 00:00 Africa/Lagos (WAT, UTC+1).
+// Until then, all traffic is redirected to /countdown (waitlist signup page).
+// After launch, the gate is disabled and the site is fully accessible.
+//
+// To bypass the gate (e.g. for admin testing), set BYPASS_LAUNCH_GATE=true in env.
+const LAUNCH_DATE_ISO = "2026-08-21T00:00:00+01:00"; // 2026-08-21 00:00 WAT
+const BYPASS_GATE = process.env.BYPASS_LAUNCH_GATE === "true";
+
+function isBeforeLaunch(): boolean {
+  if (BYPASS_GATE) return false;
+  return Date.now() < new Date(LAUNCH_DATE_ISO).getTime();
+}
+
+// Routes that are ALWAYS accessible (even before launch)
+const isPreLaunchRoute = createRouteMatcher([
+  "/countdown(.*)",
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  "/api/waitlist(.*)",
+  "/api/webhook(.*)",
+  "/api/health(.*)",
+  "/_next(.*)",
+  "/favicon(.*)",
+  "/manifest(.*)",
+  "/icon(.*)",
+  "/apple-touch-icon(.*)",
+]);
+
+// Public routes — accessible without authentication (post-launch)
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/webhook(.*)",
   "/api/health(.*)",
   "/api/neighborhoods(.*)",
-  "/api/truths(.*)",  // GET truths is public (community feed), writes are auth-checked in route
+  "/api/truths(.*)", // GET truths is public (community feed), writes are auth-checked in route
   "/api/dashboard(.*)",
   "/api/trends(.*)",
   "/api/search(.*)",
@@ -25,13 +55,14 @@ const isPublicRoute = createRouteMatcher([
   "/api/geo(.*)",
   "/api/organizations(.*)",
   "/api/push/vapid-key(.*)",
-  "/api/ai/feed-predictions(.*)",  // GET is public (feed display), POST is rate-limited
-  "/api/feed(.*)",  // Feed snapshots and suggestions are public
-  "/api/maps(.*)",  // Maps nearby is public
-  "/api/ai/time-series(.*)",  // Historical data is public
-  "/api/feedback(.*)",  // POST is public (anyone can submit feedback)
-  "/api/questionnaire(.*)",  // POST is public (anyone can submit questionnaire)
-  "/api/backup(.*)",  // Cron-triggered daily backup (protected by CRON_SECRET)
+  "/api/ai/feed-predictions(.*)", // GET is public (feed display), POST is rate-limited
+  "/api/feed(.*)", // Feed snapshots and suggestions are public
+  "/api/maps(.*)", // Maps nearby is public
+  "/api/ai/time-series(.*)", // Historical data is public
+  "/api/feedback(.*)", // POST is public (anyone can submit feedback)
+  "/api/questionnaire(.*)", // POST is public (anyone can submit questionnaire)
+  "/api/backup(.*)", // Cron-triggered daily backup (protected by CRON_SECRET)
+  "/api/waitlist(.*)",
 ]);
 
 // Admin-only API routes — require super admin email
@@ -75,6 +106,20 @@ const passThrough = () => NextResponse.next();
 
 const middleware = isClerkConfigured
   ? clerkMiddleware(async (auth, req) => {
+      // ─── Launch gate: redirect to countdown if before launch date ───
+      if (isBeforeLaunch() && !isPreLaunchRoute(req)) {
+        // Allow API calls from the countdown page itself
+        const isApiCall = req.nextUrl.pathname.startsWith("/api/");
+        if (isApiCall && !isPreLaunchRoute(req)) {
+          // Block all non-pre-launch API calls during countdown
+          return NextResponse.json(
+            { message: "Site launches August 21, 2026" },
+            { status: 503 }
+          );
+        }
+        return NextResponse.redirect(new URL("/countdown", req.url));
+      }
+
       // Protect admin, org, and user dashboard pages — require authentication
       if (isAdminRoute(req) || isOrgRoute(req) || isUserRoute(req)) {
         await auth.protect();
@@ -85,7 +130,20 @@ const middleware = isClerkConfigured
         await auth.protect();
       }
     })
-  : passThrough;
+  : (async (req: NextRequest) => {
+      // ─── Launch gate without Clerk ───
+      if (isBeforeLaunch() && !isPreLaunchRoute(req)) {
+        const isApiCall = req.nextUrl.pathname.startsWith("/api/");
+        if (isApiCall) {
+          return NextResponse.json(
+            { message: "Site launches August 21, 2026" },
+            { status: 503 }
+          );
+        }
+        return NextResponse.redirect(new URL("/countdown", req.url));
+      }
+      return NextResponse.next();
+    });
 
 export default middleware;
 
