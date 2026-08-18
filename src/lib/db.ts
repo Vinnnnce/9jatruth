@@ -1044,6 +1044,31 @@ export async function ensureDbInitialized() {
     }
   }
 
+  // Emergency contacts table for law enforcement agencies
+  await sql`CREATE TABLE IF NOT EXISTS emergency_contacts (
+    id SERIAL PRIMARY KEY,
+    agency_type TEXT NOT NULL,
+    agency_name TEXT NOT NULL,
+    phone_primary TEXT,
+    phone_secondary TEXT,
+    email TEXT,
+    address TEXT,
+    state TEXT,
+    lga TEXT,
+    community TEXT,
+    village TEXT,
+    lat DOUBLE PRECISION,
+    lng DOUBLE PRECISION,
+    coverage_radius_km INTEGER DEFAULT 50,
+    verified BOOLEAN DEFAULT false,
+    source TEXT DEFAULT '9jatruth',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_emergency_state ON emergency_contacts(state)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_emergency_lga ON emergency_contacts(lga)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_emergency_type ON emergency_contacts(agency_type)`;
+
   } catch (err) {
     console.error('[DB Init] Non-fatal error during initialization (continuing):', err);
   }

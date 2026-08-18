@@ -338,7 +338,6 @@ export default function CountdownPage() {
             {[
               { src: "/countdown/screenshots/feeds.png", label: "Community Feeds", span: "col-span-2" },
               { src: "/countdown/screenshots/news.png", label: "News & Articles", span: "" },
-              { src: "/countdown/screenshots/dashboard.png", label: "Dashboard", span: "" },
               { src: "/countdown/screenshots/sidebar.png", label: "Sidebar Navigation", span: "col-span-2" },
             ].map((item, idx) => (
               <div
