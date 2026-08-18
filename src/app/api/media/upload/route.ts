@@ -3,6 +3,10 @@ import { getClerkUserId, getUserId } from "@/lib/api-helpers";
 import { csrfCheck } from "@/lib/security";
 import crypto from "node:crypto";
 import { promises as fs } from "node:fs";
+
+// Allow larger body size and longer duration for media uploads on Vercel
+export const runtime = "nodejs";
+export const maxDuration = 60;
 import path from "node:path";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");

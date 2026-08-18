@@ -28,7 +28,8 @@ export type IssueType =
   | "null-render"
   | "missing-field"
   | "layout-shift"
-  | "component-timeout";
+  | "component-timeout"
+  | "empty-render";
 
 export type IssueSeverity = "low" | "medium" | "high" | "critical";
 
@@ -77,6 +78,10 @@ export interface UseSelfHealingReturn {
   healthStatus: HealthStatus;
   /** Detect anomalies in a data payload (null renders / missing fields). */
   detectAnomaly: (componentId: string, data: unknown, expectedFields?: string[]) => boolean;
+  /** Detect an empty render: arrays/strings/objects with no usable content. */
+  detectEmptyRender: (componentId: string, data: unknown) => boolean;
+  /** Observe a DOM element for layout shifts (CLS-style) and report anomalies. */
+  observeLayoutShifts: (componentId: string, el: Element | null) => () => void;
   /** Wrap an async API call with retry + exponential backoff + issue reporting. */
   withAutoRetry: <T>(
     componentId: string,
@@ -240,6 +245,81 @@ export function useSelfHealing(): UseSelfHealingReturn {
     [reportIssue]
   );
 
+  const detectEmptyRender = useCallback(
+    (componentId: string, data: unknown): boolean => {
+      // Arrays / strings / objects that contain no usable content.
+      let isEmpty = false;
+      if (data === null || data === undefined) {
+        isEmpty = true;
+      } else if (Array.isArray(data)) {
+        isEmpty = data.length === 0;
+      } else if (typeof data === "string") {
+        isEmpty = data.trim().length === 0;
+      } else if (typeof data === "object") {
+        isEmpty = Object.keys(data as object).length === 0;
+      }
+
+      if (isEmpty) {
+        reportIssue({
+          componentId,
+          type: "empty-render",
+          message: "Component rendered with empty content where data was expected",
+          severity: "low",
+        });
+      }
+      return isEmpty;
+    },
+    [reportIssue]
+  );
+
+  const observeLayoutShifts = useCallback(
+    (componentId: string, el: Element | null): (() => void) => {
+      if (typeof window === "undefined" || !el) return () => {};
+      // Use the PerformanceObserver API to detect layout shifts within the
+      // observed element's subtree. Falls back gracefully if unavailable.
+      if (typeof PerformanceObserver === "undefined") return () => {};
+
+      let cumulativeShift = 0;
+      let entries = 0;
+      const record = (value: number) => {
+        cumulativeShift += value;
+        entries += 1;
+        // Report only when the cumulative shift crosses an anomaly threshold.
+        if (cumulativeShift > 0.25) {
+          reportIssue({
+            componentId,
+            type: "layout-shift",
+            message: `Detected cumulative layout shift of ${cumulativeShift.toFixed(3)} across ${entries} entries`,
+            severity: "low",
+            meta: { cumulativeShift, entries },
+          });
+          // Reset so we only report a new anomaly for the next burst.
+          cumulativeShift = 0;
+          entries = 0;
+        }
+      };
+
+      let observer: PerformanceObserver | null = null;
+      try {
+        observer = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            // Layout-shift entries carry a `value` with the shift score.
+            const value = (entry as unknown as { value?: number }).value ?? 0;
+            record(value);
+          }
+        });
+        observer.observe({ type: "layout-shift", buffered: true });
+      } catch {
+        // Some browsers don't support the layout-shift entry type — ignore.
+      }
+
+      return () => {
+        if (observer) observer.disconnect();
+      };
+    },
+    [reportIssue]
+  );
+
   const autoFix = useCallback(
     async (componentId: string): Promise<boolean> => {
       const record = getOrCreateRecord(componentId);
@@ -356,6 +436,8 @@ export function useSelfHealing(): UseSelfHealingReturn {
     autoFix,
     healthStatus,
     detectAnomaly,
+    detectEmptyRender,
+    observeLayoutShifts,
     withAutoRetry,
     getComponentHealth,
     clearIssues,
