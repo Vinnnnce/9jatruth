@@ -25,6 +25,7 @@ function isBeforeLaunch(): boolean {
 // Routes that are ALWAYS accessible (even before launch)
 const isPreLaunchRoute = createRouteMatcher([
   "/countdown(.*)",
+  "/faq(.*)",
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/waitlist(.*)",
@@ -63,6 +64,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/questionnaire(.*)", // POST is public (anyone can submit questionnaire)
   "/api/backup(.*)", // Cron-triggered daily backup (protected by CRON_SECRET)
   "/api/waitlist(.*)",
+  "/faq(.*)",
 ]);
 
 // Admin-only API routes — require super admin email

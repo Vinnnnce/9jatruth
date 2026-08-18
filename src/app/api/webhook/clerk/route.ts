@@ -1,12 +1,14 @@
-import { ensureDbInitialized } from "@/lib/db";
+import { ensureDbInitialized, getDb } from "@/lib/db";
 import { upsertPlatformUser } from "@/lib/neon-storage";
 import { Webhook } from "svix";
 
 /**
  * Clerk webhook endpoint.
  *
- * Verifies the incoming webhook signature using svix, then upserts the user
- * into the platform_users table on user.created and user.updated events.
+ * Verifies the incoming webhook signature using svix, then:
+ * 1. Upserts the user into platform_users table (user.created, user.updated)
+ * 2. On user.created, matches the email against the waitlist table and
+ *    marks the row as 'converted', linking the Clerk user ID.
  *
  * Required env: CLERK_WEBHOOK_SECRET (the Signing Secret from the Clerk dashboard).
  */
@@ -48,11 +50,11 @@ export async function POST(request: Request) {
   const eventType: string = evt.type;
   const data: any = evt.data;
 
-  // Sync on user creation, update, or deletion-recovery events.
+  // Sync on user creation, update, or deletion events.
   const syncEvents = new Set([
     "user.created",
     "user.updated",
-    "user.deleted", // handled below
+    "user.deleted",
   ]);
 
   if (!syncEvents.has(eventType)) {
@@ -64,9 +66,19 @@ export async function POST(request: Request) {
     return Response.json({ message: "No user id in payload" }, { status: 400 });
   }
 
-  // On deletion, we leave the row (soft handling) — a production system
-  // might mark the user inactive. Here we simply acknowledge.
+  // On deletion, leave the row (soft handling)
   if (eventType === "user.deleted") {
+    // Mark user as deleted in platform_users (soft delete)
+    try {
+      const sql = getDb();
+      await sql`
+        UPDATE platform_users 
+        SET updated_at = NOW(), deleted_at = NOW()
+        WHERE clerk_user_id = ${clerkUserId}
+      `;
+    } catch {
+      // Non-critical — the row stays as-is
+    }
     return Response.json({ received: true, event: eventType, deleted: true });
   }
 
@@ -82,12 +94,33 @@ export async function POST(request: Request) {
   const displayName = (firstName || lastName ? `${firstName} ${lastName}`.trim() : data.username) || null;
   const avatarUrl = data.image_url || null;
 
+  // ─── 1. Upsert into platform_users ────────────────────────────
   const saved = await upsertPlatformUser({
     clerkUserId,
     email: email || clerkUserId,
     displayName,
     avatarUrl,
   });
+
+  // ─── 2. On user.created, match waitlist emails ───────────────
+  // When a new user is created in Clerk (e.g. someone from the waitlist
+  // signs up), find their email in the waitlist table and mark it as
+  // 'converted', linking the Clerk user ID.
+  if (eventType === "user.created" && email) {
+    try {
+      const sql = getDb();
+      const emailLower = email.toLowerCase();
+      await sql`
+        UPDATE waitlist 
+        SET clerk_status = 'converted', 
+            clerk_entry_id = ${clerkUserId},
+            updated_at = NOW()
+        WHERE email = ${emailLower} AND clerk_status != 'converted'
+      `;
+    } catch (err) {
+      console.error("[Clerk Webhook] Failed to update waitlist:", err);
+    }
+  }
 
   return Response.json({ received: true, event: eventType, userId: saved?.id ?? null });
 }

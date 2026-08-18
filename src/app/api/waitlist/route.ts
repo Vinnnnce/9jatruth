@@ -21,7 +21,13 @@ export async function POST(request: Request) {
   if (!parsed.success) return validationErrorResponse(parsed.error);
 
   const { email, name, source } = parsed.data;
+  const emailLower = email.toLowerCase();
 
+  let dbStored = false;
+  let clerkStored = false;
+  let clerkError: string | null = null;
+
+  // ─── 1. Store in Neon database ───────────────────────────────
   try {
     await ensureDbInitialized();
     const sql = getDb();
@@ -34,27 +40,85 @@ export async function POST(request: Request) {
         name TEXT,
         source TEXT DEFAULT 'countdown',
         ip_hash TEXT,
+        clerk_status TEXT DEFAULT 'pending',
+        clerk_entry_id TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `;
 
     // Insert or update — ON CONFLICT does nothing if email already exists
     await sql`
-      INSERT INTO waitlist (email, name, source, ip_hash)
-      VALUES (${email.toLowerCase()}, ${name || null}, ${source}, ${ip})
+      INSERT INTO waitlist (email, name, source, ip_hash, clerk_status)
+      VALUES (${emailLower}, ${name || null}, ${source}, ${ip}, 'pending')
       ON CONFLICT (email) DO NOTHING
     `;
 
-    return Response.json({ success: true, message: "Added to waitlist" });
+    dbStored = true;
   } catch (err: any) {
-    console.error("[Waitlist] Error:", err);
-    // If table creation fails (e.g. permissions), still return success
-    // so the user experience isn't broken — we can backfill later.
-    if (err?.message?.includes("permission") || err?.message?.includes("denied")) {
-      return Response.json({ success: true, message: "Added to waitlist" });
+    console.error("[Waitlist] DB error:", err);
+    // Don't return early — try Clerk storage even if DB fails
+  }
+
+  // ─── 2. Create Clerk waitlist entry ───────────────────────────
+  // Uses Clerk's Backend SDK to add the email to the Clerk waitlist.
+  // When the user later signs up via Clerk, the webhook will match the
+  // waitlist email and update the DB row's clerk_status to 'converted'.
+  try {
+    const { clerkClient } = await import("@clerk/nextjs/server");
+    const client = await clerkClient();
+    const entry = await client.waitlistEntries.create({
+      emailAddress: emailLower,
+      notify: true,
+    });
+
+    clerkStored = true;
+
+    // Update the DB row with the Clerk entry ID if DB storage succeeded
+    if (dbStored) {
+      try {
+        const sql = getDb();
+        await sql`
+          UPDATE waitlist 
+          SET clerk_status = 'waitlisted', clerk_entry_id = ${entry.id}
+          WHERE email = ${emailLower}
+        `;
+      } catch (dbErr) {
+        console.error("[Waitlist] Failed to update clerk_entry_id:", dbErr);
+      }
     }
+  } catch (err: any) {
+    clerkError = err?.message || "Unknown Clerk error";
+    console.error("[Waitlist] Clerk error:", clerkError);
+
+    // If Clerk fails because the entry already exists, that's fine
+    if (clerkError && (clerkError.includes("already") || clerkError.includes("exists"))) {
+      clerkStored = true;
+      clerkError = null;
+    }
+  }
+
+  // ─── 3. Return response ───────────────────────────────────────
+  if (dbStored && clerkStored) {
+    return Response.json({
+      success: true,
+      message: "Added to waitlist",
+      storage: { database: true, clerk: true },
+    });
+  } else if (dbStored) {
+    return Response.json({
+      success: true,
+      message: "Added to waitlist",
+      storage: { database: true, clerk: false, clerkError: clerkError || undefined },
+    });
+  } else if (clerkStored) {
+    return Response.json({
+      success: true,
+      message: "Added to waitlist",
+      storage: { database: false, clerk: true },
+    });
+  } else {
     return Response.json(
-      { message: "Failed to join waitlist. Please try again." },
+      { message: "Failed to join waitlist. Please try again.", clerkError: clerkError || undefined },
       { status: 500 }
     );
   }

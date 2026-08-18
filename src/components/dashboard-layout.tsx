@@ -241,6 +241,8 @@ function AppSidebar() {
           <Link href="/terms" className="hover:underline">Terms</Link>
           <span>·</span>
           <Link href="/cookies" className="hover:underline">Cookies</Link>
+          <span>·</span>
+          <Link href="/faq" className="hover:underline">FAQ</Link>
         </div>
         <a
           href="/manifest.webmanifest"
