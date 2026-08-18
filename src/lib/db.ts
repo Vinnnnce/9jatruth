@@ -305,6 +305,19 @@ export async function ensureDbInitialized() {
     updated_at TIMESTAMPTZ DEFAULT NOW()
   )`;
 
+  // Waitlist table for pre-launch email signups
+  await sql`CREATE TABLE IF NOT EXISTS waitlist (
+    id SERIAL PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    name TEXT,
+    source TEXT DEFAULT 'countdown',
+    ip_hash TEXT,
+    clerk_status TEXT DEFAULT 'pending',
+    clerk_entry_id TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+
   // Add columns to existing tables (idempotent)
   await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS ip_hash TEXT`;
   await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS ip_region TEXT`;
