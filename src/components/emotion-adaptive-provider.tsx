@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Smile, Brain, Coffee, TrendingDown, Heart, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -76,12 +76,15 @@ export interface EmotionAdaptiveProviderProps {
   showMoodIndicator?: boolean;
   /** Apply density-driven className to the wrapper. Defaults to true. */
   applyDensityClass?: boolean;
+  /** Apply tone/mood/palette CSS classes to <body> as well. Defaults to true. */
+  applyBodyClasses?: boolean;
 }
 
 export function EmotionAdaptiveProvider({
   children,
   showMoodIndicator = false,
   applyDensityClass = true,
+  applyBodyClasses = true,
 }: EmotionAdaptiveProviderProps) {
   const { mood, moodScore, textTone, colorPalette, layoutDensity, recommendations, resetMood } =
     useEmotionAdaptive();
@@ -91,6 +94,23 @@ export function EmotionAdaptiveProvider({
     () => PALETTE_VARS[colorPalette] as CSSProperties,
     [colorPalette]
   );
+
+  // Apply a tone + mood + density class to <body> so any component in the
+  // tree (not just descendants of this wrapper) can react via CSS, e.g.
+  // `body.emotion-tone-calm .cta { ... }`. Removed on unmount.
+  useEffect(() => {
+    if (!applyBodyClasses || typeof document === "undefined") return;
+    const body = document.body;
+    const toneClass = `emotion-tone-${textTone}`;
+    const moodClass = `emotion-mood-${mood}`;
+    const paletteClass = `emotion-palette-${colorPalette}`;
+    const densityClass = `emotion-density-${layoutDensity}`;
+
+    body.classList.add(toneClass, moodClass, paletteClass, densityClass);
+    return () => {
+      body.classList.remove(toneClass, moodClass, paletteClass, densityClass);
+    };
+  }, [applyBodyClasses, textTone, mood, colorPalette, layoutDensity]);
 
   const contextValue = useMemo<EmotionAdaptiveContextValue>(
     () => ({ mood, moodScore, textTone, colorPalette, layoutDensity, recommendations, resetMood }),
