@@ -30,7 +30,7 @@ export async function ensureDbInitialized() {
   if (initialized) return;
   const sql = getDb();
 
-  // Core tables
+  try {
   await sql`CREATE TABLE IF NOT EXISTS neighborhoods (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
@@ -1042,6 +1042,10 @@ export async function ensureDbInitialized() {
     for (const c of cats) {
       await sql`INSERT INTO reward_categories (name, description, icon) VALUES (${c.name}, ${c.description}, ${c.icon})`;
     }
+  }
+
+  } catch (err) {
+    console.error('[DB Init] Non-fatal error during initialization (continuing):', err);
   }
 
   initialized = true;
