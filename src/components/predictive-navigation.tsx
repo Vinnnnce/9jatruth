@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Brain, Clock, Sparkles, TrendingUp, Zap } from "lucide-react";
+import { ArrowRight, Brain, Clock, Sparkles, TrendingUp, Zap, Compass } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,8 @@ export type PredictiveNavigationProps = {
   orientation?: "row" | "column";
   /** Called when the user clicks through a suggestion. */
   onNavigate?: (path: SuggestedPath) => void;
+  /** Show the "anticipated next action" banner above the suggestion cards. */
+  showAnticipatedAction?: boolean;
 };
 
 const KIND_META: Record<
@@ -47,8 +49,9 @@ export function PredictiveNavigation({
   maxSuggestions = 4,
   orientation = "row",
   onNavigate,
+  showAnticipatedAction = true,
 }: PredictiveNavigationProps) {
-  const { suggestedPaths, prefetchContent, trackNavigation, isPrefetched } = usePredictiveFlows();
+  const { suggestedPaths, prefetchContent, trackNavigation, isPrefetched, anticipatedAction, observeForPrefetch } = usePredictiveFlows();
 
   const visible = React.useMemo(
     () => suggestedPaths.slice(0, maxSuggestions),
@@ -84,6 +87,51 @@ export function PredictiveNavigation({
       )}
       aria-label="Predictive navigation suggestions"
     >
+      {/* Anticipated next action banner: surfaces the single most-likely next
+          step so the user can resume with one click. */}
+      {showAnticipatedAction && anticipatedAction && (
+        <motion.div
+          layout
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+          className="w-full"
+        >
+          <Link
+            href={anticipatedAction.path}
+            onMouseEnter={() => handleHover(anticipatedAction.path)}
+            onFocus={() => handleHover(anticipatedAction.path)}
+            onClick={() => handleClick(anticipatedAction)}
+            className="block"
+          >
+            <Card className="group border-primary/30 bg-primary/5 transition-shadow hover-elevate">
+              <CardContent className="flex items-center gap-3 p-3">
+                <Compass className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-primary">Anticipated next</p>
+                  <p className="truncate text-sm font-medium leading-snug">{anticipatedAction.title}</p>
+                </div>
+                {isPrefetched(anticipatedAction.path) && (
+                  <Badge variant="secondary" className="gap-1 shrink-0">
+                    <Zap className="h-3 w-3" />
+                    Ready
+                  </Badge>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1 text-xs shrink-0 group-hover:translate-x-0.5 transition-transform"
+                  tabIndex={-1}
+                >
+                  Go
+                  <ArrowRight className="h-3 w-3" />
+                </Button>
+              </CardContent>
+            </Card>
+          </Link>
+        </motion.div>
+      )}
+
       <AnimatePresence initial={false} mode="popLayout">
         {visible.map((suggestion, index) => {
           const meta = KIND_META[suggestion.kind];
@@ -99,6 +147,9 @@ export function PredictiveNavigation({
               exit={{ opacity: 0, y: -8, scale: 0.97 }}
               transition={{ duration: 0.25, delay: index * 0.04, ease: "easeOut" }}
               className={orientation === "row" ? "sm:w-72" : "w-full"}
+              // Preload content as the card scrolls into view so the eventual
+              // click feels instant (Intersection Observer anticipatory caching).
+              ref={observeForPrefetch(suggestion.path)}
             >
               <Link
                 href={suggestion.path}

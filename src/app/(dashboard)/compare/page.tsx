@@ -347,9 +347,28 @@ function AICompareSection({ neighborhoodA, neighborhoodB, nameA, nameB }: {
         )}
 
         {analysis && (
-          <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
-            {analysis}
-          </p>
+          <div className="space-y-3">
+            <div className="rounded-md bg-purple-500/5 border border-purple-500/20 p-3">
+              <p className="text-[10px] uppercase tracking-wide text-purple-500 font-medium mb-1.5">AI Analysis</p>
+              <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                {analysis}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <div className="rounded-md bg-muted/30 p-2">
+                <p className="text-[9px] uppercase text-muted-foreground">Risk Assessment</p>
+                <p className="text-[10px] mt-0.5">AI-powered risk evaluation based on safety, infrastructure, and economic indicators.</p>
+              </div>
+              <div className="rounded-md bg-muted/30 p-2">
+                <p className="text-[9px] uppercase text-muted-foreground">Smart Recommendations</p>
+                <p className="text-[10px] mt-0.5">Context-aware suggestions for residents, businesses, and visitors.</p>
+              </div>
+              <div className="rounded-md bg-muted/30 p-2">
+                <p className="text-[9px] uppercase text-muted-foreground">Trend Forecasting</p>
+                <p className="text-[10px] mt-0.5">Predictive analysis of future conditions based on historical patterns.</p>
+              </div>
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>

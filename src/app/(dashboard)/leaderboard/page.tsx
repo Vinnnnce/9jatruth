@@ -12,6 +12,7 @@ import { Trophy, Star, Award, Medal, Crown, TrendingUp, Shield, ArrowUpDown, Shi
 
 type LeaderboardEntry = {
   userHash: string;
+  displayName?: string;
   totalCredits: number;
   submissions: number;
   verifications: number;
@@ -155,7 +156,7 @@ export default function Leaderboard() {
                     <PodiumIcon className={`h-5 w-5 ${color}`} />
                   </div>
                   <p className={`text-2xl font-display font-700 ${color}`}>#{i + 1}</p>
-                  <p className="text-xs font-mono text-muted-foreground mt-0.5">{user.userHash}</p>
+                  <p className="text-xs font-medium text-muted-foreground mt-0.5">{user.displayName || user.userHash}</p>
                   <div className="mt-2 flex items-center justify-center gap-1">
                     <BadgeIcon className={`h-3 w-3 ${badge.color}`} />
                     <span className="text-[10px] text-muted-foreground">{user.badge}</span>
@@ -200,7 +201,7 @@ export default function Leaderboard() {
                       #{rank}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-mono">{user.userHash}</p>
+                      <p className="text-xs font-medium">{user.displayName || user.userHash}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <BadgeIcon className={`h-2.5 w-2.5 ${badge.color}`} />
                         <span className="text-[9px] text-muted-foreground">{user.badge}</span>

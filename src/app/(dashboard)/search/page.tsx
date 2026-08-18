@@ -134,13 +134,26 @@ export default function SearchPage() {
               <SelectTrigger className="w-[160px]" data-testid="search-region">
                 <SelectValue placeholder="All regions" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[300px]">
                 <SelectItem value="all">All regions</SelectItem>
                 <SelectItem value="Lagos">Lagos</SelectItem>
                 <SelectItem value="Abuja">Abuja</SelectItem>
                 <SelectItem value="Enugu">Enugu</SelectItem>
                 <SelectItem value="Port Harcourt">Port Harcourt</SelectItem>
                 <SelectItem value="Ibadan">Ibadan</SelectItem>
+                <SelectItem value="Kano">Kano</SelectItem>
+                <SelectItem value="Kaduna">Kaduna</SelectItem>
+                <SelectItem value="Benin City">Benin City</SelectItem>
+                <SelectItem value="Onitsha">Onitsha</SelectItem>
+                <SelectItem value="Aba">Aba</SelectItem>
+                <SelectItem value="Accra">Accra, Ghana</SelectItem>
+                <SelectItem value="Nairobi">Nairobi, Kenya</SelectItem>
+                <SelectItem value="Johannesburg">Johannesburg, SA</SelectItem>
+                <SelectItem value="Cairo">Cairo, Egypt</SelectItem>
+                <SelectItem value="London">London, UK</SelectItem>
+                <SelectItem value="New York">New York, US</SelectItem>
+                <SelectItem value="Toronto">Toronto, Canada</SelectItem>
+                <SelectItem value="Dubai">Dubai, UAE</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -248,7 +261,7 @@ export default function SearchPage() {
             <SearchIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
             <p className="text-sm">Start searching to find truths, neighborhoods, predictions, and alerts</p>
             <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
-              {["power outage", "fuel", "Lekki", "traffic", "Abuja", "safety"].map((term) => (
+              {["power outage", "fuel", "Lekki", "traffic", "Abuja", "safety", "security", "agriculture", "infrastructure", "health", "education", "environment"].map((term) => (
                 <button
                   key={term}
                   onClick={() => { setQuery(term); setSearchQuery(term); }}
@@ -257,6 +270,10 @@ export default function SearchPage() {
                   {term}
                 </button>
               ))}
+            </div>
+            <div className="mt-4 pt-4 border-t">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mb-2">AI-Powered Suggestions</p>
+              <p className="text-xs">Search results include AI-ranked relevance scoring, trend analysis, and predictive content discovery across all categories and regions.</p>
             </div>
           </CardContent>
         </Card>

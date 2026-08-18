@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Brain, ChevronDown, ChevronUp, Sparkles, TrendingUp, Zap } from "lucide-react";
+import { Brain, ChevronDown, ChevronUp, Sparkles, TrendingUp, Zap, Compass } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,10 @@ export type PredictiveInterfaceProps = {
   className?: string;
   /** Hide the "smart order" chip row (rearranged category pills). */
   hideCategoryStrip?: boolean;
+  /** Hide the "surface ahead" strip that proactively surfaces news before search. */
+  hideSurfaceAhead?: boolean;
+  /** Minimum engagement score (0-100) required to auto-expand sections. */
+  autoExpandEngagementThreshold?: number;
 };
 
 /**
@@ -46,12 +50,16 @@ export function PredictiveInterface({
   onCategoryRearrange,
   className,
   hideCategoryStrip,
+  hideSurfaceAhead,
+  autoExpandEngagementThreshold = 30,
 }: PredictiveInterfaceProps) {
   const {
     predictedCategory,
     categoryScores,
     engagementScore,
     autoExpandSections,
+    intent,
+    predictedNext,
     trackEvent,
   } = usePredictiveUI();
   const { suggestedPaths, trackNavigation } = usePredictiveFlows();
@@ -100,6 +108,30 @@ export function PredictiveInterface({
 
   const topSuggestion = suggestedPaths[0];
   const showSurfaceStrip = !dismissed && (!!predictedCategory || !!topSuggestion);
+
+  // "Surface ahead": proactively surface categories the user is predicted to
+  // care about next, before they search. Filter to known categories and
+  // drop the one already shown as the primary prediction.
+  const surfaceAhead = React.useMemo(() => {
+    if (hideSurfaceAhead) return [];
+    const known = new Set(categories.map((c) => c.key));
+    return intent.surfaceAhead
+      .filter((s) => known.has(s.category) && s.category !== predictedCategory)
+      .slice(0, 4);
+  }, [intent.surfaceAhead, categories, predictedCategory, hideSurfaceAhead]);
+
+  // Engagement-gated auto-expand: only auto-expand sections when the user is
+  // demonstrably engaged (above the configurable threshold), so passive
+  // browsing doesn't trigger noisy expansions.
+  const effectiveAutoExpand = React.useMemo(() => {
+    if (engagementScore < autoExpandEngagementThreshold) return [];
+    return autoExpandSections;
+  }, [autoExpandSections, engagementScore, autoExpandEngagementThreshold]);
+
+  const surfaceAheadLabel = React.useCallback(
+    (key: string) => categories.find((c) => c.key === key)?.label ?? key,
+    [categories],
+  );
 
   return (
     <div className={cn("w-full", className)}>
@@ -167,13 +199,23 @@ export function PredictiveInterface({
                       <TrendingUp className="h-3 w-3" />
                       Engagement {engagementScore}%
                     </Badge>
-                    {autoExpandSections.length > 0 && (
+                    {effectiveAutoExpand.length > 0 && (
                       <Badge variant="secondary">
-                        Auto-expanding {autoExpandSections.length}{" "}
-                        {autoExpandSections.length === 1 ? "section" : "sections"}
+                        Auto-expanding {effectiveAutoExpand.length}{" "}
+                        {effectiveAutoExpand.length === 1 ? "section" : "sections"}
+                      </Badge>
+                    )}
+                    {predictedNext.confidence > 0 && (
+                      <Badge variant="outline" className="gap-1">
+                        <Compass className="h-3 w-3" />
+                        Next: {categories.find((c) => c.key === predictedNext.predictedCategory)?.label ?? predictedNext.predictedCategory ?? "—"}{" "}
+                        ({Math.round(predictedNext.confidence * 100)}%)
                       </Badge>
                     )}
                   </div>
+                  {intent.reason && (
+                    <p className="text-[11px] text-muted-foreground/80 italic">{intent.reason}</p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-1">
@@ -194,7 +236,49 @@ export function PredictiveInterface({
         )}
       </AnimatePresence>
 
-      <PredictiveAutoExpandContext.Provider value={autoExpandSections}>
+      {/* Surface-ahead strip: proactively surface news the user is predicted to
+          care about next, before they search. Renders as quick-access pills. */}
+      <AnimatePresence>
+        {surfaceAhead.length > 0 && (
+          <motion.div
+            key="surface-ahead"
+            initial={{ opacity: 0, y: -6, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -6, height: 0 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            className="mb-3 overflow-hidden"
+            aria-label="Surfaced ahead of search"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <motion.div layout className="flex items-center gap-1 text-xs text-muted-foreground pr-1">
+                <Compass className="h-3.5 w-3.5" />
+                <span>Surfaced for you</span>
+              </motion.div>
+              <AnimatePresence initial={false}>
+                {surfaceAhead.map((s) => (
+                  <motion.button
+                    key={s.category}
+                    layout
+                    type="button"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    onClick={() => handleCategoryClick(s.category)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary transition-colors hover-elevate"
+                  >
+                    <Sparkles className="h-3 w-3" aria-hidden />
+                    {surfaceAheadLabel(s.category)}
+                    <span className="text-[9px] text-primary/60">{Math.round(s.score * 100)}%</span>
+                  </motion.button>
+                ))}
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <PredictiveAutoExpandContext.Provider value={effectiveAutoExpand}>
         {children}
       </PredictiveAutoExpandContext.Provider>
     </div>

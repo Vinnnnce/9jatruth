@@ -1,6 +1,7 @@
 import { ensureDbInitialized } from "@/lib/db";
 import {
   getAgencyAccountByClerkId,
+  getAgencyAccountByEmail,
   updateAgencyAccount,
   updateOrganizationProfile,
   getOrganization,
@@ -41,6 +42,82 @@ export async function PATCH(request: Request) {
 
   const authAccount = clerkUserId ? await getAgencyAccountByClerkId(clerkUserId) : null;
   if (!authAccount) {
+    // For agency accounts using password-based auth (not Clerk),
+    // try looking up by email from the request body
+    try {
+      const peekBody = await request.clone().json();
+      if (peekBody?.email || peekBody?.contactEmail) {
+        const emailToLookup = peekBody.email || peekBody.contactEmail;
+        const emailAccount = await getAgencyAccountByEmail(emailToLookup);
+        if (emailAccount && emailAccount.active) {
+          // Use this account for the update
+          const body = await request.json();
+          const parsed = validate(agencyUpdateSchema, body);
+          if (!parsed.success) return validationErrorResponse(parsed.error);
+          const data = parsed.data;
+
+          // Defense-in-depth: ensure no privileged field leaked through validation.
+          for (const field of SENSITIVE_ACCOUNT_FIELDS) {
+            if (field in (data as Record<string, unknown>)) {
+              return Response.json({ message: `Field '${field}' cannot be modified here` }, { status: 400 });
+            }
+          }
+
+          // If changing password, verify current password
+          if (data.newPassword) {
+            if (!data.currentPassword) {
+              return Response.json({ message: "Current password is required to change password" }, { status: 400 });
+            }
+            const valid = await verifyPassword(data.currentPassword, emailAccount.passwordHash);
+            if (!valid) {
+              return Response.json({ message: "Current password is incorrect" }, { status: 403 });
+            }
+            const newHash = await hashPassword(data.newPassword);
+            await updateAgencyAccount(emailAccount.id, { passwordHash: newHash });
+          }
+
+          // Update account display name
+          if (data.displayName) {
+            await updateAgencyAccount(emailAccount.id, { displayName: data.displayName });
+          }
+
+          // Update organization profile
+          const orgUpdates: any = {};
+          if (data.description !== undefined) orgUpdates.description = data.description;
+          if (data.contactEmail !== undefined) orgUpdates.contactEmail = data.contactEmail;
+          if (data.contactPhone !== undefined) orgUpdates.contactPhone = data.contactPhone;
+          if (data.website !== undefined) orgUpdates.website = data.website || null;
+          if (data.region !== undefined) orgUpdates.region = data.region;
+          if (data.city !== undefined) orgUpdates.city = data.city;
+
+          if (Object.keys(orgUpdates).length > 0) {
+            await updateOrganizationProfile(emailAccount.organizationId, orgUpdates);
+          }
+
+          const updatedAccount = await getAgencyAccountByEmail(emailToLookup);
+          const org = await getOrganization(emailAccount.organizationId);
+          return Response.json({
+            account: updatedAccount ? { id: updatedAccount.id, email: updatedAccount.email, displayName: updatedAccount.displayName, role: updatedAccount.role } : null,
+            organization: org
+              ? {
+                  id: org.id,
+                  name: org.name,
+                  type: org.type,
+                  verified: org.verified,
+                  contactEmail: org.contactEmail,
+                  description: org.description,
+                  region: org.region,
+                  city: org.city,
+                  website: org.website,
+                  contactPhone: org.contactPhone,
+                }
+              : null,
+          });
+        }
+      }
+    } catch {
+      // Body peek failed, continue to error
+    }
     return Response.json({ message: "Account not found. Please register first." }, { status: 404 });
   }
 

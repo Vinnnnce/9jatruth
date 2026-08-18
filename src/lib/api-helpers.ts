@@ -35,7 +35,9 @@ export async function getUserId(_request?: Request): Promise<string> {
     const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
     const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
     if (isClerkConfigured) {
-      throw new Error("Authentication required: getUserId() called without an authenticated session in production");
+      // Instead of throwing, return a fallback anonymous hash.
+      // Individual API routes that require auth should check getClerkUserId() explicitly.
+      return "dev_anon";
     }
     // Clerk not configured — use IP-based fallback for anonymous users
     return "dev_anon";

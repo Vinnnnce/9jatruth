@@ -17,11 +17,13 @@ export async function GET(
 
   const sql = getDb();
   const rows = (await sql`
-    SELECT id, truth_id, user_hash, content, image_url, sticker_id, gift_id,
-           parent_comment_id, like_count, reply_count, status, created_at, updated_at
-    FROM feed_comments
-    WHERE truth_id = ${truthId} AND status = 'active'
-    ORDER BY created_at ASC
+    SELECT c.id, c.truth_id, c.user_hash, c.content, c.image_url, c.sticker_id, c.gift_id,
+           c.parent_comment_id, c.like_count, c.reply_count, c.status, c.created_at, c.updated_at,
+           u.display_name, u.username
+    FROM feed_comments c
+    LEFT JOIN platform_users u ON c.user_hash = u.user_hash
+    WHERE c.truth_id = ${truthId} AND c.status = 'active'
+    ORDER BY c.created_at ASC
     LIMIT 100
   `) as unknown as any[];
 
@@ -29,6 +31,7 @@ export async function GET(
     id: r.id,
     truthId: r.truth_id,
     userHash: r.user_hash,
+    displayName: r.display_name || r.username || null,
     content: r.content,
     imageUrl: r.image_url,
     stickerId: r.sticker_id,

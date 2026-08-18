@@ -292,6 +292,62 @@ async function streamSummary(
   }
 }
 
+/**
+ * Batch streaming helper: sends the whole article list to the summarize API
+ * in `batch` mode and invokes `onItem` as each article's summary arrives.
+ * Falls back to per-article heuristic summarization on any failure.
+ */
+async function streamBatchSummary(
+  articles: Array<{ id: string | number; title: string; content: string }>,
+  level: SummaryLevel,
+  onItem: (id: string | number, result: SummaryResult) => void,
+): Promise<void> {
+  try {
+    const res = await fetch("/api/ai/summarize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        level,
+        batch: articles.map((a) => ({ id: a.id, title: a.title, text: a.content })),
+      }),
+    });
+
+    if (!res.ok || !res.body) {
+      throw new Error(`Summarize API responded with ${res.status}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const event = JSON.parse(line);
+          if (event.type === "item" && event.id && event.result) {
+            onItem(event.id, event.result as SummaryResult);
+          } else if (event.type === "error") {
+            throw new Error(event.message || "Batch streaming error");
+          }
+        } catch {
+          // Ignore malformed line, keep reading.
+        }
+      }
+    }
+  } catch {
+    // Fallback: summarize each article locally with the heuristic summarizer.
+    for (const article of articles) {
+      onItem(article.id, localHeuristicSummarize(article.content, article.title, level));
+    }
+  }
+}
+
 // ─── Progressive text reveal (simulated streaming for already-fetched text) ───
 
 function useProgressiveReveal(fullText: string, active: boolean, speedMs = 12) {
@@ -650,28 +706,54 @@ export function BatchAISummaries({ articles }: BatchSummaryProps) {
     setRunning(true);
     setProgress(0);
 
-    const CONCURRENCY = 3;
-    let completed = 0;
-    let index = 0;
+    // First, try the batch streaming endpoint (single request, streamed
+    // per-article results). Falls back to per-article requests if it errors.
+    let usedBatchStream = false;
+    try {
+      // Mark all as pending up front.
+      setStatuses((prev) => {
+        const next = { ...prev };
+        for (const a of articles) next[idOf(a.id)] = "pending";
+        return next;
+      });
 
-    async function worker() {
-      while (index < articles.length) {
-        const current = articles[index++];
-        await summarizeOne(current, level);
+      let completed = 0;
+      await streamBatchSummary(articles, level, (id, result) => {
+        const key = idOf(id);
+        setResults((prev) => ({ ...prev, [key]: result }));
+        setStatuses((prev) => ({ ...prev, [key]: "done" }));
+        writeCache(id, level, result);
         completed += 1;
         setProgress(Math.round((completed / articles.length) * 100));
-      }
+      });
+      usedBatchStream = true;
+    } catch {
+      usedBatchStream = false;
     }
 
-    try {
+    // Fallback: per-article requests for anything still pending.
+    if (!usedBatchStream) {
+      const CONCURRENCY = 3;
+      let completed = 0;
+      let index = 0;
+
+      async function worker() {
+        while (index < articles.length) {
+          const current = articles[index++];
+          await summarizeOne(current, level);
+          completed += 1;
+          setProgress(Math.round((completed / articles.length) * 100));
+        }
+      }
+
       await Promise.all(Array.from({ length: Math.min(CONCURRENCY, articles.length) }, worker));
-      toast({
-        title: "Batch summarization complete",
-        description: `Summarized ${articles.length} article${articles.length === 1 ? "" : "s"}.`,
-      });
-    } finally {
-      setRunning(false);
     }
+
+    toast({
+      title: "Batch summarization complete",
+      description: `Summarized ${articles.length} article${articles.length === 1 ? "" : "s"}.`,
+    });
+    setRunning(false);
   }, [articles, level, summarizeOne, toast]);
 
   const doneCount = Object.values(statuses).filter((s) => s === "done").length;

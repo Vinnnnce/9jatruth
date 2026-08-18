@@ -94,6 +94,7 @@ import {
   Trash2,
   Plus,
   ClipboardList,
+  Save,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -1595,27 +1596,76 @@ export default function AdminDashboard() {
               </div>
 
               <div className="space-y-2">
-                <p className="text-xs font-medium">Credit Rules</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium">Credit Rules</p>
+                  <Badge variant="outline" className="text-[9px] gap-0.5">
+                    <Sparkles className="h-2.5 w-2.5 text-purple-500" /> AI-Optimized
+                  </Badge>
+                </div>
                 <div className="space-y-1 text-xs text-muted-foreground">
                   <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
                     <span>Truth submission</span>
-                    <Badge variant="secondary">+20 credits</Badge>
+                    <div className="flex items-center gap-2">
+                      <Input type="number" defaultValue={20} className="h-6 w-16 text-xs" />
+                      <Badge variant="secondary">credits</Badge>
+                    </div>
                   </div>
                   <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
                     <span>Corroboration received</span>
-                    <Badge variant="secondary">+10 credits</Badge>
+                    <div className="flex items-center gap-2">
+                      <Input type="number" defaultValue={10} className="h-6 w-16 text-xs" />
+                      <Badge variant="secondary">credits</Badge>
+                    </div>
                   </div>
                   <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
                     <span>Verified by AI as authentic</span>
-                    <Badge variant="secondary">+15 credits</Badge>
+                    <div className="flex items-center gap-2">
+                      <Input type="number" defaultValue={15} className="h-6 w-16 text-xs" />
+                      <Badge variant="secondary">credits</Badge>
+                    </div>
                   </div>
                   <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
                     <span>Daily streak bonus</span>
-                    <Badge variant="secondary">+5 credits</Badge>
+                    <div className="flex items-center gap-2">
+                      <Input type="number" defaultValue={5} className="h-6 w-16 text-xs" />
+                      <Badge variant="secondary">credits</Badge>
+                    </div>
                   </div>
                   <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
                     <span>Disputed truth penalty</span>
-                    <Badge variant="destructive">-10 credits</Badge>
+                    <div className="flex items-center gap-2">
+                      <Input type="number" defaultValue={-10} className="h-6 w-16 text-xs" />
+                      <Badge variant="destructive">credits</Badge>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-2">
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                    <Save className="h-3 w-3" /> Save Rules
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                    <Sparkles className="h-3 w-3 text-purple-500" /> AI Optimize
+                  </Button>
+                </div>
+              </div>
+
+              {/* AI Rewards Insights */}
+              <div className="rounded-lg bg-purple-500/5 border border-purple-500/20 p-3 space-y-2">
+                <p className="text-[10px] uppercase tracking-wide text-purple-500 font-medium flex items-center gap-1">
+                  <Sparkles className="h-3 w-3" /> AI Rewards Insights
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div className="text-[10px]">
+                    <p className="font-medium text-foreground">Top Earners</p>
+                    <p className="text-muted-foreground">AI identifies most active contributors for targeted bonus rewards.</p>
+                  </div>
+                  <div className="text-[10px]">
+                    <p className="font-medium text-foreground">Fraud Detection</p>
+                    <p className="text-muted-foreground">AI flags suspicious credit accumulation patterns for review.</p>
+                  </div>
+                  <div className="text-[10px]">
+                    <p className="font-medium text-foreground">Reward Trends</p>
+                    <p className="text-muted-foreground">AI analyzes redemption patterns to optimize reward offerings.</p>
                   </div>
                 </div>
               </div>

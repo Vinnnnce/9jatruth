@@ -18,9 +18,22 @@ export const runtime = "nodejs";
  */
 
 const summarizeSchema = z.object({
-  text: z.string().min(1, "text is required").max(50_000),
+  text: z.string().max(50_000).optional(),
   title: z.string().max(500).optional().default(""),
   level: z.enum(["short", "medium", "deep"]).optional().default("medium"),
+  /** Batch mode: an array of articles to summarize in one streamed response. */
+  batch: z
+    .array(
+      z.object({
+        id: z.union([z.string(), z.number()]),
+        title: z.string().max(500).optional().default(""),
+        text: z.string().min(1, "text is required").max(50_000),
+      }),
+    )
+    .max(50)
+    .optional(),
+}).refine((data) => !!data.text || (!!data.batch && data.batch.length > 0), {
+  message: "Either `text` or a non-empty `batch` array is required",
 });
 
 export type SummaryLevel = "short" | "medium" | "deep";
@@ -273,6 +286,42 @@ function streamSummaryResult(result: SummaryResult): ReadableStream<Uint8Array> 
   });
 }
 
+/**
+ * Batch streaming: emits one `item` event per article (with its id + result)
+ * followed by a final `done` event summarizing the whole batch. Lets the
+ * client render each article's summary as soon as it is ready.
+ */
+function streamBatchSummaryResults(
+  items: Array<{ id: string | number; result: SummaryResult }>,
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+
+  return new ReadableStream({
+    async start(controller) {
+      const emit = (payload: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(JSON.stringify(payload) + "\n"));
+      };
+
+      try {
+        emit({ type: "batch-start", count: items.length });
+        for (const item of items) {
+          emit({ type: "item", id: item.id, result: item.result });
+          await new Promise((r) => setTimeout(r, 10));
+        }
+        emit({ type: "done", done: true, count: items.length });
+      } catch (err) {
+        emit({
+          type: "error",
+          done: true,
+          message: err instanceof Error ? err.message : "Batch streaming failed",
+        });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+}
+
 export async function POST(request: Request) {
   const csrfError = csrfCheck(request);
   if (csrfError) return csrfError;
@@ -289,7 +338,49 @@ export async function POST(request: Request) {
     return Response.json({ message: "Invalid input", errors: parsed.error.issues }, { status: 400 });
   }
 
-  const { text, title, level } = parsed.data;
+  const { text, title, level, batch } = parsed.data;
+
+  // ─── Batch mode: summarize many articles in one streamed response ───
+  if (batch && batch.length > 0) {
+    const items: Array<{ id: string | number; result: SummaryResult }> = [];
+    for (const article of batch) {
+      let result: SummaryResult;
+      if (isKimiConfigured()) {
+        try {
+          const { system, user } = buildKimiPrompt(article.text, article.title, level);
+          const raw = await generateKimiText(system, user, {
+            temperature: 0.4,
+            maxOutputTokens: level === "deep" ? 1400 : level === "medium" ? 900 : 500,
+          });
+          const kimiParsed = raw ? parseKimiResponse(raw) : null;
+          result = kimiParsed
+            ? { ...kimiParsed, source: "kimi", level }
+            : heuristicSummarize(article.text, article.title, level);
+        } catch (err) {
+          console.error("[api/ai/summarize] Kimi batch item failed, falling back:", err);
+          result = heuristicSummarize(article.text, article.title, level);
+        }
+      } else {
+        result = heuristicSummarize(article.text, article.title, level);
+      }
+      items.push({ id: article.id, result });
+    }
+
+    const stream = streamBatchSummaryResults(items);
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/x-ndjson; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Summary-Mode": "batch",
+      },
+    });
+  }
+
+  // ─── Single-article mode ───
+  if (!text) {
+    return Response.json({ message: "`text` is required in single-article mode" }, { status: 400 });
+  }
 
   let result: SummaryResult;
 

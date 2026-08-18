@@ -105,7 +105,11 @@ export async function POST(request: Request) {
   // Authentication (dev mode pattern — allow anonymous in development)
   const clerkUserId = await getClerkUserId();
   if (!clerkUserId) {
-    return Response.json({ message: "Unauthorized" }, { status: 401 });
+    const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
+    if (isClerkConfigured) {
+      return Response.json({ message: "Unauthorized — Please sign in to generate articles" }, { status: 401 });
+    }
   }
 
   const csrfError = csrfCheck(request);

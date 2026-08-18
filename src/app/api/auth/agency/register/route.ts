@@ -27,7 +27,16 @@ export async function POST(request: Request) {
     }
 
     const clerkUserId = await getClerkUserId();
-    const adminHash = await getUserId(request);
+    // Agency registration uses its own password-based auth, not Clerk.
+    // Use a fallback hash if the user isn't signed in via Clerk yet.
+    let adminHash: string;
+    try {
+      adminHash = await getUserId(request);
+    } catch {
+      // User not signed in via Clerk — generate a hash from their registration email
+      const crypto = await import("node:crypto");
+      adminHash = `dev_${crypto.createHash("sha256").update(data.email).digest("hex").substring(0, 12)}`;
+    }
 
     // Allow registration even when Clerk isn't configured (dev/legacy mode)
     const org = await createOrganization({

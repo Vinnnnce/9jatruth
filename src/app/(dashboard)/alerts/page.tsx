@@ -6,7 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
-import { Zap, Fuel, Car, Tag, Shield, MapPin, AlertTriangle, AlertCircle, Info, Clock } from "lucide-react";
+import { Zap, Fuel, Car, Tag, Shield, MapPin, AlertTriangle, AlertCircle, Info, Clock, Bell, BellRing } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 type Alert = {
   id: string;
@@ -90,6 +93,46 @@ export default function Alerts() {
           Real-time alerts computed from neighborhood snapshots and AI predictions
         </p>
       </div>
+
+      {/* Push Notification Section */}
+      <Card className="border-border">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                <BellRing className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Push Notifications</p>
+                <p className="text-xs text-muted-foreground">Get alerts delivered to your device in real time</p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1"
+              onClick={async () => {
+                try {
+                  const reg = await navigator.serviceWorker?.getRegistration();
+                  if (!reg) {
+                    await navigator.serviceWorker?.register("/sw.js");
+                  }
+                  const permission = await Notification.requestPermission();
+                  if (permission === "granted") {
+                    new Notification("9jatruth Alerts", {
+                      body: "Push notifications enabled. You will receive alerts for critical events.",
+                    });
+                  }
+                } catch {
+                  // SW not available
+                }
+              }}
+            >
+              <Bell className="h-3.5 w-3.5" /> Enable Push
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="border-border">

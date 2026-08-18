@@ -45,6 +45,42 @@ export interface RecommendedSection {
   reason: string;
 }
 
+/** Per-category behavioral aggregate surfaced for intent anticipation. */
+export interface CategoryBehavior {
+  category: string;
+  /** Total clicks recorded (recency-decayed). */
+  clicks: number;
+  /** Total views recorded (recency-decayed). */
+  views: number;
+  /** Cumulative dwell time in ms (recency-decayed). */
+  totalDwellMs: number;
+  /** Average scroll depth reached (0-1). */
+  avgScrollDepth: number;
+  /** Last time this category was interacted with (epoch ms). */
+  lastSeenAt: number | null;
+}
+
+/** Inferred short-term intent, used to surface news before search. */
+export interface IntentSignal {
+  /** Best-guess category the user is currently pursuing. */
+  category: string | null;
+  /** 0-1 confidence of the intent guess. */
+  confidence: number;
+  /** Human-readable reason for the prediction. */
+  reason: string;
+  /** Ranked categories the user may want surfaced proactively. */
+  surfaceAhead: Array<{ category: string; score: number }>;
+}
+
+export interface PredictedCategoryResult {
+  /** The category the model believes the user will open next. */
+  predictedCategory: string | null;
+  /** Confidence 0-1 of the prediction. */
+  confidence: number;
+  /** Ranked next-likely categories (top 3). */
+  runnersUp: Array<{ category: string; score: number }>;
+}
+
 export interface PredictiveUIState {
   /** The category the model believes the user will open next. */
   predictedCategory: string | null;
@@ -56,12 +92,20 @@ export interface PredictiveUIState {
   engagementScore: number;
   /** Sections that should be auto-expanded right now. */
   autoExpandSections: string[];
+  /** Per-category behavioral aggregates (intent anticipation input). */
+  categoryBehavior: CategoryBehavior[];
+  /** Inferred short-term intent used to surface news before search. */
+  intent: IntentSignal;
+  /** Ranked prediction of the next category the user will open. */
+  predictedNext: PredictedCategoryResult;
   /** Record a new behavioral event. */
   trackEvent: (event: Omit<PredictiveEvent, "timestamp">) => void;
   /** Convenience helper: record dwell time for a category in ms. */
   trackDwell: (category: string, dwellMs: number) => void;
   /** Convenience helper: record scroll depth (0-1) for a category. */
   trackScroll: (category: string, scrollDepth: number) => void;
+  /** Start a dwell timer for a category; returns a stop() that records elapsed ms. */
+  startDwellTimer: (category: string) => () => void;
   /** Reset all stored behavioral data. */
   resetHistory: () => void;
 }
@@ -71,9 +115,15 @@ export interface PredictiveUIState {
 // ---------------------------------------------------------------------------
 
 const STORAGE_KEY = "9jatruth:predictive-ui:events:v1";
+const PREDICTIONS_KEY = "9jatruth:predictive-ui:predictions:v1";
 const MAX_EVENTS = 100;
 const HALF_LIFE_MS = 1000 * 60 * 60 * 24 * 3; // 3 days recency half-life
 const AUTO_EXPAND_THRESHOLD = 0.55;
+/** Dwell time (ms) above which a section is considered "deeply engaged" and
+ *  eligible for auto-expansion regardless of click frequency. */
+const DWELL_ENGAGEMENT_THRESHOLD_MS = 1000 * 45; // 45 seconds
+/** Time-of-day intent window: most recent events weighted heavier here. */
+const INTENT_WINDOW_MS = 1000 * 60 * 20; // 20 minutes
 
 // ---------------------------------------------------------------------------
 // Storage helpers
@@ -103,6 +153,35 @@ function saveEvents(events: PredictiveEvent[]) {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
   } catch {
     // Storage may be full or unavailable (private mode) - fail silently.
+  }
+}
+
+interface PersistedPredictions {
+  predictedCategory: string | null;
+  predictedNext: PredictedCategoryResult;
+  intent: IntentSignal;
+  savedAt: number;
+}
+
+function loadPredictions(): PersistedPredictions | null {
+  if (!isBrowser()) return null;
+  try {
+    const raw = window.localStorage.getItem(PREDICTIONS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedPredictions;
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function savePredictions(predictions: PersistedPredictions) {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.setItem(PREDICTIONS_KEY, JSON.stringify(predictions));
+  } catch {
+    // ignore quota / privacy-mode errors
   }
 }
 
@@ -214,12 +293,16 @@ function computeRecommendedSections(
   now: number,
 ): RecommendedSection[] {
   const sectionScores: Record<string, number> = {};
+  const sectionDwell: Record<string, number> = {};
 
   for (const event of events) {
     if (!event.section) continue;
     const recency = recencyWeight(event.timestamp, now);
     const base = event.type === "section_expand" ? 2 : event.type === "section_collapse" ? -1 : 1;
     sectionScores[event.section] = (sectionScores[event.section] ?? 0) + base * recency;
+    if (event.type === "dwell" && event.dwellMs) {
+      sectionDwell[event.section] = (sectionDwell[event.section] ?? 0) + event.dwellMs * recency;
+    }
   }
 
   const max = Math.max(1, ...Object.values(sectionScores).map((v) => Math.max(v, 0)));
@@ -227,16 +310,201 @@ function computeRecommendedSections(
   return Object.entries(sectionScores)
     .map(([section, raw]) => {
       const score = Math.max(0, raw) / max;
+      const dwell = sectionDwell[section] ?? 0;
+      const deeplyEngaged = dwell >= DWELL_ENGAGEMENT_THRESHOLD_MS;
       return {
         section,
         score,
-        reason:
-          score >= AUTO_EXPAND_THRESHOLD
+        reason: deeplyEngaged
+          ? "Deeply engaged — long dwell time detected"
+          : score >= AUTO_EXPAND_THRESHOLD
             ? "Frequently expanded and recently engaged with"
             : "Occasionally engaged with",
       };
     })
     .sort((a, b) => b.score - a.score);
+}
+
+/**
+ * Builds per-category behavioral aggregates (clicks, views, dwell, scroll
+ * depth, last seen) using recency-decayed weights. Used as the input to
+ * intent anticipation and "surface news before search" logic.
+ */
+function computeCategoryBehavior(
+  events: PredictiveEvent[],
+  now: number,
+): CategoryBehavior[] {
+  const map = new Map<string, CategoryBehavior>();
+
+  for (const event of events) {
+    if (!event.category) continue;
+    const recency = recencyWeight(event.timestamp, now);
+    let entry = map.get(event.category);
+    if (!entry) {
+      entry = {
+        category: event.category,
+        clicks: 0,
+        views: 0,
+        totalDwellMs: 0,
+        avgScrollDepth: 0,
+        lastSeenAt: null,
+      };
+      map.set(event.category, entry);
+    }
+
+    if (event.type === "category_click") entry.clicks += 1 * recency;
+    else if (event.type === "category_view") entry.views += 1 * recency;
+    else if (event.type === "dwell" && event.dwellMs) entry.totalDwellMs += event.dwellMs * recency;
+    else if (event.type === "scroll" && typeof event.scrollDepth === "number") {
+      // Running average weighted by recency so deeper recent scrolls count more.
+      entry.avgScrollDepth = entry.avgScrollDepth * 0.7 + event.scrollDepth * recency * 0.3;
+    }
+
+    if (entry.lastSeenAt === null || event.timestamp > entry.lastSeenAt) {
+      entry.lastSeenAt = event.timestamp;
+    }
+  }
+
+  return Array.from(map.values()).sort(
+    (a, b) => (b.clicks + b.views + b.totalDwellMs / 60000) - (a.clicks + a.views + a.totalDwellMs / 60000),
+  );
+}
+
+/**
+ * Frequency-analysis prediction of which category the user will open next.
+ * Combines the recency-decayed category vector with a Markov-style
+ * transition model (what usually follows the last-clicked category) and a
+ * short-term intent window so very recent activity dominates.
+ */
+function computePredictedNext(
+  events: PredictiveEvent[],
+  categoryVector: Array<{ category: string; score: number }>,
+  lastCategory: string | null,
+  now: number,
+): PredictedCategoryResult {
+  if (categoryVector.length === 0) {
+    return { predictedCategory: null, confidence: 0, runnersUp: [] };
+  }
+
+  // Markov transition probabilities: P(next | lastCategory).
+  const transitions: Record<string, Record<string, number>> = {};
+  const clickSequence = events.filter(
+    (e) => e.type === "category_click" || e.type === "category_view",
+  );
+  for (let i = 1; i < clickSequence.length; i++) {
+    const from = clickSequence[i - 1].category;
+    const to = clickSequence[i].category;
+    if (!from || !to || from === to) continue;
+    transitions[from] = transitions[from] ?? {};
+    transitions[from][to] = (transitions[from][to] ?? 0) + 1;
+  }
+
+  const scoreMap = new Map(categoryVector.map((c) => [c.category, c.score]));
+  const transitionBoost: Record<string, number> = {};
+  if (lastCategory && transitions[lastCategory]) {
+    const total = Object.values(transitions[lastCategory]).reduce((s, v) => s + v, 0) || 1;
+    for (const [to, count] of Object.entries(transitions[lastCategory])) {
+      transitionBoost[to] = (count / total) * 0.35;
+    }
+  }
+
+  // Short-term intent window: events in the last INTENT_WINDOW_MS get extra weight.
+  const recentBoost: Record<string, number> = {};
+  for (const e of events) {
+    if (now - e.timestamp > INTENT_WINDOW_MS) continue;
+    if (!e.category) continue;
+    const recency = recencyWeight(e.timestamp, now);
+    recentBoost[e.category] = (recentBoost[e.category] ?? 0) + 0.15 * recency;
+  }
+
+  const combined = categoryVector.map((c) => ({
+    category: c.category,
+    score: Math.min(
+      1,
+      (scoreMap.get(c.category) ?? 0) + (transitionBoost[c.category] ?? 0) + (recentBoost[c.category] ?? 0),
+    ),
+  }));
+
+  combined.sort((a, b) => b.score - a.score);
+  const top = combined[0];
+  const runnersUp = combined.slice(1, 4);
+  const confidence = top ? Math.min(1, top.score) : 0;
+
+  return {
+    predictedCategory: top?.category ?? null,
+    confidence,
+    runnersUp,
+  };
+}
+
+/**
+ * Intent anticipation: identifies the category the user is most likely
+ * actively pursuing right now, based on the recent intent window plus
+ * dwell/scroll depth signals. Also produces a `surfaceAhead` list of
+ * categories to proactively surface before the user searches.
+ */
+function computeIntent(
+  events: PredictiveEvent[],
+  behavior: CategoryBehavior[],
+  lastCategory: string | null,
+  now: number,
+): IntentSignal {
+  if (behavior.length === 0) {
+    return {
+      category: null,
+      confidence: 0,
+      reason: "Not enough browsing history yet.",
+      surfaceAhead: [],
+    };
+  }
+
+  // Weight recent events heavily within the intent window.
+  const recent = events.filter((e) => now - e.timestamp <= INTENT_WINDOW_MS);
+  const recentScores: Record<string, number> = {};
+  for (const e of recent) {
+    if (!e.category) continue;
+    const recency = recencyWeight(e.timestamp, now);
+    const base = EVENT_WEIGHTS[e.type] ?? 1;
+    recentScores[e.category] = (recentScores[e.category] ?? 0) + base * recency;
+  }
+
+  // Blend recent activity with long-term behavioral preference.
+  const behaviorMap = new Map(behavior.map((b) => [b.category, b]));
+  const candidates = new Set<string>([
+    ...Object.keys(recentScores),
+    ...behavior.map((b) => b.category),
+  ]);
+
+  const blended: Array<{ category: string; score: number }> = [];
+  for (const category of candidates) {
+    const recentScore = recentScores[category] ?? 0;
+    const b = behaviorMap.get(category);
+    const longTerm = b ? b.clicks * 0.3 + b.views * 0.1 + b.totalDwellMs / 60000 * 0.2 : 0;
+    const score = Math.min(1, recentScore * 0.65 + longTerm * 0.35);
+    blended.push({ category, score });
+  }
+  blended.sort((a, b) => b.score - a.score);
+
+  const top = blended[0];
+  const surfaceAhead = blended.slice(0, 4);
+
+  let reason: string;
+  if (top && top.score > 0.5) {
+    reason = `Strong recent activity in ${top.category}`;
+  } else if (lastCategory && recentScores[lastCategory]) {
+    reason = `Continuing from ${lastCategory}`;
+  } else if (top) {
+    reason = `Frequently browsed: ${top.category}`;
+  } else {
+    reason = "No clear intent yet.";
+  }
+
+  return {
+    category: top?.category ?? null,
+    confidence: top?.score ?? 0,
+    reason,
+    surfaceAhead,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -247,6 +515,7 @@ export function usePredictiveUI(): PredictiveUIState {
   const [events, setEvents] = useState<PredictiveEvent[]>([]);
   const [tick, setTick] = useState(0);
   const lastCategoryRef = useRef<string | null>(null);
+  const dwellTimerRef = useRef<{ category: string; startedAt: number } | null>(null);
 
   // Hydrate from localStorage on mount (client only).
   useEffect(() => {
@@ -291,11 +560,30 @@ export function usePredictiveUI(): PredictiveUIState {
     [trackEvent],
   );
 
+  /**
+   * Starts a dwell timer for a category. The returned stop() function records
+   * the elapsed milliseconds as a dwell event — handy for measuring actual
+   * time spent on an article/section without manual bookkeeping.
+   */
+  const startDwellTimer = useCallback((category: string) => {
+    dwellTimerRef.current = { category, startedAt: Date.now() };
+    return () => {
+      const current = dwellTimerRef.current;
+      if (current && current.category === category) {
+        const elapsed = Date.now() - current.startedAt;
+        if (elapsed > 0) trackDwell(category, elapsed);
+        dwellTimerRef.current = null;
+      }
+    };
+  }, [trackDwell]);
+
   const resetHistory = useCallback(() => {
     setEvents([]);
     lastCategoryRef.current = null;
+    dwellTimerRef.current = null;
     if (isBrowser()) {
       window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(PREDICTIONS_KEY);
     }
   }, []);
 
@@ -312,8 +600,14 @@ export function usePredictiveUI(): PredictiveUIState {
     const categoryScores = normalizeVector(combined);
     const predictedCategory = categoryScores[0]?.category ?? null;
     const recommendedSections = computeRecommendedSections(events, now);
+    const categoryBehavior = computeCategoryBehavior(events, now);
+    const intent = computeIntent(events, categoryBehavior, lastCategoryRef.current, now);
+    const predictedNext = computePredictedNext(events, categoryScores, lastCategoryRef.current, now);
+
+    // Auto-expand sections that either cross the engagement threshold OR have
+    // accumulated enough dwell time to count as deeply engaged.
     const autoExpandSections = recommendedSections
-      .filter((s) => s.score >= AUTO_EXPAND_THRESHOLD)
+      .filter((s) => s.score >= AUTO_EXPAND_THRESHOLD || s.reason.startsWith("Deeply engaged"))
       .map((s) => s.section);
     const engagementScore = computeEngagementScore(events, now);
 
@@ -323,15 +617,36 @@ export function usePredictiveUI(): PredictiveUIState {
       recommendedSections,
       autoExpandSections,
       engagementScore,
+      categoryBehavior,
+      intent,
+      predictedNext,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events, tick]);
+
+  // Persist predictions to localStorage so they survive reloads and can be
+  // read by other components (e.g. to surface news before search) without
+  // recomputing the full event log.
+  useEffect(() => {
+    if (!isBrowser()) return;
+    savePredictions({
+      predictedCategory: derived.predictedCategory,
+      predictedNext: derived.predictedNext,
+      intent: derived.intent,
+      savedAt: Date.now(),
+    });
+  }, [
+    derived.predictedCategory,
+    derived.predictedNext,
+    derived.intent,
+  ]);
 
   return {
     ...derived,
     trackEvent,
     trackDwell,
     trackScroll,
+    startDwellTimer,
     resetHistory,
   };
 }

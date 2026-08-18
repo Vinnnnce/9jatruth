@@ -40,6 +40,9 @@ import {
   Tag as TagIcon,
   Sparkles,
   Wand2,
+  ShieldCheck,
+  TrendingUp,
+  Brain,
 } from "lucide-react";
 
 // ─── Constants ───
@@ -409,6 +412,31 @@ export default function CreateArticlePage() {
                 <p className="text-[10px] text-muted-foreground">
                   AI generates a draft article based on your topic. You can edit it before publishing.
                 </p>
+
+                {/* Advanced AI Capabilities */}
+                <div className="pt-2 border-t space-y-2">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Advanced AI Tools</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button">
+                      <Sparkles className="h-2.5 w-2.5 text-purple-500" /> Key Points
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button">
+                      <ShieldCheck className="h-2.5 w-2.5 text-green-500" /> Fact Check
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button">
+                      <TagIcon className="h-2.5 w-2.5 text-blue-500" /> Auto-Tag
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button">
+                      <TrendingUp className="h-2.5 w-2.5 text-orange-500" /> SEO Optimize
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button">
+                      <Brain className="h-2.5 w-2.5 text-purple-500" /> Expand Content
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button">
+                      <Sparkles className="h-2.5 w-2.5 text-primary" /> Translate
+                    </Button>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </motion.div>

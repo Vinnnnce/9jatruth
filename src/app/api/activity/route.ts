@@ -1,6 +1,6 @@
 import { ensureDbInitialized } from "@/lib/db";
 import { getActivity } from "@/lib/neon-storage";
-import { validate, validationErrorResponse } from "@/lib/api-helpers";
+import { validate, validationErrorResponse, getUserId } from "@/lib/api-helpers";
 import { z } from "zod";
 
 const activityQuerySchema = z.object({
@@ -14,7 +14,9 @@ export async function GET(request: Request) {
   const parsed = validate(activityQuerySchema, queryObj);
   if (!parsed.success) return validationErrorResponse(parsed.error);
   try {
-    const result = await getActivity(parsed.data.limit);
+    // Only show the current user's activities, not all website activities
+    const userHash = await getUserId(request);
+    const result = await getActivity(parsed.data.limit, userHash);
     return Response.json(result);
   } catch (err) {
     console.error("[api/activity] Error:", err);

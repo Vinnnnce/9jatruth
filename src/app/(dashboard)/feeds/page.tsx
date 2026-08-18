@@ -162,10 +162,8 @@ export default function Feeds() {
   const trackedRef = useRef<Set<number>>(new Set());
 
   // Geo filters for feeds (state and lga only)
-  const [geoFilter, setGeoFilter] = useState({
-    state: "",
-    lga: "",
-  });
+  const [geoFilter, setGeoFilter] = useState<{ state: string; lga: string }>({ state: "", lga: "" });
+  const [sortBy, setSortBy] = useState<"recent" | "nearest" | "trending" | "trust">("recent");
 
   // Fetch geo hierarchy for filter dropdowns (states and lgas only)
   const { data: geoHierarchy } = useQuery<{ states: string[]; lgas: string[] }>({
@@ -317,16 +315,28 @@ export default function Feeds() {
           <SummaryCard icon={Gauge} label="Avg Price Index" value={summary?.avgPriceIndex ?? 0} colorClass="text-purple-glow" />
         </div>
 
-        {/* ─── Geo Filters ─── */}
+        {/* ─── Geo Filters + Sort ─── */}
         <div className="rounded-xl p-3 space-y-2 bg-card border border-border">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-medium uppercase text-muted-foreground">Filter by Location</span>
-            {(geoFilter.state || geoFilter.lga) && (
-              <button
-                onClick={() => setGeoFilter({ state: "", lga: "" })}
-                className="text-[10px] text-primary hover:underline"
-              >Clear</button>
-            )}
+            <div className="flex items-center gap-2">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as "recent" | "nearest" | "trending" | "trust")}
+                className="h-7 rounded-md text-[10px] px-2 outline-none bg-background text-foreground border border-border"
+              >
+                <option value="recent">Most Recent</option>
+                <option value="nearest">Nearest Location</option>
+                <option value="trending">Trending</option>
+                <option value="trust">Highest Trust</option>
+              </select>
+              {(geoFilter.state || geoFilter.lga) && (
+                <button
+                  onClick={() => setGeoFilter({ state: "", lga: "" })}
+                  className="text-[10px] text-primary hover:underline"
+                >Clear</button>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <select
@@ -335,7 +345,7 @@ export default function Feeds() {
               className="h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
             >
               <option value="">All States</option>
-              {(geoHierarchy?.states?.length ? geoHierarchy.states : NIGERIA_STATES).map(s => <option key={s} value={s}>{s}</option>)}
+              {(geoHierarchy?.states?.length ? [...geoHierarchy.states].sort() : [...NIGERIA_STATES].sort()).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <select
               value={geoFilter.lga}
@@ -343,7 +353,7 @@ export default function Feeds() {
               className="h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
             >
               <option value="">All L.G.A</option>
-              {(geoFilter.state ? getLgasForState(geoFilter.state) : (geoHierarchy?.lgas || [])).map(l => <option key={l} value={l}>{l}</option>)}
+              {(geoFilter.state ? getLgasForState(geoFilter.state).sort() : [...(geoHierarchy?.lgas || [])].sort()).map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </div>
         </div>
@@ -368,9 +378,37 @@ export default function Feeds() {
               <span className="text-[10px] text-muted-foreground font-normal">
                 ({recentTruths.truths.length})
               </span>
+              {sortBy === "nearest" && (
+                <Badge variant="outline" className="text-[8px] gap-0.5 ml-1">
+                  <MapPin className="h-2 w-2" /> Nearest First
+                </Badge>
+              )}
+              {sortBy === "trending" && (
+                <Badge variant="outline" className="text-[8px] gap-0.5 ml-1">
+                  <TrendingUp className="h-2 w-2" /> Trending
+                </Badge>
+              )}
+              {sortBy === "trust" && (
+                <Badge variant="outline" className="text-[8px] gap-0.5 ml-1">
+                  <ShieldCheck className="h-2 w-2" /> By Trust Score
+                </Badge>
+              )}
             </h2>
             <div className="grid gap-2">
-              {recentTruths.truths.slice(0, 15).map((truth: any) => (
+              {[...recentTruths.truths]
+                .sort((a: any, b: any) => {
+                  if (sortBy === "trust") return (b.trustScore ?? 50) - (a.trustScore ?? 50);
+                  if (sortBy === "trending") return (b.likeCount ?? 0) - (a.likeCount ?? 0);
+                  // For 'nearest', sort by neighborhood name proximity (state/lga match first)
+                  if (sortBy === "nearest") {
+                    const aMatch = (a.stateName === geoFilter.state ? 2 : 0) + (a.lgaName === geoFilter.lga ? 1 : 0);
+                    const bMatch = (b.stateName === geoFilter.state ? 2 : 0) + (b.lgaName === geoFilter.lga ? 1 : 0);
+                    return bMatch - aMatch;
+                  }
+                  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                })
+                .slice(0, 15)
+                .map((truth: any) => (
                 <Card key={truth.id} className="border-border hover:border-primary/30 transition-colors">
                   <CardContent className="p-3 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
@@ -379,6 +417,11 @@ export default function Feeds() {
                           <Badge variant="secondary" className="text-[9px]">
                             {truth.category}
                           </Badge>
+                        )}
+                        {truth.displayName && (
+                          <span className="text-[10px] text-muted-foreground">
+                            by {truth.displayName}
+                          </span>
                         )}
                         {truth.neighborhoodName && (
                           <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
@@ -451,6 +494,9 @@ export default function Feeds() {
             </div>
           </div>
         )}
+
+        {/* ─── Active Questionnaires ─── */}
+        <QuestionnaireSection />
 
         {/* ─── Additional dashboard widgets row (POS, Weather, Scam Alerts) ─── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1231,5 +1277,56 @@ function LikeButton({ truthId }: { truthId: number }) {
         <span className="text-[10px] font-medium text-muted-foreground">{likeCount}</span>
       )}
     </Button>
+  );
+}
+
+// ─── Questionnaire Section (displayed on feeds) ───
+function QuestionnaireSection() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["/api/questionnaire"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/questionnaire");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const questionnaires = Array.isArray(data) ? data : (data?.questionnaires || []);
+
+  if (isLoading || !questionnaires || questionnaires.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <h2 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+        <Brain className="h-4 w-4 text-primary" />
+        Active Questionnaires
+      </h2>
+      <div className="grid gap-2">
+        {questionnaires.slice(0, 3).map((q: any) => (
+          <Card key={q.id || q.questionnaireType} className="border-border hover:border-primary/30 transition-colors">
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{q.questionnaireType || q.title || "Community Survey"}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {q.questions?.length || q.responseCount || 0} questions · {q.responses?.length || 0} responses
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[11px] gap-1"
+                  onClick={() => {
+                    window.location.href = "/questionnaire";
+                  }}
+                >
+                  <Sparkles className="h-3 w-3" /> Participate
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 }

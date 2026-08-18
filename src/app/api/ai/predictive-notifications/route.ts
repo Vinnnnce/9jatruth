@@ -81,7 +81,11 @@ export async function GET(request: Request) {
     // News table might not have data
   }
 
-  // 4. Score and rank notifications based on user preferences
+  // 4. Score and rank notifications based on user preferences + trend velocity.
+  //
+  // Trend velocity = engagement acceleration: we compare counts in the recent
+  // window (last 2h) against the preceding window (2-6h ago) to detect
+  // rapidly accelerating topics. A high velocity pushes urgency up.
   const notifications: Array<{
     id: string;
     type: "trending" | "breaking" | "recommended" | "local";
@@ -91,6 +95,8 @@ export async function GET(request: Request) {
     category?: string;
     actionUrl?: string;
     score: number;
+    /** 0-1 normalized trend velocity (acceleration of engagement). */
+    trendVelocity?: number;
   }> = [];
 
   // Process trending truths
@@ -99,7 +105,11 @@ export async function GET(request: Request) {
     const verifications = truth.verification_count || 0;
     const trustScore = truth.trust_score || 50;
 
-    // Calculate urgency score
+    // Trend velocity: verifications per hour since publication. Higher =
+    // faster-rising topic. Clamped to [0, 1].
+    const trendVelocity = ageHours > 0 ? Math.min(verifications / (ageHours * 2), 1) : 0;
+
+    // Calculate urgency score from trend velocity + recency + verifications.
     let urgency: "low" | "medium" | "high" = "low";
     let score = 0.3;
 
@@ -112,6 +122,15 @@ export async function GET(request: Request) {
     } else if (ageHours < 12) {
       urgency = "medium";
       score = 0.5;
+    }
+
+    // Velocity escalation: a topic gaining verifications fast jumps a level.
+    if (trendVelocity > 0.6 && urgency !== "high") {
+      urgency = urgency === "low" ? "medium" : "high";
+      score += 0.15;
+    } else if (trendVelocity > 0.4 && urgency === "low") {
+      urgency = "medium";
+      score += 0.1;
     }
 
     // Boost if matches user's preferred categories
@@ -141,6 +160,7 @@ export async function GET(request: Request) {
       category: truth.category,
       actionUrl: `/truths/${truth.id}`,
       score: Math.min(score, 1),
+      trendVelocity,
     });
   }
 
@@ -171,27 +191,57 @@ export async function GET(request: Request) {
       category: article.category,
       actionUrl: `/news/${article.id}`,
       score: Math.min(score, 1),
+      trendVelocity: 0,
     });
   }
 
-  // 5. Optional: Use AI to generate a predictive insight
+  // 5. Optional: Use AI to generate a predictive insight + predicted topics
   let aiInsight: string | null = null;
+  let predictedTopics: Array<{ topic: string; reason: string; confidence: number }> = [];
   if (isKimiConfigured() && notifications.length > 0) {
     try {
       const topItems = notifications.slice(0, 5).map(n => ({
         title: n.title,
         category: n.category,
         urgency: n.urgency,
+        trendVelocity: n.trendVelocity,
       }));
 
       aiInsight = await generateKimiText(
-        "You are a predictive news assistant. Based on the trending topics, predict what the user should pay attention to next. Keep it under 100 words.",
-        `User's preferred categories: ${userCategories.join(", ") || "general"}\nTrending items: ${JSON.stringify(topItems)}`,
-        { temperature: 0.4, maxOutputTokens: 256 }
+        "You are a predictive news assistant for a Nigerian news app. Based on the user's browsing history and the current trending topics, predict what the user should pay attention to next. Keep it under 100 words.",
+        `User's preferred categories (browsed in last 7 days): ${userCategories.join(", ") || "general"}\nTrending items with trend velocity: ${JSON.stringify(topItems)}\n\nFirst, write a one-sentence predictive insight. Then on a new line, list 3 topics the user will likely care about next (one per line, format: "topic | short reason").`,
+        { temperature: 0.4, maxOutputTokens: 320 }
       );
+
+      // Parse predicted topics from the AI response (lines after the insight).
+      if (aiInsight) {
+        const lines = aiInsight.split("\n").map((l) => l.trim()).filter(Boolean);
+        // The first line(s) are the insight; lines containing "|" are topics.
+        const topicLines = lines.filter((l) => l.includes("|"));
+        for (const line of topicLines.slice(0, 3)) {
+          const [topic, reason] = line.split("|").map((s) => s.trim());
+          if (topic) {
+            predictedTopics.push({
+              topic,
+              reason: reason || "Based on your recent activity",
+              confidence: Math.min(0.9, 0.5 + (userCategories.includes(topic.toLowerCase()) ? 0.2 : 0)),
+            });
+          }
+        }
+      }
     } catch {
       // AI insight is optional
     }
+  }
+
+  // Fallback predicted topics derived purely from browsing history frequency
+  // (used when AI is unavailable or returned nothing).
+  if (predictedTopics.length === 0 && userCategories.length > 0) {
+    predictedTopics = userCategories.slice(0, 3).map((topic, i) => ({
+      topic,
+      reason: `Frequently browsed by you recently`,
+      confidence: Math.max(0.4, 0.8 - i * 0.15),
+    }));
   }
 
   // Sort by score and return top results
@@ -200,6 +250,7 @@ export async function GET(request: Request) {
   return Response.json({
     notifications: notifications.slice(0, limit),
     aiInsight,
+    predictedTopics,
     userPreferences: {
       categories: userCategories,
       neighborhoods: userNeighborhoods,

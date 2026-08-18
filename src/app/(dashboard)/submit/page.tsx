@@ -22,7 +22,7 @@ import {
   Send, CheckCircle2, Info, MapPin, LocateFixed, Building2, Navigation, Coins, ShieldCheck, User,
   Clock, BarChart3, Plus, X, Upload, Image as ImageIcon, Video, RotateCw, RotateCcw, Crop,
   Wand2, Trash2, Film, AlertTriangle, Loader2, Scissors, Sun, Contrast, Palette, Rainbow,
-  ClipboardList,
+  ClipboardList, FlipHorizontal, VolumeX, Gauge,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Slider } from "@/components/ui/slider";
@@ -1070,6 +1070,66 @@ export default function SubmitTruth() {
                           <span className="text-amber-500">(max {MAX_VIDEO_SECONDS}s)</span>
                         )}
                       </p>
+                      {/* Advanced video editing tools */}
+                      <div className="pt-1.5 border-t border-border/50 space-y-1.5">
+                        <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                          <Wand2 className="h-2.5 w-2.5" /> Video Editing Tools
+                        </p>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <Select defaultValue="1">
+                            <SelectTrigger className="h-7 text-[10px] w-auto min-w-[60px] gap-1">
+                              <Gauge className="h-2.5 w-2.5" />
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="0.5">0.5x Speed</SelectItem>
+                              <SelectItem value="0.75">0.75x Speed</SelectItem>
+                              <SelectItem value="1">1x Speed</SelectItem>
+                              <SelectItem value="1.5">1.5x Speed</SelectItem>
+                              <SelectItem value="2">2x Speed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-[10px] gap-1"
+                          >
+                            <FlipHorizontal className="h-3 w-3" />
+                            Flip
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-[10px] gap-1"
+                          >
+                            <VolumeX className="h-3 w-3" />
+                            Mute
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-[10px] gap-1"
+                          >
+                            <Crop className="h-3 w-3" />
+                            Crop
+                          </Button>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Sun className="h-2.5 w-2.5 text-amber-500 shrink-0" />
+                          <span className="text-[9px] text-muted-foreground w-16">Brightness</span>
+                          <Slider value={[100]} min={0} max={200} step={5} className="flex-1" />
+                          <span className="text-[9px] text-muted-foreground w-7 text-right tabular-nums">100%</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Contrast className="h-2.5 w-2.5 text-blue-500 shrink-0" />
+                          <span className="text-[9px] text-muted-foreground w-16">Contrast</span>
+                          <Slider value={[100]} min={0} max={200} step={5} className="flex-1" />
+                          <span className="text-[9px] text-muted-foreground w-7 text-right tabular-nums">100%</span>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </motion.div>

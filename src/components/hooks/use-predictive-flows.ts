@@ -64,6 +64,14 @@ export interface PredictiveFlowsState {
   getPrefetched: (path: string) => unknown | null;
   /** Whether a given path currently has a fresh prefetch cache entry. */
   isPrefetched: (path: string) => boolean;
+  /** The single next action the model anticipates the user will take. */
+  anticipatedAction: SuggestedPath | null;
+  /**
+   * Returns a ref callback that, when attached to an element, prefetches the
+   * given path as soon as the element scrolls into view (Intersection Observer).
+   * Reduces perceived loading time via anticipatory caching.
+   */
+  observeForPrefetch: (path: string) => (node: Element | null) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +288,72 @@ export function usePredictiveFlows(): PredictiveFlowsState {
     return isFresh(prefetchCache.get(path), Date.now());
   }, []);
 
+  // ─── Intersection Observer-based anticipatory prefetch ───
+  //
+  // observeForPrefetch(path) returns a ref callback. When the callback is
+  // attached to a DOM element and that element enters the viewport, the path
+  // is prefetched in the background so the eventual click feels instant. The
+  // observer disconnects after the first intersection to avoid repeat work.
+  const observerMapRef = useRef<Map<string, IntersectionObserver>>(new Map());
+  const observedPathsRef = useRef<Set<string>>(new Set());
+
+  const observeForPrefetch = useCallback(
+    (path: string) => (node: Element | null) => {
+      if (!isBrowser() || !path) return () => {};
+
+      // Clean up any previous observer for this path.
+      const prev = observerMapRef.current.get(path);
+      if (prev) {
+        prev.disconnect();
+        observerMapRef.current.delete(path);
+      }
+
+      if (!node) return () => {};
+
+      // If already prefetched fresh, no need to observe again.
+      if (isFresh(prefetchCache.get(path), Date.now()) || observedPathsRef.current.has(path)) {
+        return () => {};
+      }
+
+      if (typeof IntersectionObserver === "undefined") {
+        // Fallback: prefetch immediately if IntersectionObserver is unavailable.
+        void prefetchContent(path);
+        return () => {};
+      }
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              observedPathsRef.current.add(path);
+              void prefetchContent(path);
+              observer.disconnect();
+              observerMapRef.current.delete(path);
+            }
+          }
+        },
+        { rootMargin: "200px", threshold: 0.01 },
+      );
+
+      observer.observe(node);
+      observerMapRef.current.set(path, observer);
+
+      return () => {
+        observer.disconnect();
+        observerMapRef.current.delete(path);
+      };
+    },
+    [prefetchContent],
+  );
+
+  // Disconnect all observers on unmount.
+  useEffect(() => {
+    return () => {
+      observerMapRef.current.forEach((o) => o.disconnect());
+      observerMapRef.current.clear();
+    };
+  }, []);
+
   // Periodically refresh derived suggestions so recency decay stays current.
   useEffect(() => {
     const interval = setInterval(() => forceTick((t) => t + 1), 60_000);
@@ -293,6 +367,17 @@ export function usePredictiveFlows(): PredictiveFlowsState {
     return [...topical, ...revisit].sort((a, b) => b.confidence - a.confidence).slice(0, 6);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events]);
+
+  /** The single next action the model anticipates the user will take. */
+  const anticipatedAction = useMemo<SuggestedPath | null>(() => {
+    if (suggestedPaths.length === 0) return null;
+    // The top suggestion is the best-guess anticipated next action, but we
+    // prefer "continue" kind when available since it signals an interrupted
+    // task the user is most likely to resume.
+    const continueSuggestion = suggestedPaths.find((s) => s.kind === "continue");
+    return continueSuggestion ?? suggestedPaths[0];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestedPaths]);
 
   // Opportunistically prefetch the top prediction's path.
   useEffect(() => {
@@ -320,6 +405,8 @@ export function usePredictiveFlows(): PredictiveFlowsState {
     trackNavigation,
     getPrefetched,
     isPrefetched,
+    anticipatedAction,
+    observeForPrefetch,
   };
 }
 

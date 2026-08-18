@@ -107,7 +107,10 @@ export function useAgencyAuth() {
     newPassword?: string;
   }) => {
     setError(null);
-    const res = await apiRequest("PATCH", "/api/account/settings", data);
+    // Include the account email so the API can look up the account
+    // even when the user authenticated via password-based agency auth (not Clerk)
+    const payload = { ...data, email: auth.account?.email };
+    const res = await apiRequest("PATCH", "/api/account/settings", payload);
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.message || "Update failed");

@@ -26,6 +26,7 @@ export type Comment = {
   id: number;
   truthId: number;
   userHash: string;
+  displayName?: string | null;
   content: string;
   imageUrl?: string | null;
   stickerId?: string | null;
@@ -54,6 +55,10 @@ function timeAgo(dateStr: string): string {
 
 function truncateHash(hash: string): string {
   return hash ? hash.slice(0, 8) : "anonymous";
+}
+
+function displayName(c: { userHash: string; displayName?: string | null }): string {
+  return c.displayName || truncateHash(c.userHash);
 }
 
 function renderContent(content: string): React.ReactNode {
@@ -191,11 +196,11 @@ export function FeedComments({
                 >
                   <div className="flex gap-2">
                     <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium shrink-0">
-                      {truncateHash(c.userHash).slice(0, 2).toUpperCase()}
+                      {displayName(c).slice(0, 2).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0 space-y-1">
                       <div className="flex items-center gap-2 text-xs">
-                        <span className="font-medium font-mono">{truncateHash(c.userHash)}</span>
+                        <span className="font-medium font-mono">{displayName(c)}</span>
                         <span className="text-muted-foreground">{timeAgo(c.createdAt)}</span>
                       </div>
                       <div className="text-sm break-words bg-muted/50 rounded-lg px-3 py-2">
@@ -243,11 +248,11 @@ export function FeedComments({
                           {replies(c.id).map((r) => (
                             <div key={r.id} className="flex gap-2">
                               <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[8px] font-medium shrink-0">
-                                {truncateHash(r.userHash).slice(0, 2).toUpperCase()}
+                                {displayName(r).slice(0, 2).toUpperCase()}
                               </div>
                               <div className="flex-1 min-w-0 space-y-0.5">
                                 <div className="flex items-center gap-2 text-xs">
-                                  <span className="font-medium font-mono text-[10px]">{truncateHash(r.userHash)}</span>
+                                  <span className="font-medium font-mono text-[10px]">{displayName(r)}</span>
                                   <span className="text-muted-foreground text-[10px]">{timeAgo(r.createdAt)}</span>
                                 </div>
                                 <div className="text-sm break-words bg-muted/30 rounded-lg px-2 py-1">
