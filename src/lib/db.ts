@@ -29,9 +29,13 @@ let initialized = false;
 export async function ensureDbInitialized() {
   if (initialized) return;
   const sql = getDb();
+  // Batch ALL schema DDL into a single HTTP round-trip to Neon.
+  // 80+ sequential CREATE/ALTER queries on a cold serverless function exceed
+  // Vercel's 10s timeout -> 504/500 on /api/health & /api/waitlist.
+  const _q: any[] = [];
 
   try {
-  await sql`CREATE TABLE IF NOT EXISTS neighborhoods (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS neighborhoods (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     region TEXT NOT NULL,
@@ -39,9 +43,9 @@ export async function ensureDbInitialized() {
     lat DOUBLE PRECISION NOT NULL,
     lng DOUBLE PRECISION NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
-  await sql`CREATE TABLE IF NOT EXISTS micro_truths (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS micro_truths (
     id SERIAL PRIMARY KEY,
     neighborhood_id INTEGER NOT NULL,
     category TEXT NOT NULL,
@@ -59,9 +63,9 @@ export async function ensureDbInitialized() {
     report_lng DOUBLE PRECISION,
     location_source TEXT,
     organization_id INTEGER
-  )`;
+  )`);
 
-  await sql`CREATE TABLE IF NOT EXISTS snapshots (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS snapshots (
     id SERIAL PRIMARY KEY,
     neighborhood_id INTEGER NOT NULL,
     power_status TEXT NOT NULL,
@@ -71,9 +75,9 @@ export async function ensureDbInitialized() {
     safety_index INTEGER NOT NULL DEFAULT 70,
     active_truths INTEGER NOT NULL DEFAULT 0,
     updated_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
-  await sql`CREATE TABLE IF NOT EXISTS predictions (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS predictions (
     id SERIAL PRIMARY KEY,
     category TEXT NOT NULL,
     neighborhood_id INTEGER NOT NULL,
@@ -83,36 +87,36 @@ export async function ensureDbInitialized() {
     trend TEXT NOT NULL DEFAULT 'stable',
     model_version TEXT NOT NULL DEFAULT '9jatruth-heuristic-v1',
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
-  await sql`CREATE TABLE IF NOT EXISTS reward_ledger (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS reward_ledger (
     id SERIAL PRIMARY KEY,
     user_hash TEXT NOT NULL,
     amount INTEGER NOT NULL,
     type TEXT NOT NULL,
     description TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
-  await sql`CREATE TABLE IF NOT EXISTS device_profiles (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS device_profiles (
     id SERIAL PRIMARY KEY,
     device_id_hash TEXT NOT NULL UNIQUE,
     trust_score INTEGER NOT NULL DEFAULT 50,
     total_submissions INTEGER NOT NULL DEFAULT 0,
     rewards_balance INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
-  await sql`CREATE TABLE IF NOT EXISTS verifications (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS verifications (
     id SERIAL PRIMARY KEY,
     truth_id INTEGER NOT NULL,
     user_hash TEXT NOT NULL,
     action TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_verifications_truth_user ON verifications(truth_id, user_hash)`;
+  )`);
+  _q.push(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_verifications_truth_user ON verifications(truth_id, user_hash)`);
 
-  await sql`CREATE TABLE IF NOT EXISTS sync_queue (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS sync_queue (
     id SERIAL PRIMARY KEY,
     device_hash TEXT NOT NULL,
     operation TEXT NOT NULL,
@@ -122,9 +126,9 @@ export async function ensureDbInitialized() {
     bundle_id TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     synced_at TIMESTAMPTZ
-  )`;
+  )`);
 
-  await sql`CREATE TABLE IF NOT EXISTS mesh_events (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS mesh_events (
     id SERIAL PRIMARY KEY,
     bundle_id TEXT NOT NULL,
     device_hash TEXT NOT NULL,
@@ -132,9 +136,9 @@ export async function ensureDbInitialized() {
     record_count INTEGER NOT NULL DEFAULT 0,
     metadata TEXT NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
-  await sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
     id SERIAL PRIMARY KEY,
     device_hash TEXT NOT NULL,
     endpoint TEXT NOT NULL,
@@ -144,18 +148,18 @@ export async function ensureDbInitialized() {
     neighborhoods TEXT NOT NULL DEFAULT '[]',
     active INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
-  await sql`CREATE TABLE IF NOT EXISTS achievements (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS achievements (
     id SERIAL PRIMARY KEY,
     device_hash TEXT NOT NULL,
     achievement TEXT NOT NULL,
     tier TEXT NOT NULL DEFAULT 'bronze',
     xp_awarded INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
-  await sql`CREATE TABLE IF NOT EXISTS user_stats (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS user_stats (
     id SERIAL PRIMARY KEY,
     device_hash TEXT NOT NULL UNIQUE,
     xp INTEGER NOT NULL DEFAULT 0,
@@ -167,9 +171,9 @@ export async function ensureDbInitialized() {
     total_verifications INTEGER NOT NULL DEFAULT 0,
     badges TEXT NOT NULL DEFAULT '[]',
     updated_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
-  await sql`CREATE TABLE IF NOT EXISTS geo_clusters (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS geo_clusters (
     id SERIAL PRIMARY KEY,
     geo_hash TEXT NOT NULL,
     neighborhood_id INTEGER,
@@ -181,9 +185,9 @@ export async function ensureDbInitialized() {
     radius_meters INTEGER NOT NULL DEFAULT 500,
     last_report_at TIMESTAMPTZ DEFAULT NOW(),
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
-  await sql`CREATE TABLE IF NOT EXISTS model_runs (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS model_runs (
     id SERIAL PRIMARY KEY,
     model_name TEXT NOT NULL,
     model_version TEXT NOT NULL,
@@ -194,9 +198,9 @@ export async function ensureDbInitialized() {
     explanation TEXT,
     execution_ms INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
-  await sql`CREATE TABLE IF NOT EXISTS organizations (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS organizations (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     type TEXT NOT NULL,
@@ -217,13 +221,13 @@ export async function ensureDbInitialized() {
     tagline TEXT,
     accent_color TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS subdomain TEXT`;
-  await sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS tagline TEXT`;
-  await sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS accent_color TEXT`;
-  await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_organizations_subdomain ON organizations(subdomain) WHERE subdomain IS NOT NULL`;
+  )`);
+  _q.push(sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS subdomain TEXT`);
+  _q.push(sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS tagline TEXT`);
+  _q.push(sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS accent_color TEXT`);
+  _q.push(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_organizations_subdomain ON organizations(subdomain) WHERE subdomain IS NOT NULL`);
 
-  await sql`CREATE TABLE IF NOT EXISTS agency_accounts (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS agency_accounts (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL,
     email TEXT NOT NULL UNIQUE,
@@ -235,11 +239,11 @@ export async function ensureDbInitialized() {
     clerk_user_id TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
   // ─── NEW: RBAC / Members / Vacancies ───
 
-  await sql`CREATE TABLE IF NOT EXISTS org_members (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS org_members (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL,
     clerk_user_id TEXT NOT NULL,
@@ -253,10 +257,10 @@ export async function ensureDbInitialized() {
     joined_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_org_members_org_clerk ON org_members(organization_id, clerk_user_id)`;
+  )`);
+  _q.push(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_org_members_org_clerk ON org_members(organization_id, clerk_user_id)`);
 
-  await sql`CREATE TABLE IF NOT EXISTS role_definitions (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS role_definitions (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL,
     name TEXT NOT NULL,
@@ -264,9 +268,9 @@ export async function ensureDbInitialized() {
     permissions JSONB NOT NULL DEFAULT '[]'::jsonb,
     is_system_role BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
-  await sql`CREATE TABLE IF NOT EXISTS vacancies (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS vacancies (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL,
     title TEXT NOT NULL,
@@ -282,9 +286,9 @@ export async function ensureDbInitialized() {
     posted_by_clerk_id TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
-  await sql`CREATE TABLE IF NOT EXISTS vacancy_applications (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS vacancy_applications (
     id SERIAL PRIMARY KEY,
     vacancy_id INTEGER NOT NULL,
     clerk_user_id TEXT,
@@ -294,11 +298,11 @@ export async function ensureDbInitialized() {
     resume_url TEXT,
     status TEXT NOT NULL DEFAULT 'pending',
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
   // ─── NEW: Platform Users (Clerk-synced) ───
 
-  await sql`CREATE TABLE IF NOT EXISTS platform_users (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS platform_users (
     id SERIAL PRIMARY KEY,
     clerk_user_id TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL,
@@ -310,10 +314,10 @@ export async function ensureDbInitialized() {
     organization_id INTEGER,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
   // Waitlist table for pre-launch email signups
-  await sql`CREATE TABLE IF NOT EXISTS waitlist (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS waitlist (
     id SERIAL PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     name TEXT,
@@ -323,36 +327,36 @@ export async function ensureDbInitialized() {
     clerk_entry_id TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
 
   // Add columns to existing tables (idempotent)
-  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS ip_hash TEXT`;
-  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS ip_region TEXT`;
-  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS ip_city TEXT`;
-  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS report_lat DOUBLE PRECISION`;
-  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS report_lng DOUBLE PRECISION`;
-  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS location_source TEXT`;
-  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS organization_id INTEGER`;
-  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS state_name TEXT`;
-  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS lga_name TEXT`;
-  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS community_name TEXT`;
-  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS village_name TEXT`;
-  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS region_name TEXT`;
-  await sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS clerk_user_id TEXT`;
-  await sql`ALTER TABLE agency_accounts ADD COLUMN IF NOT EXISTS clerk_user_id TEXT`;
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS ip_hash TEXT`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS ip_region TEXT`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS ip_city TEXT`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS report_lat DOUBLE PRECISION`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS report_lng DOUBLE PRECISION`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS location_source TEXT`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS organization_id INTEGER`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS state_name TEXT`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS lga_name TEXT`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS community_name TEXT`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS village_name TEXT`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS region_name TEXT`);
+  _q.push(sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS clerk_user_id TEXT`);
+  _q.push(sql`ALTER TABLE agency_accounts ADD COLUMN IF NOT EXISTS clerk_user_id TEXT`);
 
   // Add geo hierarchy columns to neighborhoods
-  await sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS state TEXT`;
-  await sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS lga TEXT`;
-  await sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS community TEXT`;
-  await sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS village TEXT`;
-  await sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS country TEXT`;
+  _q.push(sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS state TEXT`);
+  _q.push(sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS lga TEXT`);
+  _q.push(sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS community TEXT`);
+  _q.push(sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS village TEXT`);
+  _q.push(sql`ALTER TABLE neighborhoods ADD COLUMN IF NOT EXISTS country TEXT`);
 
   // Add country column to micro_truths
-  await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS country TEXT`;
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS country TEXT`);
 
   // ─── Truth Reports table ───
-  await sql`CREATE TABLE IF NOT EXISTS truth_reports (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS truth_reports (
     id SERIAL PRIMARY KEY,
     truth_id INTEGER NOT NULL,
     reporter_user_hash TEXT,
@@ -360,47 +364,47 @@ export async function ensureDbInitialized() {
     details TEXT,
     status TEXT NOT NULL DEFAULT 'pending',
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_truth_reports_truth ON truth_reports(truth_id)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_truth_reports_status ON truth_reports(status)`;
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_truth_reports_truth ON truth_reports(truth_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_truth_reports_status ON truth_reports(status)`);
 
   // Add IP tracking columns to platform_users
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS last_ip_hash TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS last_ip_region TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS last_ip_city TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS state TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS lga TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS community TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS village TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS region TEXT`;
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS last_ip_hash TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS last_ip_region TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS last_ip_city TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS state TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS lga TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS community TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS village TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS region TEXT`);
 
   // ─── Geo Hierarchy Reference Tables ───
-  await sql`CREATE TABLE IF NOT EXISTS regions (
+  _q.push(sql`CREATE TABLE IF NOT EXISTS regions (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE TABLE IF NOT EXISTS states (
+  )`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS states (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     region_id INTEGER REFERENCES regions(id),
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE TABLE IF NOT EXISTS lgas (
+  )`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS lgas (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     state_id INTEGER REFERENCES states(id),
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE TABLE IF NOT EXISTS villages (
+  )`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS villages (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     lga_id INTEGER REFERENCES lgas(id),
     lat DOUBLE PRECISION,
     lng DOUBLE PRECISION,
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE TABLE IF NOT EXISTS communities (
+  )`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS communities (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     village_id INTEGER REFERENCES villages(id),
@@ -408,7 +412,750 @@ export async function ensureDbInitialized() {
     lat DOUBLE PRECISION NOT NULL,
     lng DOUBLE PRECISION NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
+  // Notifications table
+  _q.push(sql`CREATE TABLE IF NOT EXISTS notifications (
+    id SERIAL PRIMARY KEY,
+    user_hash TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'info',
+    read INTEGER NOT NULL DEFAULT 0,
+    action_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_notifications_user_hash ON notifications(user_hash)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(user_hash, read)`);
+
+  // Feed interactions: likes
+  _q.push(sql`CREATE TABLE IF NOT EXISTS feed_likes (
+    id SERIAL PRIMARY KEY,
+    truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE,
+    user_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(truth_id, user_hash)
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feed_likes_truth ON feed_likes(truth_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feed_likes_user ON feed_likes(user_hash)`);
+
+  // Feed interactions: comments
+  _q.push(sql`CREATE TABLE IF NOT EXISTS feed_comments (
+    id SERIAL PRIMARY KEY,
+    truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE,
+    user_hash TEXT NOT NULL,
+    content TEXT NOT NULL,
+    image_url TEXT,
+    sticker_id TEXT,
+    gift_id TEXT,
+    parent_comment_id INTEGER REFERENCES feed_comments(id) ON DELETE CASCADE,
+    like_count INTEGER NOT NULL DEFAULT 0,
+    reply_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feed_comments_truth ON feed_comments(truth_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feed_comments_user ON feed_comments(user_hash)`);
+
+  // Feed interactions: shares
+  _q.push(sql`CREATE TABLE IF NOT EXISTS feed_shares (
+    id SERIAL PRIMARY KEY,
+    truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE,
+    user_hash TEXT,
+    channel TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feed_shares_truth ON feed_shares(truth_id)`);
+
+  // Add rich comment columns to feed_comments (idempotent)
+  _q.push(sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS image_url TEXT`);
+  _q.push(sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS sticker_id TEXT`);
+  _q.push(sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS gift_id TEXT`);
+  _q.push(sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS like_count INTEGER NOT NULL DEFAULT 0`);
+  _q.push(sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS reply_count INTEGER NOT NULL DEFAULT 0`);
+
+  // Feed comment likes table
+  _q.push(sql`CREATE TABLE IF NOT EXISTS feed_comment_likes (
+    id SERIAL PRIMARY KEY,
+    comment_id INTEGER NOT NULL REFERENCES feed_comments(id) ON DELETE CASCADE,
+    user_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(comment_id, user_hash)
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feed_comment_likes_comment ON feed_comment_likes(comment_id)`);
+
+  // User subscriptions
+  _q.push(sql`CREATE TABLE IF NOT EXISTS user_subscriptions (
+    id SERIAL PRIMARY KEY,
+    subscriber_hash TEXT NOT NULL,
+    target_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(subscriber_hash, target_hash)
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_user_subscriptions_subscriber ON user_subscriptions(subscriber_hash)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_user_subscriptions_target ON user_subscriptions(target_hash)`);
+
+  // Location preferences on platform_users
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_neighborhood_id INTEGER`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_state_name TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_lga_name TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_community_name TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_region_name TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_lat DOUBLE PRECISION`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_lng DOUBLE PRECISION`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS location_source TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS location_updated_at TIMESTAMPTZ`);
+
+  // Optional profile detail columns
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS bio TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS phone TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS occupation TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS website TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS twitter_handle TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS linkedin_url TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS date_of_birth DATE`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS gender TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS interests TEXT[]`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS skills TEXT[]`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS profile_completed BOOLEAN DEFAULT FALSE`);
+
+  // ─── AI Verifications Table ───
+  _q.push(sql`CREATE TABLE IF NOT EXISTS ai_verifications (
+    id SERIAL PRIMARY KEY,
+    truth_id INTEGER NOT NULL UNIQUE,
+    verdict TEXT NOT NULL DEFAULT 'unverified',
+    confidence INTEGER DEFAULT 0,
+    score INTEGER DEFAULT 0,
+    explanation TEXT,
+    signals JSONB DEFAULT '{}'::jsonb,
+    verified_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_ai_verifications_truth_id ON ai_verifications(truth_id)`);
+
+  // ─── User Browsing Events (behaviour tracking for AI suggestions) ───
+  _q.push(sql`CREATE TABLE IF NOT EXISTS user_browsing_events (
+    id SERIAL PRIMARY KEY,
+    clerk_user_id TEXT,
+    user_hash TEXT,
+    event_type TEXT NOT NULL,
+    truth_id INTEGER,
+    neighborhood_id INTEGER,
+    category TEXT,
+    path TEXT,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    dwell_ms INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_browsing_user ON user_browsing_events(clerk_user_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_browsing_hash ON user_browsing_events(user_hash)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_browsing_created ON user_browsing_events(created_at)`);
+
+  // ─── Post Suggestions (AI-generated recommendations) ───
+  _q.push(sql`CREATE TABLE IF NOT EXISTS post_suggestions (
+    id SERIAL PRIMARY KEY,
+    clerk_user_id TEXT,
+    user_hash TEXT,
+    truth_id INTEGER NOT NULL,
+    score DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+    reason TEXT,
+    source_model TEXT NOT NULL DEFAULT 'heuristic',
+    clicked INTEGER NOT NULL DEFAULT 0,
+    dismissed INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_suggestions_user ON post_suggestions(clerk_user_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_suggestions_hash ON post_suggestions(user_hash)`);
+
+  // ─── Weekly User Reviews (admin dashboard AI summaries) ───
+  _q.push(sql`CREATE TABLE IF NOT EXISTS weekly_user_reviews (
+    id SERIAL PRIMARY KEY,
+    week_start DATE NOT NULL,
+    week_end DATE NOT NULL,
+    clerk_user_id TEXT,
+    user_hash TEXT,
+    email TEXT,
+    display_name TEXT,
+    metrics JSONB DEFAULT '{}'::jsonb,
+    summary TEXT,
+    recommendations JSONB DEFAULT '[]'::jsonb,
+    risk_flags JSONB DEFAULT '[]'::jsonb,
+    ai_summary TEXT,
+    model_version TEXT DEFAULT 'heuristic',
+    generated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(week_start, clerk_user_id)
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_weekly_review_week ON weekly_user_reviews(week_start)`);
+
+  // ─── Event Time-Series (aggregated historical patterns) ───
+  _q.push(sql`CREATE TABLE IF NOT EXISTS event_time_series (
+    id SERIAL PRIMARY KEY,
+    period_type TEXT NOT NULL,
+    period_start DATE NOT NULL,
+    neighborhood_id INTEGER,
+    category TEXT,
+    event_count INTEGER NOT NULL DEFAULT 0,
+    avg_trust_score INTEGER NOT NULL DEFAULT 50,
+    positive_count INTEGER NOT NULL DEFAULT 0,
+    negative_count INTEGER NOT NULL DEFAULT 0,
+    neutral_count INTEGER NOT NULL DEFAULT 0,
+    avg_sentiment_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    top_keywords JSONB DEFAULT '[]'::jsonb,
+    trend TEXT NOT NULL DEFAULT 'stable',
+    summary TEXT,
+    aggregated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(period_type, period_start, neighborhood_id, category)
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_timeseries_period ON event_time_series(period_type, period_start)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_timeseries_neighborhood ON event_time_series(neighborhood_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_timeseries_category ON event_time_series(category)`);
+
+  // ─── Prediction freshness / dedup ───
+  _q.push(sql`ALTER TABLE predictions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_predictions_neighborhood ON predictions(neighborhood_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_predictions_created ON predictions(created_at DESC)`);
+
+  // ─── User Feedback ───
+  _q.push(sql`CREATE TABLE IF NOT EXISTS user_feedback (
+    id SERIAL PRIMARY KEY,
+    clerk_user_id TEXT,
+    user_hash TEXT,
+    email TEXT,
+    display_name TEXT,
+    category TEXT NOT NULL DEFAULT 'general',
+    subject TEXT NOT NULL,
+    message TEXT NOT NULL,
+    rating INTEGER DEFAULT 0,
+    page_url TEXT,
+    user_agent TEXT,
+    ip_hash TEXT,
+    status TEXT NOT NULL DEFAULT 'new',
+    admin_response TEXT,
+    responded_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feedback_status ON user_feedback(status)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feedback_created ON user_feedback(created_at DESC)`);
+
+  // ─── Questionnaire Responses ───
+  _q.push(sql`CREATE TABLE IF NOT EXISTS questionnaire_responses (
+    id SERIAL PRIMARY KEY,
+    clerk_user_id TEXT,
+    user_hash TEXT,
+    email TEXT,
+    display_name TEXT,
+    questionnaire_type TEXT NOT NULL DEFAULT 'general',
+    responses JSONB NOT NULL DEFAULT '{}'::jsonb,
+    ip_hash TEXT,
+    status TEXT NOT NULL DEFAULT 'new',
+    admin_notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_questionnaire_status ON questionnaire_responses(status)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_questionnaire_created ON questionnaire_responses(created_at DESC)`);
+
+  // ─── NEW: News System Tables ───
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS news_articles (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(300) NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    excerpt TEXT,
+    content TEXT NOT NULL,
+    cover_image_url TEXT,
+    media_urls TEXT NOT NULL DEFAULT '[]',
+    category TEXT NOT NULL DEFAULT 'general',
+    tags TEXT NOT NULL DEFAULT '[]',
+    author_id INTEGER,
+    author_name TEXT NOT NULL,
+    author_type TEXT NOT NULL DEFAULT 'agency',
+    organization_id INTEGER,
+    state TEXT,
+    lga TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    verification_badge TEXT,
+    trust_score INTEGER NOT NULL DEFAULT 50,
+    view_count INTEGER NOT NULL DEFAULT 0,
+    like_count INTEGER NOT NULL DEFAULT 0,
+    comment_count INTEGER NOT NULL DEFAULT 0,
+    accuracy_bonus INTEGER NOT NULL DEFAULT 0,
+    published_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_news_status ON news_articles(status)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_news_category ON news_articles(category)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_news_org ON news_articles(organization_id)`);
+
+  // Ensure all columns exist (for tables created before all columns were added)
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS accuracy_bonus INTEGER NOT NULL DEFAULT 0`);
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS author_id TEXT`);
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE`);
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS verification_badge TEXT`);
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS trust_score INTEGER NOT NULL DEFAULT 50`);
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0`);
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS like_count INTEGER NOT NULL DEFAULT 0`);
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS comment_count INTEGER NOT NULL DEFAULT 0`);
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS media_urls TEXT NOT NULL DEFAULT '[]'`);
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS cover_image_url TEXT`);
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS tags TEXT NOT NULL DEFAULT '[]'`);
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS state TEXT`);
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS lga TEXT`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS news_comments (
+    id SERIAL PRIMARY KEY,
+    article_id INTEGER NOT NULL,
+    user_hash TEXT NOT NULL,
+    author_name TEXT NOT NULL,
+    author_avatar TEXT,
+    content TEXT NOT NULL,
+    image_url TEXT,
+    sticker_id TEXT,
+    gift_id TEXT,
+    parent_comment_id INTEGER REFERENCES news_comments(id) ON DELETE CASCADE,
+    like_count INTEGER NOT NULL DEFAULT 0,
+    reply_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_news_comments_article ON news_comments(article_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_news_comments_user ON news_comments(user_hash)`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS news_likes (
+    id SERIAL PRIMARY KEY,
+    article_id INTEGER NOT NULL,
+    user_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(article_id, user_hash)
+  )`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS comment_likes (
+    id SERIAL PRIMARY KEY,
+    comment_id INTEGER NOT NULL,
+    user_hash TEXT NOT NULL,
+    article_id INTEGER NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(comment_id, user_hash)
+  )`);
+
+  // ─── NEW: Rewards System Tables ───
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS reward_categories (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    icon TEXT,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS reward_redemptions (
+    id SERIAL PRIMARY KEY,
+    user_hash TEXT NOT NULL,
+    reward_type TEXT NOT NULL,
+    reward_category TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    description TEXT NOT NULL,
+    recipient_phone TEXT,
+    recipient_name TEXT,
+    network_provider TEXT,
+    gift_card_code TEXT,
+    voucher_store_name TEXT,
+    voucher_code TEXT,
+    admin_notes TEXT,
+    processed_by TEXT,
+    processed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  // Ensure all columns exist on reward_redemptions (for tables created before all columns were added)
+  _q.push(sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS reward_category TEXT`);
+  _q.push(sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS recipient_name TEXT`);
+  _q.push(sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS network_provider TEXT`);
+  _q.push(sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS gift_card_code TEXT`);
+  _q.push(sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS voucher_code TEXT`);
+  _q.push(sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS voucher_store_name TEXT`);
+  _q.push(sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS admin_notes TEXT`);
+  _q.push(sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS processed_by TEXT`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_redemptions_user ON reward_redemptions(user_hash)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_redemptions_status ON reward_redemptions(status)`);
+
+  // Affiliate / referral programme
+  _q.push(sql`CREATE TABLE IF NOT EXISTS referrals (
+    id SERIAL PRIMARY KEY,
+    referrer_hash TEXT NOT NULL,
+    referred_hash TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'pending',
+    points_awarded INTEGER NOT NULL DEFAULT 0,
+    signup_bonus INTEGER NOT NULL DEFAULT 0,
+    completion_bonus INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_hash)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_hash)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_referrals_status ON referrals(status)`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS gift_cards (
+    id SERIAL PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    type TEXT NOT NULL,
+    brand TEXT NOT NULL,
+    face_value INTEGER NOT NULL,
+    balance INTEGER NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL DEFAULT 'NGN',
+    expiry_date TIMESTAMPTZ NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    redeemed_by TEXT,
+    redeemed_at TIMESTAMPTZ,
+    created_by TEXT NOT NULL,
+    metadata TEXT NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_gift_cards_status ON gift_cards(status)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_gift_cards_type ON gift_cards(type)`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS store_vouchers (
+    id SERIAL PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    store_name TEXT NOT NULL,
+    store_type TEXT NOT NULL DEFAULT 'general',
+    description TEXT,
+    discount_type TEXT NOT NULL DEFAULT 'fixed',
+    discount_value INTEGER NOT NULL,
+    min_purchase INTEGER NOT NULL DEFAULT 0,
+    max_discount INTEGER,
+    valid_from TIMESTAMPTZ NOT NULL,
+    valid_until TIMESTAMPTZ NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    used_by TEXT,
+    used_at TIMESTAMPTZ,
+    partner_business TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_vouchers_store ON store_vouchers(store_name)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_vouchers_status ON store_vouchers(status)`);
+
+  // ─── NEW: Telecom Transactions Table ───
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS telecom_transactions (
+    id SERIAL PRIMARY KEY,
+    user_hash TEXT NOT NULL,
+    phone_number TEXT NOT NULL,
+    network_provider TEXT NOT NULL,
+    service_type TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    plan_code TEXT,
+    plan_name TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    provider_ref TEXT,
+    provider TEXT,
+    error_message TEXT,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    ledger_entry_id INTEGER,
+    redemption_id INTEGER,
+    processed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_telecom_user ON telecom_transactions(user_hash)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_telecom_status ON telecom_transactions(status)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_telecom_phone ON telecom_transactions(phone_number)`);
+
+  // ─── NEW: Audit Logs Table ───
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS audit_logs (
+    id SERIAL PRIMARY KEY,
+    actor_id TEXT NOT NULL,
+    actor_name TEXT NOT NULL,
+    actor_role TEXT NOT NULL,
+    action TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id INTEGER,
+    description TEXT NOT NULL,
+    old_values TEXT,
+    new_values TEXT,
+    ip_address TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_logs(actor_id)`);
+
+  // ─── NEW: Questionnaire Management Table ───
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS questionnaires (
+    id SERIAL PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    questions TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+
+  // ─── NEW: Feedback Schedule Table ───
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS feedback_schedules (
+    id SERIAL PRIMARY KEY,
+    user_hash TEXT NOT NULL UNIQUE,
+    clerk_user_id TEXT,
+    signup_date TIMESTAMPTZ NOT NULL,
+    first_prompt_shown BOOLEAN NOT NULL DEFAULT FALSE,
+    first_prompt_date TIMESTAMPTZ,
+    last_prompt_date TIMESTAMPTZ,
+    next_prompt_date TIMESTAMPTZ,
+    feedback_count INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+
+  // ─── NEW: News Accuracy Incentives Table ───
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS news_incentives (
+    id SERIAL PRIMARY KEY,
+    article_id INTEGER NOT NULL,
+    user_hash TEXT NOT NULL,
+    incentive_type TEXT NOT NULL,
+    amount INTEGER NOT NULL DEFAULT 0,
+    badge_name TEXT,
+    trust_boost INTEGER NOT NULL DEFAULT 0,
+    reason TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_incentives_article ON news_incentives(article_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_incentives_user ON news_incentives(user_hash)`);
+
+  // Polls
+  _q.push(sql`CREATE TABLE IF NOT EXISTS polls (
+    id SERIAL PRIMARY KEY,
+    question TEXT NOT NULL,
+    content_type VARCHAR(20) DEFAULT 'truth' NOT NULL,
+    content_id INTEGER,
+    created_by VARCHAR(64) NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    expires_at TIMESTAMPTZ,
+    total_votes INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS poll_options (
+    id SERIAL PRIMARY KEY,
+    poll_id INTEGER REFERENCES polls(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    vote_count INTEGER DEFAULT 0,
+    display_order INTEGER DEFAULT 0
+  )`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS poll_votes (
+    id SERIAL PRIMARY KEY,
+    poll_id INTEGER REFERENCES polls(id) ON DELETE CASCADE,
+    option_id INTEGER REFERENCES poll_options(id) ON DELETE CASCADE,
+    user_hash VARCHAR(64) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(poll_id, user_hash)
+  )`);
+
+  // Scheduled content
+  _q.push(sql`CREATE TABLE IF NOT EXISTS scheduled_content (
+    id SERIAL PRIMARY KEY,
+    content_type VARCHAR(20) NOT NULL,
+    payload JSONB NOT NULL,
+    scheduled_at TIMESTAMPTZ NOT NULL,
+    status VARCHAR(20) DEFAULT 'scheduled',
+    created_by VARCHAR(64) NOT NULL,
+    published_ref_id INTEGER,
+    error_message TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_scheduled_status ON scheduled_content(status, scheduled_at)`);
+  // Emergency contacts table for law enforcement agencies
+  _q.push(sql`CREATE TABLE IF NOT EXISTS emergency_contacts (
+    id SERIAL PRIMARY KEY,
+    agency_type TEXT NOT NULL,
+    agency_name TEXT NOT NULL,
+    phone_primary TEXT,
+    phone_secondary TEXT,
+    email TEXT,
+    address TEXT,
+    state TEXT,
+    lga TEXT,
+    community TEXT,
+    village TEXT,
+    lat DOUBLE PRECISION,
+    lng DOUBLE PRECISION,
+    coverage_radius_km INTEGER DEFAULT 50,
+    verified BOOLEAN DEFAULT false,
+    source TEXT DEFAULT '9jatruth',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_emergency_state ON emergency_contacts(state)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_emergency_lga ON emergency_contacts(lga)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_emergency_type ON emergency_contacts(agency_type)`);
+
+  // Seed national-level emergency agency contacts (idempotent).
+  // 112 is Nigeria's verified national emergency number; it routes to the
+  // nearest emergency response centre. Agency office lines are publicly
+  // listed and should be confirmed locally before reliance.
+
+  // ─── AI Security System Tables ─────────────────────────────
+  // Zero-trust, threat detection, RBAC, 2FA, content verification.
+  _q.push(sql`CREATE TABLE IF NOT EXISTS security_events (
+    id SERIAL PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'info',
+    risk_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    ip_hash TEXT,
+    device_fingerprint TEXT,
+    user_hash TEXT,
+    user_agent TEXT,
+    endpoint TEXT,
+    action_taken TEXT DEFAULT 'log',
+    signals JSONB NOT NULL DEFAULT '[]',
+    metadata JSONB NOT NULL DEFAULT '{}',
+    acknowledged BOOLEAN DEFAULT false,
+    acknowledged_by TEXT,
+    acknowledged_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_sec_events_severity ON security_events(severity, created_at DESC)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_sec_events_fp ON security_events(device_fingerprint, created_at DESC)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_sec_events_ip ON security_events(ip_hash, created_at DESC)`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS device_fingerprints (
+    id SERIAL PRIMARY KEY,
+    fingerprint TEXT UNIQUE NOT NULL,
+    ip_hash TEXT,
+    user_agent TEXT,
+    platform TEXT,
+    asn TEXT,
+    trust_score INTEGER NOT NULL DEFAULT 50,
+    is_bot BOOLEAN DEFAULT false,
+    bot_reason TEXT,
+    request_count INTEGER NOT NULL DEFAULT 0,
+    blocked BOOLEAN DEFAULT false,
+    first_seen TIMESTAMPTZ DEFAULT NOW(),
+    last_seen TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_dev_fp_ip ON device_fingerprints(ip_hash)`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS security_members (
+    id SERIAL PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    display_name TEXT NOT NULL,
+    clerk_user_id TEXT,
+    role_ids TEXT NOT NULL DEFAULT '[]',
+    active BOOLEAN DEFAULT true,
+    two_factor_enabled BOOLEAN DEFAULT false,
+    two_factor_secret TEXT,
+    two_factor_backup_codes TEXT,
+    last_active_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS content_verifications (
+    id SERIAL PRIMARY KEY,
+    content_type TEXT NOT NULL,
+    reference_id INTEGER,
+    source_url TEXT,
+    text_content TEXT,
+    media_url TEXT,
+    authenticity_score INTEGER NOT NULL DEFAULT 50,
+    risk_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    verdict TEXT NOT NULL DEFAULT 'pending',
+    signals JSONB NOT NULL DEFAULT '[]',
+    reviewed_by TEXT,
+    reviewed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_cv_verdict ON content_verifications(verdict, created_at DESC)`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS fraud_signals (
+    id SERIAL PRIMARY KEY,
+    fraud_type TEXT NOT NULL,
+    user_hash TEXT,
+    ip_hash TEXT,
+    risk_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    signals JSONB NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'open',
+    mitigated_by TEXT,
+    mitigated_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_fraud_status ON fraud_signals(status, created_at DESC)`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS mitigation_actions (
+    id SERIAL PRIMARY KEY,
+    target_type TEXT NOT NULL,
+    target_value TEXT NOT NULL,
+    action TEXT NOT NULL,
+    reason TEXT,
+    duration_minutes INTEGER,
+    active BOOLEAN DEFAULT true,
+    expires_at TIMESTAMPTZ,
+    created_by TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS security_alerts (
+    id SERIAL PRIMARY KEY,
+    severity TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    event_id INTEGER REFERENCES security_events(id),
+    delivery_channels TEXT NOT NULL DEFAULT '["in_app"]',
+    delivered BOOLEAN DEFAULT false,
+    acknowledged BOOLEAN DEFAULT false,
+    acknowledged_by TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_sec_alerts_sev ON security_alerts(severity, created_at DESC)`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS security_rules (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    detector TEXT NOT NULL,
+    threshold DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+    action TEXT NOT NULL DEFAULT 'flag',
+    enabled BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS api_usage_log (
+    id BIGSERIAL PRIMARY KEY,
+    ip_hash TEXT,
+    device_fingerprint TEXT,
+    endpoint TEXT,
+    method TEXT,
+    status_code INTEGER,
+    response_time_ms INTEGER,
+    blocked BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_api_usage_ip ON api_usage_log(ip_hash, created_at DESC)`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS botnet_clusters (
+    id SERIAL PRIMARY KEY,
+    cluster_id TEXT UNIQUE NOT NULL,
+    member_count INTEGER NOT NULL,
+    risk_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    shared_attributes JSONB NOT NULL DEFAULT '[]',
+    members JSONB NOT NULL DEFAULT '[]',
+    status TEXT DEFAULT 'active',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS request_telemetry (
+    id BIGSERIAL PRIMARY KEY,
+    identity_hash TEXT NOT NULL,
+    endpoint TEXT NOT NULL,
+    timestamp BIGINT NOT NULL
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_telemetry_identity ON request_telemetry(identity_hash, timestamp DESC)`);
+  await sql.transaction(_q as any);
 
   // Seed geo hierarchy reference data (Nigeria regions/states only — no demo posts)
   const existingRegions = await sql`SELECT COUNT(*) as count FROM regions`;
@@ -495,563 +1242,6 @@ export async function ensureDbInitialized() {
     console.log("[9jatruth] Reference data initialized (neighborhoods with geo hierarchy, no demo posts)");
   }
 
-  // Notifications table
-  await sql`CREATE TABLE IF NOT EXISTS notifications (
-    id SERIAL PRIMARY KEY,
-    user_hash TEXT NOT NULL,
-    title TEXT NOT NULL,
-    message TEXT NOT NULL,
-    type TEXT NOT NULL DEFAULT 'info',
-    read INTEGER NOT NULL DEFAULT 0,
-    action_url TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_notifications_user_hash ON notifications(user_hash)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(user_hash, read)`;
-
-  // Feed interactions: likes
-  await sql`CREATE TABLE IF NOT EXISTS feed_likes (
-    id SERIAL PRIMARY KEY,
-    truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE,
-    user_hash TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(truth_id, user_hash)
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_feed_likes_truth ON feed_likes(truth_id)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_feed_likes_user ON feed_likes(user_hash)`;
-
-  // Feed interactions: comments
-  await sql`CREATE TABLE IF NOT EXISTS feed_comments (
-    id SERIAL PRIMARY KEY,
-    truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE,
-    user_hash TEXT NOT NULL,
-    content TEXT NOT NULL,
-    image_url TEXT,
-    sticker_id TEXT,
-    gift_id TEXT,
-    parent_comment_id INTEGER REFERENCES feed_comments(id) ON DELETE CASCADE,
-    like_count INTEGER NOT NULL DEFAULT 0,
-    reply_count INTEGER NOT NULL DEFAULT 0,
-    status TEXT NOT NULL DEFAULT 'active',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_feed_comments_truth ON feed_comments(truth_id)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_feed_comments_user ON feed_comments(user_hash)`;
-
-  // Feed interactions: shares
-  await sql`CREATE TABLE IF NOT EXISTS feed_shares (
-    id SERIAL PRIMARY KEY,
-    truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE,
-    user_hash TEXT,
-    channel TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_feed_shares_truth ON feed_shares(truth_id)`;
-
-  // Add rich comment columns to feed_comments (idempotent)
-  await sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS image_url TEXT`;
-  await sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS sticker_id TEXT`;
-  await sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS gift_id TEXT`;
-  await sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS like_count INTEGER NOT NULL DEFAULT 0`;
-  await sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS reply_count INTEGER NOT NULL DEFAULT 0`;
-
-  // Feed comment likes table
-  await sql`CREATE TABLE IF NOT EXISTS feed_comment_likes (
-    id SERIAL PRIMARY KEY,
-    comment_id INTEGER NOT NULL REFERENCES feed_comments(id) ON DELETE CASCADE,
-    user_hash TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(comment_id, user_hash)
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_feed_comment_likes_comment ON feed_comment_likes(comment_id)`;
-
-  // User subscriptions
-  await sql`CREATE TABLE IF NOT EXISTS user_subscriptions (
-    id SERIAL PRIMARY KEY,
-    subscriber_hash TEXT NOT NULL,
-    target_hash TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(subscriber_hash, target_hash)
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_user_subscriptions_subscriber ON user_subscriptions(subscriber_hash)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_user_subscriptions_target ON user_subscriptions(target_hash)`;
-
-  // Location preferences on platform_users
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_neighborhood_id INTEGER`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_state_name TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_lga_name TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_community_name TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_region_name TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_lat DOUBLE PRECISION`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS preferred_lng DOUBLE PRECISION`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS location_source TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS location_updated_at TIMESTAMPTZ`;
-
-  // Optional profile detail columns
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS bio TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS phone TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS occupation TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS website TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS twitter_handle TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS linkedin_url TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS date_of_birth DATE`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS gender TEXT`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS interests TEXT[]`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS skills TEXT[]`;
-  await sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS profile_completed BOOLEAN DEFAULT FALSE`;
-
-  // ─── AI Verifications Table ───
-  await sql`CREATE TABLE IF NOT EXISTS ai_verifications (
-    id SERIAL PRIMARY KEY,
-    truth_id INTEGER NOT NULL UNIQUE,
-    verdict TEXT NOT NULL DEFAULT 'unverified',
-    confidence INTEGER DEFAULT 0,
-    score INTEGER DEFAULT 0,
-    explanation TEXT,
-    signals JSONB DEFAULT '{}'::jsonb,
-    verified_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_ai_verifications_truth_id ON ai_verifications(truth_id)`;
-
-  // ─── User Browsing Events (behaviour tracking for AI suggestions) ───
-  await sql`CREATE TABLE IF NOT EXISTS user_browsing_events (
-    id SERIAL PRIMARY KEY,
-    clerk_user_id TEXT,
-    user_hash TEXT,
-    event_type TEXT NOT NULL,
-    truth_id INTEGER,
-    neighborhood_id INTEGER,
-    category TEXT,
-    path TEXT,
-    metadata JSONB DEFAULT '{}'::jsonb,
-    dwell_ms INTEGER DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_browsing_user ON user_browsing_events(clerk_user_id)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_browsing_hash ON user_browsing_events(user_hash)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_browsing_created ON user_browsing_events(created_at)`;
-
-  // ─── Post Suggestions (AI-generated recommendations) ───
-  await sql`CREATE TABLE IF NOT EXISTS post_suggestions (
-    id SERIAL PRIMARY KEY,
-    clerk_user_id TEXT,
-    user_hash TEXT,
-    truth_id INTEGER NOT NULL,
-    score DOUBLE PRECISION NOT NULL DEFAULT 0.5,
-    reason TEXT,
-    source_model TEXT NOT NULL DEFAULT 'heuristic',
-    clicked INTEGER NOT NULL DEFAULT 0,
-    dismissed INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at TIMESTAMPTZ
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_suggestions_user ON post_suggestions(clerk_user_id)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_suggestions_hash ON post_suggestions(user_hash)`;
-
-  // ─── Weekly User Reviews (admin dashboard AI summaries) ───
-  await sql`CREATE TABLE IF NOT EXISTS weekly_user_reviews (
-    id SERIAL PRIMARY KEY,
-    week_start DATE NOT NULL,
-    week_end DATE NOT NULL,
-    clerk_user_id TEXT,
-    user_hash TEXT,
-    email TEXT,
-    display_name TEXT,
-    metrics JSONB DEFAULT '{}'::jsonb,
-    summary TEXT,
-    recommendations JSONB DEFAULT '[]'::jsonb,
-    risk_flags JSONB DEFAULT '[]'::jsonb,
-    ai_summary TEXT,
-    model_version TEXT DEFAULT 'heuristic',
-    generated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(week_start, clerk_user_id)
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_weekly_review_week ON weekly_user_reviews(week_start)`;
-
-  // ─── Event Time-Series (aggregated historical patterns) ───
-  await sql`CREATE TABLE IF NOT EXISTS event_time_series (
-    id SERIAL PRIMARY KEY,
-    period_type TEXT NOT NULL,
-    period_start DATE NOT NULL,
-    neighborhood_id INTEGER,
-    category TEXT,
-    event_count INTEGER NOT NULL DEFAULT 0,
-    avg_trust_score INTEGER NOT NULL DEFAULT 50,
-    positive_count INTEGER NOT NULL DEFAULT 0,
-    negative_count INTEGER NOT NULL DEFAULT 0,
-    neutral_count INTEGER NOT NULL DEFAULT 0,
-    avg_sentiment_score DOUBLE PRECISION NOT NULL DEFAULT 0,
-    top_keywords JSONB DEFAULT '[]'::jsonb,
-    trend TEXT NOT NULL DEFAULT 'stable',
-    summary TEXT,
-    aggregated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(period_type, period_start, neighborhood_id, category)
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_timeseries_period ON event_time_series(period_type, period_start)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_timeseries_neighborhood ON event_time_series(neighborhood_id)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_timeseries_category ON event_time_series(category)`;
-
-  // ─── Prediction freshness / dedup ───
-  await sql`ALTER TABLE predictions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_predictions_neighborhood ON predictions(neighborhood_id)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_predictions_created ON predictions(created_at DESC)`;
-
-  // ─── User Feedback ───
-  await sql`CREATE TABLE IF NOT EXISTS user_feedback (
-    id SERIAL PRIMARY KEY,
-    clerk_user_id TEXT,
-    user_hash TEXT,
-    email TEXT,
-    display_name TEXT,
-    category TEXT NOT NULL DEFAULT 'general',
-    subject TEXT NOT NULL,
-    message TEXT NOT NULL,
-    rating INTEGER DEFAULT 0,
-    page_url TEXT,
-    user_agent TEXT,
-    ip_hash TEXT,
-    status TEXT NOT NULL DEFAULT 'new',
-    admin_response TEXT,
-    responded_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_feedback_status ON user_feedback(status)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_feedback_created ON user_feedback(created_at DESC)`;
-
-  // ─── Questionnaire Responses ───
-  await sql`CREATE TABLE IF NOT EXISTS questionnaire_responses (
-    id SERIAL PRIMARY KEY,
-    clerk_user_id TEXT,
-    user_hash TEXT,
-    email TEXT,
-    display_name TEXT,
-    questionnaire_type TEXT NOT NULL DEFAULT 'general',
-    responses JSONB NOT NULL DEFAULT '{}'::jsonb,
-    ip_hash TEXT,
-    status TEXT NOT NULL DEFAULT 'new',
-    admin_notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_questionnaire_status ON questionnaire_responses(status)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_questionnaire_created ON questionnaire_responses(created_at DESC)`;
-
-  // ─── NEW: News System Tables ───
-
-  await sql`CREATE TABLE IF NOT EXISTS news_articles (
-    id SERIAL PRIMARY KEY,
-    title VARCHAR(300) NOT NULL,
-    slug TEXT NOT NULL UNIQUE,
-    excerpt TEXT,
-    content TEXT NOT NULL,
-    cover_image_url TEXT,
-    media_urls TEXT NOT NULL DEFAULT '[]',
-    category TEXT NOT NULL DEFAULT 'general',
-    tags TEXT NOT NULL DEFAULT '[]',
-    author_id INTEGER,
-    author_name TEXT NOT NULL,
-    author_type TEXT NOT NULL DEFAULT 'agency',
-    organization_id INTEGER,
-    state TEXT,
-    lga TEXT,
-    status TEXT NOT NULL DEFAULT 'draft',
-    is_verified BOOLEAN NOT NULL DEFAULT FALSE,
-    verification_badge TEXT,
-    trust_score INTEGER NOT NULL DEFAULT 50,
-    view_count INTEGER NOT NULL DEFAULT 0,
-    like_count INTEGER NOT NULL DEFAULT 0,
-    comment_count INTEGER NOT NULL DEFAULT 0,
-    accuracy_bonus INTEGER NOT NULL DEFAULT 0,
-    published_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_news_status ON news_articles(status)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_news_category ON news_articles(category)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_news_org ON news_articles(organization_id)`;
-
-  // Ensure all columns exist (for tables created before all columns were added)
-  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS accuracy_bonus INTEGER NOT NULL DEFAULT 0`;
-  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
-  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS author_id TEXT`;
-  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE`;
-  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS verification_badge TEXT`;
-  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS trust_score INTEGER NOT NULL DEFAULT 50`;
-  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0`;
-  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS like_count INTEGER NOT NULL DEFAULT 0`;
-  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS comment_count INTEGER NOT NULL DEFAULT 0`;
-  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS media_urls TEXT NOT NULL DEFAULT '[]'`;
-  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS cover_image_url TEXT`;
-  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS tags TEXT NOT NULL DEFAULT '[]'`;
-  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS state TEXT`;
-  await sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS lga TEXT`;
-
-  await sql`CREATE TABLE IF NOT EXISTS news_comments (
-    id SERIAL PRIMARY KEY,
-    article_id INTEGER NOT NULL,
-    user_hash TEXT NOT NULL,
-    author_name TEXT NOT NULL,
-    author_avatar TEXT,
-    content TEXT NOT NULL,
-    image_url TEXT,
-    sticker_id TEXT,
-    gift_id TEXT,
-    parent_comment_id INTEGER REFERENCES news_comments(id) ON DELETE CASCADE,
-    like_count INTEGER NOT NULL DEFAULT 0,
-    reply_count INTEGER NOT NULL DEFAULT 0,
-    status TEXT NOT NULL DEFAULT 'active',
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_news_comments_article ON news_comments(article_id)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_news_comments_user ON news_comments(user_hash)`;
-
-  await sql`CREATE TABLE IF NOT EXISTS news_likes (
-    id SERIAL PRIMARY KEY,
-    article_id INTEGER NOT NULL,
-    user_hash TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(article_id, user_hash)
-  )`;
-
-  await sql`CREATE TABLE IF NOT EXISTS comment_likes (
-    id SERIAL PRIMARY KEY,
-    comment_id INTEGER NOT NULL,
-    user_hash TEXT NOT NULL,
-    article_id INTEGER NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(comment_id, user_hash)
-  )`;
-
-  // ─── NEW: Rewards System Tables ───
-
-  await sql`CREATE TABLE IF NOT EXISTS reward_categories (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE,
-    description TEXT,
-    icon TEXT,
-    active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-
-  await sql`CREATE TABLE IF NOT EXISTS reward_redemptions (
-    id SERIAL PRIMARY KEY,
-    user_hash TEXT NOT NULL,
-    reward_type TEXT NOT NULL,
-    reward_category TEXT NOT NULL,
-    amount INTEGER NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    description TEXT NOT NULL,
-    recipient_phone TEXT,
-    recipient_name TEXT,
-    network_provider TEXT,
-    gift_card_code TEXT,
-    voucher_store_name TEXT,
-    voucher_code TEXT,
-    admin_notes TEXT,
-    processed_by TEXT,
-    processed_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  // Ensure all columns exist on reward_redemptions (for tables created before all columns were added)
-  await sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS reward_category TEXT`;
-  await sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS recipient_name TEXT`;
-  await sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS network_provider TEXT`;
-  await sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS gift_card_code TEXT`;
-  await sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS voucher_code TEXT`;
-  await sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS voucher_store_name TEXT`;
-  await sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS admin_notes TEXT`;
-  await sql`ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS processed_by TEXT`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_redemptions_user ON reward_redemptions(user_hash)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_redemptions_status ON reward_redemptions(status)`;
-
-  // Affiliate / referral programme
-  await sql`CREATE TABLE IF NOT EXISTS referrals (
-    id SERIAL PRIMARY KEY,
-    referrer_hash TEXT NOT NULL,
-    referred_hash TEXT NOT NULL UNIQUE,
-    status TEXT NOT NULL DEFAULT 'pending',
-    points_awarded INTEGER NOT NULL DEFAULT 0,
-    signup_bonus INTEGER NOT NULL DEFAULT 0,
-    completion_bonus INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    completed_at TIMESTAMPTZ
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_hash)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_hash)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_referrals_status ON referrals(status)`;
-
-  await sql`CREATE TABLE IF NOT EXISTS gift_cards (
-    id SERIAL PRIMARY KEY,
-    code TEXT NOT NULL UNIQUE,
-    type TEXT NOT NULL,
-    brand TEXT NOT NULL,
-    face_value INTEGER NOT NULL,
-    balance INTEGER NOT NULL DEFAULT 0,
-    currency TEXT NOT NULL DEFAULT 'NGN',
-    expiry_date TIMESTAMPTZ NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active',
-    redeemed_by TEXT,
-    redeemed_at TIMESTAMPTZ,
-    created_by TEXT NOT NULL,
-    metadata TEXT NOT NULL DEFAULT '{}',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_gift_cards_status ON gift_cards(status)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_gift_cards_type ON gift_cards(type)`;
-
-  await sql`CREATE TABLE IF NOT EXISTS store_vouchers (
-    id SERIAL PRIMARY KEY,
-    code TEXT NOT NULL UNIQUE,
-    store_name TEXT NOT NULL,
-    store_type TEXT NOT NULL DEFAULT 'general',
-    description TEXT,
-    discount_type TEXT NOT NULL DEFAULT 'fixed',
-    discount_value INTEGER NOT NULL,
-    min_purchase INTEGER NOT NULL DEFAULT 0,
-    max_discount INTEGER,
-    valid_from TIMESTAMPTZ NOT NULL,
-    valid_until TIMESTAMPTZ NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active',
-    used_by TEXT,
-    used_at TIMESTAMPTZ,
-    partner_business TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_vouchers_store ON store_vouchers(store_name)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_vouchers_status ON store_vouchers(status)`;
-
-  // ─── NEW: Telecom Transactions Table ───
-
-  await sql`CREATE TABLE IF NOT EXISTS telecom_transactions (
-    id SERIAL PRIMARY KEY,
-    user_hash TEXT NOT NULL,
-    phone_number TEXT NOT NULL,
-    network_provider TEXT NOT NULL,
-    service_type TEXT NOT NULL,
-    amount INTEGER NOT NULL,
-    plan_code TEXT,
-    plan_name TEXT,
-    status TEXT NOT NULL DEFAULT 'pending',
-    provider_ref TEXT,
-    provider TEXT,
-    error_message TEXT,
-    retry_count INTEGER NOT NULL DEFAULT 0,
-    ledger_entry_id INTEGER,
-    redemption_id INTEGER,
-    processed_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_telecom_user ON telecom_transactions(user_hash)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_telecom_status ON telecom_transactions(status)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_telecom_phone ON telecom_transactions(phone_number)`;
-
-  // ─── NEW: Audit Logs Table ───
-
-  await sql`CREATE TABLE IF NOT EXISTS audit_logs (
-    id SERIAL PRIMARY KEY,
-    actor_id TEXT NOT NULL,
-    actor_name TEXT NOT NULL,
-    actor_role TEXT NOT NULL,
-    action TEXT NOT NULL,
-    entity_type TEXT NOT NULL,
-    entity_id INTEGER,
-    description TEXT NOT NULL,
-    old_values TEXT,
-    new_values TEXT,
-    ip_address TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_logs(actor_id)`;
-
-  // ─── NEW: Questionnaire Management Table ───
-
-  await sql`CREATE TABLE IF NOT EXISTS questionnaires (
-    id SERIAL PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT,
-    questions TEXT NOT NULL DEFAULT '[]',
-    status TEXT NOT NULL DEFAULT 'active',
-    created_by TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-
-  // ─── NEW: Feedback Schedule Table ───
-
-  await sql`CREATE TABLE IF NOT EXISTS feedback_schedules (
-    id SERIAL PRIMARY KEY,
-    user_hash TEXT NOT NULL UNIQUE,
-    clerk_user_id TEXT,
-    signup_date TIMESTAMPTZ NOT NULL,
-    first_prompt_shown BOOLEAN NOT NULL DEFAULT FALSE,
-    first_prompt_date TIMESTAMPTZ,
-    last_prompt_date TIMESTAMPTZ,
-    next_prompt_date TIMESTAMPTZ,
-    feedback_count INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-
-  // ─── NEW: News Accuracy Incentives Table ───
-
-  await sql`CREATE TABLE IF NOT EXISTS news_incentives (
-    id SERIAL PRIMARY KEY,
-    article_id INTEGER NOT NULL,
-    user_hash TEXT NOT NULL,
-    incentive_type TEXT NOT NULL,
-    amount INTEGER NOT NULL DEFAULT 0,
-    badge_name TEXT,
-    trust_boost INTEGER NOT NULL DEFAULT 0,
-    reason TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_incentives_article ON news_incentives(article_id)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_incentives_user ON news_incentives(user_hash)`;
-
-  // Polls
-  await sql`CREATE TABLE IF NOT EXISTS polls (
-    id SERIAL PRIMARY KEY,
-    question TEXT NOT NULL,
-    content_type VARCHAR(20) DEFAULT 'truth' NOT NULL,
-    content_id INTEGER,
-    created_by VARCHAR(64) NOT NULL,
-    is_active BOOLEAN DEFAULT true,
-    expires_at TIMESTAMPTZ,
-    total_votes INTEGER DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE TABLE IF NOT EXISTS poll_options (
-    id SERIAL PRIMARY KEY,
-    poll_id INTEGER REFERENCES polls(id) ON DELETE CASCADE,
-    text TEXT NOT NULL,
-    vote_count INTEGER DEFAULT 0,
-    display_order INTEGER DEFAULT 0
-  )`;
-  await sql`CREATE TABLE IF NOT EXISTS poll_votes (
-    id SERIAL PRIMARY KEY,
-    poll_id INTEGER REFERENCES polls(id) ON DELETE CASCADE,
-    option_id INTEGER REFERENCES poll_options(id) ON DELETE CASCADE,
-    user_hash VARCHAR(64) NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(poll_id, user_hash)
-  )`;
-
-  // Scheduled content
-  await sql`CREATE TABLE IF NOT EXISTS scheduled_content (
-    id SERIAL PRIMARY KEY,
-    content_type VARCHAR(20) NOT NULL,
-    payload JSONB NOT NULL,
-    scheduled_at TIMESTAMPTZ NOT NULL,
-    status VARCHAR(20) DEFAULT 'scheduled',
-    created_by VARCHAR(64) NOT NULL,
-    published_ref_id INTEGER,
-    error_message TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_scheduled_status ON scheduled_content(status, scheduled_at)`;
-
   // Seed default reward categories
   const existingCats = await sql`SELECT COUNT(*) as count FROM reward_categories`;
   if ((existingCats as any)[0].count === 0) {
@@ -1067,192 +1257,6 @@ export async function ensureDbInitialized() {
     }
   }
 
-  // Emergency contacts table for law enforcement agencies
-  await sql`CREATE TABLE IF NOT EXISTS emergency_contacts (
-    id SERIAL PRIMARY KEY,
-    agency_type TEXT NOT NULL,
-    agency_name TEXT NOT NULL,
-    phone_primary TEXT,
-    phone_secondary TEXT,
-    email TEXT,
-    address TEXT,
-    state TEXT,
-    lga TEXT,
-    community TEXT,
-    village TEXT,
-    lat DOUBLE PRECISION,
-    lng DOUBLE PRECISION,
-    coverage_radius_km INTEGER DEFAULT 50,
-    verified BOOLEAN DEFAULT false,
-    source TEXT DEFAULT '9jatruth',
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_emergency_state ON emergency_contacts(state)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_emergency_lga ON emergency_contacts(lga)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_emergency_type ON emergency_contacts(agency_type)`;
-
-  // Seed national-level emergency agency contacts (idempotent).
-  // 112 is Nigeria's verified national emergency number; it routes to the
-  // nearest emergency response centre. Agency office lines are publicly
-  // listed and should be confirmed locally before reliance.
-
-  // ─── AI Security System Tables ─────────────────────────────
-  // Zero-trust, threat detection, RBAC, 2FA, content verification.
-  await sql`CREATE TABLE IF NOT EXISTS security_events (
-    id SERIAL PRIMARY KEY,
-    event_type TEXT NOT NULL,
-    severity TEXT NOT NULL DEFAULT 'info',
-    risk_score DOUBLE PRECISION NOT NULL DEFAULT 0,
-    ip_hash TEXT,
-    device_fingerprint TEXT,
-    user_hash TEXT,
-    user_agent TEXT,
-    endpoint TEXT,
-    action_taken TEXT DEFAULT 'log',
-    signals JSONB NOT NULL DEFAULT '[]',
-    metadata JSONB NOT NULL DEFAULT '{}',
-    acknowledged BOOLEAN DEFAULT false,
-    acknowledged_by TEXT,
-    acknowledged_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_sec_events_severity ON security_events(severity, created_at DESC)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_sec_events_fp ON security_events(device_fingerprint, created_at DESC)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_sec_events_ip ON security_events(ip_hash, created_at DESC)`;
-
-  await sql`CREATE TABLE IF NOT EXISTS device_fingerprints (
-    id SERIAL PRIMARY KEY,
-    fingerprint TEXT UNIQUE NOT NULL,
-    ip_hash TEXT,
-    user_agent TEXT,
-    platform TEXT,
-    asn TEXT,
-    trust_score INTEGER NOT NULL DEFAULT 50,
-    is_bot BOOLEAN DEFAULT false,
-    bot_reason TEXT,
-    request_count INTEGER NOT NULL DEFAULT 0,
-    blocked BOOLEAN DEFAULT false,
-    first_seen TIMESTAMPTZ DEFAULT NOW(),
-    last_seen TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_dev_fp_ip ON device_fingerprints(ip_hash)`;
-
-  await sql`CREATE TABLE IF NOT EXISTS security_members (
-    id SERIAL PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
-    display_name TEXT NOT NULL,
-    clerk_user_id TEXT,
-    role_ids TEXT NOT NULL DEFAULT '[]',
-    active BOOLEAN DEFAULT true,
-    two_factor_enabled BOOLEAN DEFAULT false,
-    two_factor_secret TEXT,
-    two_factor_backup_codes TEXT,
-    last_active_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-
-  await sql`CREATE TABLE IF NOT EXISTS content_verifications (
-    id SERIAL PRIMARY KEY,
-    content_type TEXT NOT NULL,
-    reference_id INTEGER,
-    source_url TEXT,
-    text_content TEXT,
-    media_url TEXT,
-    authenticity_score INTEGER NOT NULL DEFAULT 50,
-    risk_score DOUBLE PRECISION NOT NULL DEFAULT 0,
-    verdict TEXT NOT NULL DEFAULT 'pending',
-    signals JSONB NOT NULL DEFAULT '[]',
-    reviewed_by TEXT,
-    reviewed_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_cv_verdict ON content_verifications(verdict, created_at DESC)`;
-
-  await sql`CREATE TABLE IF NOT EXISTS fraud_signals (
-    id SERIAL PRIMARY KEY,
-    fraud_type TEXT NOT NULL,
-    user_hash TEXT,
-    ip_hash TEXT,
-    risk_score DOUBLE PRECISION NOT NULL DEFAULT 0,
-    signals JSONB NOT NULL DEFAULT '[]',
-    status TEXT NOT NULL DEFAULT 'open',
-    mitigated_by TEXT,
-    mitigated_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_fraud_status ON fraud_signals(status, created_at DESC)`;
-
-  await sql`CREATE TABLE IF NOT EXISTS mitigation_actions (
-    id SERIAL PRIMARY KEY,
-    target_type TEXT NOT NULL,
-    target_value TEXT NOT NULL,
-    action TEXT NOT NULL,
-    reason TEXT,
-    duration_minutes INTEGER,
-    active BOOLEAN DEFAULT true,
-    expires_at TIMESTAMPTZ,
-    created_by TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-
-  await sql`CREATE TABLE IF NOT EXISTS security_alerts (
-    id SERIAL PRIMARY KEY,
-    severity TEXT NOT NULL,
-    title TEXT NOT NULL,
-    message TEXT NOT NULL,
-    event_id INTEGER REFERENCES security_events(id),
-    delivery_channels TEXT NOT NULL DEFAULT '["in_app"]',
-    delivered BOOLEAN DEFAULT false,
-    acknowledged BOOLEAN DEFAULT false,
-    acknowledged_by TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_sec_alerts_sev ON security_alerts(severity, created_at DESC)`;
-
-  await sql`CREATE TABLE IF NOT EXISTS security_rules (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL,
-    detector TEXT NOT NULL,
-    threshold DOUBLE PRECISION NOT NULL DEFAULT 0.5,
-    action TEXT NOT NULL DEFAULT 'flag',
-    enabled BOOLEAN DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-
-  await sql`CREATE TABLE IF NOT EXISTS api_usage_log (
-    id BIGSERIAL PRIMARY KEY,
-    ip_hash TEXT,
-    device_fingerprint TEXT,
-    endpoint TEXT,
-    method TEXT,
-    status_code INTEGER,
-    response_time_ms INTEGER,
-    blocked BOOLEAN DEFAULT false,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_api_usage_ip ON api_usage_log(ip_hash, created_at DESC)`;
-
-  await sql`CREATE TABLE IF NOT EXISTS botnet_clusters (
-    id SERIAL PRIMARY KEY,
-    cluster_id TEXT UNIQUE NOT NULL,
-    member_count INTEGER NOT NULL,
-    risk_score DOUBLE PRECISION NOT NULL DEFAULT 0,
-    shared_attributes JSONB NOT NULL DEFAULT '[]',
-    members JSONB NOT NULL DEFAULT '[]',
-    status TEXT DEFAULT 'active',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`;
-
-  await sql`CREATE TABLE IF NOT EXISTS request_telemetry (
-    id BIGSERIAL PRIMARY KEY,
-    identity_hash TEXT NOT NULL,
-    endpoint TEXT NOT NULL,
-    timestamp BIGINT NOT NULL
-  )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_telemetry_identity ON request_telemetry(identity_hash, timestamp DESC)`;
 
   try {
     const { seedEmergencyContacts } = await import("@/lib/emergency-agencies-seed");

@@ -41,7 +41,7 @@ function AnalogueClock({ time }: { time: ReturnType<typeof getTimeRemaining> }) 
   // Clock hand angles (360 degrees = full rotation)
   const secondAngle = (seconds / 60) * 360;
   const minuteAngle = ((minutes + seconds / 60) / 60) * 360;
-  const hourAngle = (((hours % 24) + minutes / 60) / 24) * 360 * 2; // 24h clock face
+  const hourAngle = (((hours % 24) + minutes / 60) / 24) * 360; // 24h clock face (one full turn per day)
 
   return (
     <svg
