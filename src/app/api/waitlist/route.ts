@@ -1,4 +1,4 @@
-import { ensureDbInitialized, getDb } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { rateLimit, getClientIP } from "@/lib/rate-limiter";
 import { validate, validationErrorResponse } from "@/lib/api-helpers";
 import { z } from "zod";
@@ -16,6 +16,42 @@ function isClerkConfigured(): boolean {
   const hasPub = key && !key.includes("placeholder") && key.length > 20;
   const hasSecret = secret && !secret.includes("replace") && secret.length > 20;
   return Boolean(hasPub && hasSecret);
+}
+
+/**
+ * Ensure the waitlist table exists with all required columns.
+ *
+ * Deliberately lightweight (CREATE TABLE IF NOT EXISTS + a few idempotent
+ * ALTERs) so the waitlist endpoint never depends on the full platform schema
+ * init (`ensureDbInitialized` batches 215 DDL statements into one Neon
+ * transaction — fine for other routes, but unnecessary and riskier on a
+ * fresh-DB cold start where seeding can be slow). The waitlist only needs
+ * its own table, so this is all it touches.
+ */
+async function ensureWaitlistTable() {
+  const sql = getDb();
+  await sql`
+    CREATE TABLE IF NOT EXISTS waitlist (
+      id SERIAL PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      name TEXT,
+      source TEXT DEFAULT 'countdown',
+      ip_hash TEXT,
+      clerk_status TEXT DEFAULT 'pending',
+      clerk_entry_id TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+  // Self-heal: CREATE IF NOT EXISTS won't alter an existing table, so these
+  // ALTERs guarantee the columns exist on older schemas.
+  await sql`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS name TEXT`;
+  await sql`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'countdown'`;
+  await sql`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS ip_hash TEXT`;
+  await sql`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS clerk_status TEXT DEFAULT 'pending'`;
+  await sql`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS clerk_entry_id TEXT`;
+  await sql`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()`;
+  await sql`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
 }
 
 export async function POST(request: Request) {
@@ -38,28 +74,8 @@ export async function POST(request: Request) {
   let dbError: string | null = null;
 
   try {
-    await ensureDbInitialized();
+    await ensureWaitlistTable();
     const sql = getDb();
-
-    // Create waitlist table if it doesn't exist (idempotent)
-    await sql`
-      CREATE TABLE IF NOT EXISTS waitlist (
-        id SERIAL PRIMARY KEY,
-        email TEXT UNIQUE NOT NULL,
-        name TEXT,
-        source TEXT DEFAULT 'countdown',
-        ip_hash TEXT,
-        clerk_status TEXT DEFAULT 'pending',
-        clerk_entry_id TEXT,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `;
-    // Self-heal: add columns missing from older schemas (CREATE IF NOT EXISTS
-    // won't alter an existing table, so these ALTERs guarantee the columns exist).
-    await sql`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS clerk_status TEXT DEFAULT 'pending'`;
-    await sql`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS clerk_entry_id TEXT`;
-    await sql`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
 
     // Insert or update — detect whether the email already exists so we can
     // return a friendly message instead of a generic failure.
@@ -166,7 +182,7 @@ export async function POST(request: Request) {
 
 export async function GET() {
   try {
-    await ensureDbInitialized();
+    await ensureWaitlistTable();
     const sql = getDb();
     const result = await sql`SELECT COUNT(*) as count FROM waitlist`;
     const count = (result as unknown as any[])[0]?.count ?? 0;

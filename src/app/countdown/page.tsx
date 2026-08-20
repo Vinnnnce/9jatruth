@@ -169,13 +169,25 @@ function AnalogueClock({ time }: { time: ReturnType<typeof getTimeRemaining> }) 
 }
 
 export default function CountdownPage() {
-  const [time, setTime] = useState(getTimeRemaining());
+  // Stable initial state to avoid a server/client hydration mismatch
+  // (Date.now() differs between SSR and the client). Real values are
+  // populated immediately in the effect below before the first tick.
+  const [time, setTime] = useState<ReturnType<typeof getTimeRemaining>>({
+    distance: 0,
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+    isLaunched: false,
+  });
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
   useEffect(() => {
+    // Populate immediately, then tick every second.
+    setTime(getTimeRemaining());
     const timer = setInterval(() => setTime(getTimeRemaining()), 1000);
     return () => clearInterval(timer);
   }, []);

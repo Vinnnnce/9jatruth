@@ -32,6 +32,13 @@ const isPreLaunchRoute = createRouteMatcher([
   "/api/webhook(.*)",
   "/api/health(.*)",
   "/api/security/analyze(.*)",
+  // CRON-triggered routes — each enforces CRON_SECRET at the route level, so
+  // they are safe to run before launch (needed for nightly jobs + the daily
+  // security alerting sweep). Without this the pre-launch gate 503s them.
+  "/api/backup(.*)",
+  "/api/security/alerts(.*)",
+  "/api/news/auto-summary(.*)",
+  "/api/schedule/process(.*)",
   "/_next(.*)",
   "/favicon(.*)",
   "/manifest(.*)",
@@ -115,10 +122,9 @@ const middleware = isClerkConfigured
   ? clerkMiddleware(async (auth, req) => {
       // ─── Launch gate: redirect to countdown if before launch date ───
       if (isBeforeLaunch() && !isPreLaunchRoute(req)) {
-        // Allow API calls from the countdown page itself
+        // Block all non-pre-launch API calls during countdown
         const isApiCall = req.nextUrl.pathname.startsWith("/api/");
-        if (isApiCall && !isPreLaunchRoute(req)) {
-          // Block all non-pre-launch API calls during countdown
+        if (isApiCall) {
           return NextResponse.json(
             { message: "Site launches August 21, 2026" },
             { status: 503 }
