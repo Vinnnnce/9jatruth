@@ -55,6 +55,11 @@ export async function POST(request: Request) {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `;
+    // Self-heal: add columns missing from older schemas (CREATE IF NOT EXISTS
+    // won't alter an existing table, so these ALTERs guarantee the columns exist).
+    await sql`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS clerk_status TEXT DEFAULT 'pending'`;
+    await sql`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS clerk_entry_id TEXT`;
+    await sql`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
 
     // Insert or update — detect whether the email already exists so we can
     // return a friendly message instead of a generic failure.
