@@ -7,7 +7,7 @@
  * - Push notification handling
  */
 
-const CACHE_VERSION = "soke-v2";
+const CACHE_VERSION = "9jatruth-v3";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 const OFFLINE_URL = "/offline.html";
@@ -15,14 +15,25 @@ const OFFLINE_URL = "/offline.html";
 // App shell resources to precache
 const APP_SHELL = [
   "/",
-  "/index.html",
   "/manifest.webmanifest",
+  "/offline.html",
 ];
 
 // Install: precache app shell
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(APP_SHELL_CACHE).then((cache) => cache.addAll(APP_SHELL))
+    caches.open(APP_SHELL_CACHE).then(async (cache) => {
+      await Promise.all(
+        APP_SHELL.map(async (url) => {
+          try {
+            const res = await fetch(url, { cache: "reload" });
+            if (res.ok) await cache.put(url, res);
+          } catch {
+            // Skip entries that fail (e.g. offline) instead of failing install
+          }
+        })
+      );
+    })
   );
   self.skipWaiting();
 });
@@ -90,6 +101,22 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Page navigations: network-first, fall back to offline page
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(APP_SHELL_CACHE).then((cache) => cache.put(request, clone));
+          return response;
+        })
+        .catch(() =>
+          caches.match(request).then((cached) => cached || caches.match(OFFLINE_URL))
+        )
+    );
+    return;
+  }
+
   // Static assets: cache-first
   event.respondWith(
     caches.match(request).then((cached) => {
@@ -128,7 +155,7 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data.json();
   } catch {
-    data = { title: "Soke Alert", body: event.data.text() };
+    data = { title: "9jatruth Alert", body: event.data.text() };
   }
 
   const options = {

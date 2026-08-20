@@ -1,7 +1,7 @@
 // Force dynamic rendering — Clerk auth and Neon DB require server-side execution
 export const dynamic = "force-dynamic";
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
@@ -9,6 +9,13 @@ import { Toaster } from "@/components/ui/toaster";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const jetBrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
+
+export const viewport: Viewport = {
+  themeColor: "#0a0a0a",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+};
 
 export const metadata: Metadata = {
   title: "9jatruth — Nigeria Digital Ecosystem",
@@ -28,6 +35,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="9jatruth" />
+        <meta name="mobile-web-app-capable" content="yes" />
+      </head>
       <body className={`${inter.variable} ${jetBrainsMono.variable} font-sans antialiased`}>
         <Providers>
           {children}

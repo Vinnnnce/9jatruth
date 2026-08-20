@@ -1,11 +1,14 @@
 {
-  "name": "Soke — Community Truth Network",
-  "short_name": "Soke",
-  "description": "Neighborhood truth reporting and predictive intelligence for Nigeria",
-  "start_url": "/feeds",
+  "name": "9jatruth — Nigeria Digital Ecosystem",
+  "short_name": "9jatruth",
+  "description": "9jatruth — Nigeria's community-driven truth reporting, emergency alerts, and accountability network.",
+  "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "background_color": "#0a0a0a",
   "theme_color": "#0a0a0a",
   "orientation": "portrait-primary",
@@ -23,7 +26,11 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["news", "utilities", "social"],
+  "categories": [
+    "news",
+    "utilities",
+    "social"
+  ],
   "shortcuts": [
     {
       "name": "Feeds",
