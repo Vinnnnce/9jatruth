@@ -24,6 +24,10 @@
     {
       "path": "/api/backup",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/security/alerts",
+      "schedule": "*/15 * * * *"
     }
   ],
   "headers": [

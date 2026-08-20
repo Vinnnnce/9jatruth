@@ -54,6 +54,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { AdminAnalytics } from "@/components/admin-analytics";
 import { VerifiedBadge } from "@/components/verified-badge";
+import { AdminSecurity } from "@/components/admin-security";
 
 import {
   BarChart,
@@ -732,6 +733,9 @@ export default function AdminDashboard() {
           </TabsTrigger>
           <TabsTrigger value="feedback" data-testid="tab-feedback">
             Feedback & Questionnaires
+          </TabsTrigger>
+          <TabsTrigger value="security" data-testid="tab-security">
+            Security
           </TabsTrigger>
         </TabsList>
 
@@ -1952,6 +1956,9 @@ export default function AdminDashboard() {
         {/* --------------------------------------------------------------- */}
         <TabsContent value="feedback" className="space-y-4">
           <FeedbackTab />
+        </TabsContent>
+        <TabsContent value="security" className="space-y-4">
+          <AdminSecurity />
         </TabsContent>
       </Tabs>
     </div>

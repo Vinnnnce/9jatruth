@@ -1096,11 +1096,181 @@ export async function ensureDbInitialized() {
   // 112 is Nigeria's verified national emergency number; it routes to the
   // nearest emergency response centre. Agency office lines are publicly
   // listed and should be confirmed locally before reliance.
+
+  // ─── AI Security System Tables ─────────────────────────────
+  // Zero-trust, threat detection, RBAC, 2FA, content verification.
+  await sql`CREATE TABLE IF NOT EXISTS security_events (
+    id SERIAL PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'info',
+    risk_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    ip_hash TEXT,
+    device_fingerprint TEXT,
+    user_hash TEXT,
+    user_agent TEXT,
+    endpoint TEXT,
+    action_taken TEXT DEFAULT 'log',
+    signals JSONB NOT NULL DEFAULT '[]',
+    metadata JSONB NOT NULL DEFAULT '{}',
+    acknowledged BOOLEAN DEFAULT false,
+    acknowledged_by TEXT,
+    acknowledged_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_sec_events_severity ON security_events(severity, created_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_sec_events_fp ON security_events(device_fingerprint, created_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_sec_events_ip ON security_events(ip_hash, created_at DESC)`;
+
+  await sql`CREATE TABLE IF NOT EXISTS device_fingerprints (
+    id SERIAL PRIMARY KEY,
+    fingerprint TEXT UNIQUE NOT NULL,
+    ip_hash TEXT,
+    user_agent TEXT,
+    platform TEXT,
+    asn TEXT,
+    trust_score INTEGER NOT NULL DEFAULT 50,
+    is_bot BOOLEAN DEFAULT false,
+    bot_reason TEXT,
+    request_count INTEGER NOT NULL DEFAULT 0,
+    blocked BOOLEAN DEFAULT false,
+    first_seen TIMESTAMPTZ DEFAULT NOW(),
+    last_seen TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_dev_fp_ip ON device_fingerprints(ip_hash)`;
+
+  await sql`CREATE TABLE IF NOT EXISTS security_members (
+    id SERIAL PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    display_name TEXT NOT NULL,
+    clerk_user_id TEXT,
+    role_ids TEXT NOT NULL DEFAULT '[]',
+    active BOOLEAN DEFAULT true,
+    two_factor_enabled BOOLEAN DEFAULT false,
+    two_factor_secret TEXT,
+    two_factor_backup_codes TEXT,
+    last_active_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+
+  await sql`CREATE TABLE IF NOT EXISTS content_verifications (
+    id SERIAL PRIMARY KEY,
+    content_type TEXT NOT NULL,
+    reference_id INTEGER,
+    source_url TEXT,
+    text_content TEXT,
+    media_url TEXT,
+    authenticity_score INTEGER NOT NULL DEFAULT 50,
+    risk_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    verdict TEXT NOT NULL DEFAULT 'pending',
+    signals JSONB NOT NULL DEFAULT '[]',
+    reviewed_by TEXT,
+    reviewed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_cv_verdict ON content_verifications(verdict, created_at DESC)`;
+
+  await sql`CREATE TABLE IF NOT EXISTS fraud_signals (
+    id SERIAL PRIMARY KEY,
+    fraud_type TEXT NOT NULL,
+    user_hash TEXT,
+    ip_hash TEXT,
+    risk_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    signals JSONB NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'open',
+    mitigated_by TEXT,
+    mitigated_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_fraud_status ON fraud_signals(status, created_at DESC)`;
+
+  await sql`CREATE TABLE IF NOT EXISTS mitigation_actions (
+    id SERIAL PRIMARY KEY,
+    target_type TEXT NOT NULL,
+    target_value TEXT NOT NULL,
+    action TEXT NOT NULL,
+    reason TEXT,
+    duration_minutes INTEGER,
+    active BOOLEAN DEFAULT true,
+    expires_at TIMESTAMPTZ,
+    created_by TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+
+  await sql`CREATE TABLE IF NOT EXISTS security_alerts (
+    id SERIAL PRIMARY KEY,
+    severity TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    event_id INTEGER REFERENCES security_events(id),
+    delivery_channels TEXT NOT NULL DEFAULT '["in_app"]',
+    delivered BOOLEAN DEFAULT false,
+    acknowledged BOOLEAN DEFAULT false,
+    acknowledged_by TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_sec_alerts_sev ON security_alerts(severity, created_at DESC)`;
+
+  await sql`CREATE TABLE IF NOT EXISTS security_rules (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    detector TEXT NOT NULL,
+    threshold DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+    action TEXT NOT NULL DEFAULT 'flag',
+    enabled BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+
+  await sql`CREATE TABLE IF NOT EXISTS api_usage_log (
+    id BIGSERIAL PRIMARY KEY,
+    ip_hash TEXT,
+    device_fingerprint TEXT,
+    endpoint TEXT,
+    method TEXT,
+    status_code INTEGER,
+    response_time_ms INTEGER,
+    blocked BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_api_usage_ip ON api_usage_log(ip_hash, created_at DESC)`;
+
+  await sql`CREATE TABLE IF NOT EXISTS botnet_clusters (
+    id SERIAL PRIMARY KEY,
+    cluster_id TEXT UNIQUE NOT NULL,
+    member_count INTEGER NOT NULL,
+    risk_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    shared_attributes JSONB NOT NULL DEFAULT '[]',
+    members JSONB NOT NULL DEFAULT '[]',
+    status TEXT DEFAULT 'active',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+
+  await sql`CREATE TABLE IF NOT EXISTS request_telemetry (
+    id BIGSERIAL PRIMARY KEY,
+    identity_hash TEXT NOT NULL,
+    endpoint TEXT NOT NULL,
+    timestamp BIGINT NOT NULL
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_telemetry_identity ON request_telemetry(identity_hash, timestamp DESC)`;
+
   try {
     const { seedEmergencyContacts } = await import("@/lib/emergency-agencies-seed");
     await seedEmergencyContacts(sql);
   } catch (seedErr) {
     console.error("[DB Init] Emergency contacts seed error (non-fatal):", seedErr);
+  }
+
+  // Seed default security rules (idempotent).
+  try {
+    await sql`INSERT INTO security_rules (name, detector, threshold, action)
+      SELECT 'High-risk request', 'security_pipeline', 0.7, 'challenge_2fa'
+      WHERE NOT EXISTS (SELECT 1 FROM security_rules WHERE detector = 'security_pipeline')`;
+    await sql`INSERT INTO security_rules (name, detector, threshold, action)
+      SELECT 'Critical threat', 'security_pipeline', 0.85, 'block_ip'
+      WHERE NOT EXISTS (SELECT 1 FROM security_rules WHERE action = 'block_ip')`;
+  } catch (ruleErr) {
+    console.error("[DB Init] Security rules seed error (non-fatal):", ruleErr);
   }
 
   } catch (err) {

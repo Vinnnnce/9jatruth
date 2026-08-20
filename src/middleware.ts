@@ -31,6 +31,7 @@ const isPreLaunchRoute = createRouteMatcher([
   "/api/waitlist(.*)",
   "/api/webhook(.*)",
   "/api/health(.*)",
+  "/api/security/analyze(.*)",
   "/_next(.*)",
   "/favicon(.*)",
   "/manifest(.*)",
@@ -64,6 +65,8 @@ const isPublicRoute = createRouteMatcher([
   "/api/questionnaire(.*)", // POST is public (anyone can submit questionnaire)
   "/api/backup(.*)", // Cron-triggered daily backup (protected by CRON_SECRET)
   "/api/waitlist(.*)",
+  "/api/security/analyze(.*)", // Public content analysis (rate-limited)
+  "/api/security/alerts(.*)", // Cron-triggered alerting sweep (CRON_SECRET)
   "/faq(.*)",
 ]);
 
@@ -88,6 +91,8 @@ const isUserApiRoute = createRouteMatcher([
   "/api/notifications(.*)",
   "/api/account(.*)",
   "/api/auth/me(.*)",
+  "/api/auth/2fa(.*)",
+  "/api/security/me(.*)",
   "/api/rewards/redeem(.*)",
   "/api/push/subscribe(.*)",
   "/api/push/unsubscribe(.*)",
@@ -101,7 +106,7 @@ const isUserApiRoute = createRouteMatcher([
 
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
 const isOrgRoute = createRouteMatcher(["/org(.*)"]);
-const isUserRoute = createRouteMatcher(["/user(.*)"]);
+const isUserRoute = createRouteMatcher(["/user(.*)", "/security(.*)"]);
 
 // When Clerk is not configured, use a pass-through middleware
 const passThrough = () => NextResponse.next();

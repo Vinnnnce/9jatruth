@@ -173,6 +173,7 @@ export default function CountdownPage() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
   useEffect(() => {
     const timer = setInterval(() => setTime(getTimeRemaining()), 1000);
@@ -190,9 +191,15 @@ export default function CountdownPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim() }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || "Failed to join waitlist");
+        throw new Error(
+          data?.message || "We couldn't add you right now. Please try again in a moment."
+        );
+      }
+      // Surface the friendly message from the API (covers "already on waitlist").
+      if (data?.message) {
+        setSuccessMsg(String(data.message));
       }
       setStatus("success");
       setEmail("");
@@ -286,7 +293,7 @@ export default function CountdownPage() {
               <div className="flex items-center gap-2 text-emerald-500 py-3">
                 <CheckCircle2 className="h-5 w-5" />
                 <p className="text-sm font-medium">
-                  You&apos;re on the list. We&apos;ll notify you at launch.
+                  {successMsg || "You\u2019re on the list. We\u2019ll notify you at launch."}
                 </p>
               </div>
             ) : (
