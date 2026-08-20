@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/hooks/use-toast";
+import { RewardsReferralCard } from "@/components/rewards-referral-card";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Coins,
@@ -408,6 +409,9 @@ export default function Rewards() {
           </Card>
         </motion.div>
       </div>
+
+      {/* ─── Affiliate & Referrals ─── */}
+      <RewardsReferralCard />
 
       {/* ─── Tabbed Redemption Interface ─── */}
       <motion.div

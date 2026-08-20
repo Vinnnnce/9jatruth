@@ -12,10 +12,8 @@ import {
   Loader2,
   Sparkles,
   Bell,
-  Images,
   HelpCircle,
 } from "lucide-react";
-import Image from "next/image";
 
 // Launch date: Friday, 21 August 2026, 00:00 Africa/Lagos (WAT, UTC+1)
 // 9jatruth is a Nigeria-focused platform, so we use Lagos time.
@@ -324,43 +322,6 @@ export default function CountdownPage() {
             )}
           </CardContent>
         </Card>
-
-        {/* Screenshot gallery */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Images className="h-4 w-4 text-emerald-500" />
-            <h2 className="text-sm font-medium">Platform Preview</h2>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            A glimpse of what&apos;s coming when 9jatruth launches.
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { src: "/countdown/screenshots/feeds.png", label: "Community Feeds", span: "col-span-2" },
-              { src: "/countdown/screenshots/news.png", label: "News & Articles", span: "" },
-              { src: "/countdown/screenshots/sidebar.png", label: "Sidebar Navigation", span: "col-span-2" },
-            ].map((item, idx) => (
-              <div
-                key={idx}
-                className={`relative rounded-lg overflow-hidden border border-border/50 bg-muted/20 group ${item.span}`}
-              >
-                <div className="aspect-video relative">
-                  <Image
-                    src={item.src}
-                    alt={item.label}
-                    fill
-                    sizes="(max-width: 768px) 100vw, 50vw"
-                    className="object-cover object-top"
-                    loading="lazy"
-                  />
-                </div>
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background/95 to-transparent p-2">
-                  <p className="text-[10px] font-medium text-foreground/80">{item.label}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
 
         {/* Footer */}
         <div className="flex flex-col items-center gap-3">

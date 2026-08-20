@@ -227,7 +227,7 @@ export async function POST(request: Request) {
         phonePrimary: c.phone_primary,
         phoneSecondary: c.phone_secondary,
       })),
-      aiAnalysis: generateAIAnalysis(description, recommendedAgency, severity, state, lga),
+      aiAnalysis: await generateAIAnalysis(description, recommendedAgency, severity, state, lga),
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
@@ -245,15 +245,37 @@ export async function POST(request: Request) {
   }
 }
 
-function generateAIAnalysis(
+async function generateAIAnalysis(
   description: string,
   agency: typeof AGENCY_RULES[0] | null,
   severity: string,
   state?: string,
   lga?: string
-): string {
+): Promise<string> {
   const location = state ? `${lga ? lga + ", " : ""}${state}` : "your location";
-  
+
+  // Advanced AI analysis via Kimi (Moonshot) when configured.
+  try {
+    const { isKimiConfigured, generateKimiText } = await import("@/lib/kimi");
+    if (isKimiConfigured()) {
+      const system =
+        "You are a Nigerian public-safety assistant on the 9jatruth platform. " +
+        "Given an incident description, produce a calm, concise (under 70 words) " +
+        "analysis confirming severity, the recommended agency, and the most important " +
+        "immediate action. Never invent phone numbers; the UI already shows contacts. " +
+        "Do not use markdown.";
+      const user = `Incident: "${description.slice(0, 200)}"\n` +
+        `Severity: ${severity}\n` +
+        `Recommended agency: ${agency?.agencyName ?? "unspecified"}\n` +
+        `Location: ${location}`;
+      const ai = await generateKimiText(system, user, { temperature: 0.4, maxOutputTokens: 320 });
+      if (ai && ai.trim()) return ai.trim();
+    }
+  } catch (err) {
+    console.error("[assess] AI analysis error:", err);
+  }
+
+  // Fallback — deterministic, rule-based analysis.
   if (!agency) {
     return `The incident description doesn't match a specific emergency category. If this is a life-threatening situation, call 112 immediately. For non-emergencies, consider contacting the Nigeria Police Force or Civil Defence Corps at ${location}.`;
   }

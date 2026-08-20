@@ -41,15 +41,19 @@ const FAQS = [
   },
   {
     q: "How does the AI work?",
-    a: "9jatruth uses Kimi AI (Moonshot) for content generation, summaries, predictions, and location intelligence. AI features include multi-level summaries, trend analysis, risk assessment, fact-checking, auto-tagging, and predictive notifications. All AI-generated content is clearly labeled.",
+    a: "9jatruth uses advanced AI models for content generation, summaries, predictions, and location intelligence. AI features include multi-level summaries, trend analysis, risk assessment, fact-checking, auto-tagging, and predictive notifications. All AI-generated content is clearly labeled.",
   },
   {
     q: "Can organizations use 9jatruth?",
-    a: "Yes, organizations can register on the platform to verify and publish official truths. Org accounts get verification badges and can manage members. Contact us for organization registration after launch.",
+    a: "Yes. Organizations can register on the platform to verify and publish official truths, get verification badges, manage members, assign roles, and post vacancies. When you open the Organizations feature, you can browse and search all organizations already registered on 9jatruth, filter by category and location, and view each organization's public mini-site profile.",
   },
   {
     q: "Is my data safe?",
-    a: "9jatruth takes privacy seriously. User IPs are hashed before storage, authentication is handled by Clerk (a SOC 2 compliant service), and the database is hosted on Neon (a secure serverless PostgreSQL platform). We never share your personal data with third parties.",
+    a: "9jatruth takes privacy seriously. User IPs are hashed before storage, authentication is handled by a SOC 2 compliant identity provider, and data is hosted on a secure serverless PostgreSQL platform with end-to-end encryption in transit. We never share your personal data with third parties.",
+  },
+  {
+    q: "How can I earn on 9jatruth?",
+    a: "You earn points by contributing accurate truths, getting your reports verified by the community, participating in polls and questionnaires, and helping verify other people's reports. You can also earn through the Rewards program: invite friends with your referral link and earn points for each signup, plus bonus points when your referrals make their first verified contribution. Accumulated points can be redeemed for airtime, data, gift cards, and other rewards in the Rewards section.",
   },
   {
     q: "How can I report a problem or give feedback?",

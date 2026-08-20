@@ -65,7 +65,10 @@ import {
   Phone,
   Globe,
   Newspaper,
+  ExternalLink,
 } from "lucide-react";
+import Link from "next/link";
+import { OrgCustomizeForm } from "./org-customize-form";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -447,9 +450,17 @@ export default function OrgDashboard() {
                       {orgProfile?.type && (
                         <Badge variant="secondary" className="text-[9px] capitalize">{orgProfile.type}</Badge>
                       )}
+                      {orgProfile && (
+                        <Link href={`/org/${orgProfile.id}`} target="_blank" className="inline-flex items-center gap-0.5 text-[10px] text-primary hover:underline">
+                          <ExternalLink className="h-2.5 w-2.5" /> View public mini-site
+                        </Link>
+                      )}
                     </div>
                     {orgProfile?.description && (
                       <p className="text-xs text-muted-foreground">{orgProfile.description}</p>
+                    )}
+                    {orgProfile && (
+                      <div className="pt-2"><OrgCustomizeForm orgId={orgProfile.id} profile={orgProfile} /></div>
                     )}
                     <div className="flex items-center gap-3 flex-wrap text-[10px] text-muted-foreground pt-1">
                       {orgProfile?.contactEmail && (

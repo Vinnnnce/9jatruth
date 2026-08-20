@@ -110,6 +110,9 @@ export const organizations = sqliteTable("organizations", {
   verified: integer("verified").notNull().default(0), // 0 = pending, 1 = verified
   active: integer("active").notNull().default(1),
   adminHash: text("admin_hash").notNull(), // Device hash of the org admin
+  subdomain: text("subdomain"),
+  tagline: text("tagline"),
+  accentColor: text("accent_color"),
   createdAt: text("created_at").notNull().default(new Date().toISOString()),
 });
 

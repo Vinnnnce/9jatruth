@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { AgencyLogo } from "@/components/agency-logo";
+import { getAgencyByType } from "@/lib/emergency-agencies";
 import {
   Zap, Fuel, Car, Tag, Shield, MapPin, AlertTriangle, AlertCircle, Info, Clock, Bell, BellRing,
   Phone, Siren, Activity, Brain, Navigation, ChevronDown, Search, Loader2, Stethoscope,
@@ -224,6 +226,12 @@ function EmergencyContactsSection() {
         <Button size="sm" className="w-full gap-1" onClick={handleSearch}>
           <Search className="h-3.5 w-3.5" /> Search Contacts
         </Button>
+        <Link
+          href="/alerts/agencies"
+          className="inline-flex items-center justify-center gap-1.5 text-xs text-emerald-600 hover:underline pt-1"
+        >
+          Browse all agencies &amp; their details →
+        </Link>
 
         {/* Results */}
         {isLoading && (
@@ -253,9 +261,16 @@ function EmergencyContactsSection() {
               return (
                 <div key={type} className="space-y-1.5">
                   <div className="flex items-center gap-1.5">
-                    <div className={`rounded p-1 ${agencyColors[type] || "bg-muted"}`}>
-                      <Icon className="h-3 w-3" />
-                    </div>
+                    {(() => {
+                      const meta = getAgencyByType(type);
+                      return meta ? (
+                        <AgencyLogo agency={meta} size={24} />
+                      ) : (
+                        <div className={`rounded p-1 ${agencyColors[type] || "bg-muted"}`}>
+                          <Icon className="h-3 w-3" />
+                        </div>
+                      );
+                    })()}
                     <span className="text-xs font-medium">{agencyLabels[type] || type}</span>
                   </div>
                   {items.map((c) => (

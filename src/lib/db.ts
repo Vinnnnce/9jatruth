@@ -213,8 +213,15 @@ export async function ensureDbInitialized() {
     active INTEGER NOT NULL DEFAULT 1,
     admin_hash TEXT NOT NULL,
     clerk_user_id TEXT,
+    subdomain TEXT,
+    tagline TEXT,
+    accent_color TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
   )`;
+  await sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS subdomain TEXT`;
+  await sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS tagline TEXT`;
+  await sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS accent_color TEXT`;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_organizations_subdomain ON organizations(subdomain) WHERE subdomain IS NOT NULL`;
 
   await sql`CREATE TABLE IF NOT EXISTS agency_accounts (
     id SERIAL PRIMARY KEY,
@@ -858,6 +865,22 @@ export async function ensureDbInitialized() {
   await sql`CREATE INDEX IF NOT EXISTS idx_redemptions_user ON reward_redemptions(user_hash)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_redemptions_status ON reward_redemptions(status)`;
 
+  // Affiliate / referral programme
+  await sql`CREATE TABLE IF NOT EXISTS referrals (
+    id SERIAL PRIMARY KEY,
+    referrer_hash TEXT NOT NULL,
+    referred_hash TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'pending',
+    points_awarded INTEGER NOT NULL DEFAULT 0,
+    signup_bonus INTEGER NOT NULL DEFAULT 0,
+    completion_bonus INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_hash)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_hash)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_referrals_status ON referrals(status)`;
+
   await sql`CREATE TABLE IF NOT EXISTS gift_cards (
     id SERIAL PRIMARY KEY,
     code TEXT NOT NULL UNIQUE,
@@ -1068,6 +1091,17 @@ export async function ensureDbInitialized() {
   await sql`CREATE INDEX IF NOT EXISTS idx_emergency_state ON emergency_contacts(state)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_emergency_lga ON emergency_contacts(lga)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_emergency_type ON emergency_contacts(agency_type)`;
+
+  // Seed national-level emergency agency contacts (idempotent).
+  // 112 is Nigeria's verified national emergency number; it routes to the
+  // nearest emergency response centre. Agency office lines are publicly
+  // listed and should be confirmed locally before reliance.
+  try {
+    const { seedEmergencyContacts } = await import("@/lib/emergency-agencies-seed");
+    await seedEmergencyContacts(sql);
+  } catch (seedErr) {
+    console.error("[DB Init] Emergency contacts seed error (non-fatal):", seedErr);
+  }
 
   } catch (err) {
     console.error('[DB Init] Non-fatal error during initialization (continuing):', err);

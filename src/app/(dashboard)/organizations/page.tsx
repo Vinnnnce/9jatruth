@@ -18,7 +18,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Building2, Globe, Mail, Phone, MapPin, CheckCircle2, Plus, Shield } from "lucide-react";
+import { Building2, Globe, Mail, Phone, MapPin, CheckCircle2, Plus, Shield, ExternalLink } from "lucide-react";
+import Link from "next/link";
 import { useToast } from "@/components/hooks/use-toast";
 import { VerifiedBadge } from "@/components/verified-badge";
 
@@ -171,7 +172,7 @@ export default function Organizations() {
           {orgs.map((org) => {
             const typeCfg = ORG_TYPES[org.type] || { label: org.type, color: "text-gray-500 bg-gray-500/10" };
             return (
-              <Card key={org.id} className="hover:border-primary/20 transition-colors">
+              <Card key={org.id} className="hover:border-primary/30 transition-colors group">
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 shrink-0">
@@ -197,6 +198,7 @@ export default function Organizations() {
                         {org.city && <span className="flex items-center gap-0.5"><MapPin className="h-2.5 w-2.5" />{org.city}, {org.region}</span>}
                         {org.contactEmail && <span className="flex items-center gap-0.5"><Mail className="h-2.5 w-2.5" />{org.contactEmail}</span>}
                         {org.contactPhone && <span className="flex items-center gap-0.5"><Phone className="h-2.5 w-2.5" />{org.contactPhone}</span>}
+                        <Link href={`/org/${org.id}`} className="flex items-center gap-0.5 hover:underline text-primary"><ExternalLink className="h-2.5 w-2.5" />Mini-site</Link>
                         {org.website && <a href={org.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-0.5 hover:underline text-primary"><Globe className="h-2.5 w-2.5" />Website</a>}
                       </div>
                     </div>

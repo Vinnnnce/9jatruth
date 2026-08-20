@@ -134,6 +134,9 @@ function mapOrganization(r: SqlRow): Organization {
     verified: r.verified,
     active: r.active,
     adminHash: r.admin_hash,
+    subdomain: r.subdomain ?? null,
+    tagline: r.tagline ?? null,
+    accentColor: r.accent_color ?? null,
     createdAt: r.created_at,
   };
 }
@@ -442,6 +445,14 @@ export async function verifyTruth(
   await sql`INSERT INTO reward_ledger (user_hash, amount, type, description) VALUES (${userHash}, 10, 'verification', ${description})`;
   await sql`UPDATE device_profiles SET rewards_balance = rewards_balance + 10, trust_score = LEAST(100, trust_score + 1) WHERE device_id_hash = ${userHash}`;
 
+  // Affiliate bonus: if this verifier was referred and their referral is still
+  // pending, complete it and reward the referrer.
+  try {
+    await completePendingReferral(userHash);
+  } catch {
+    // non-fatal
+  }
+
   const updatedRows = (await sql`SELECT * FROM micro_truths WHERE id = ${truthId}`) as unknown as SqlRow[];
   return { truth: mapTruth(updatedRows[0]), verification };
 }
@@ -534,6 +545,106 @@ export async function redeemReward(userHash: string, amount: number, description
     await sql`UPDATE device_profiles SET rewards_balance = ${device.rewardsBalance - amount} WHERE device_id_hash = ${userHash}`;
   }
   return entry;
+}
+
+// ─── Affiliate / Referral programme ───
+
+const REFERRAL_SIGNUP_BONUS = 50;
+const REFERRAL_COMPLETION_BONUS = 100;
+
+/** Credit points to a user (ledger entry + balance update). Returns the ledger row. */
+export async function creditRewardPoints(
+  userHash: string,
+  amount: number,
+  type: string,
+  description: string
+): Promise<RewardLedger | null> {
+  const sql = getDb();
+  const rows = (await sql`INSERT INTO reward_ledger (user_hash, amount, type, description)
+    VALUES (${userHash}, ${amount}, ${type}, ${description}) RETURNING *`) as unknown as SqlRow[];
+  const entry = mapReward(rows[0]);
+  await sql`UPDATE device_profiles SET rewards_balance = rewards_balance + ${amount}
+    WHERE device_id_hash = ${userHash}`;
+  return entry;
+}
+
+/**
+ * Record a referral relationship and award the signup bonus to the referrer.
+ * Idempotent: a referred user can only have one referrer. Self-referrals and
+ * already-existing referrals are silently ignored.
+ */
+export async function recordReferral(
+  referrerHash: string,
+  referredHash: string
+): Promise<{ created: boolean; reason?: string }> {
+  if (!referrerHash || !referredHash || referrerHash === referredHash) {
+    return { created: false, reason: "invalid" };
+  }
+  const sql = getDb();
+
+  // Already referred by someone?
+  const existing = (await sql`SELECT id FROM referrals WHERE referred_hash = ${referredHash} LIMIT 1`) as unknown as { id: number }[];
+  if (existing.length > 0) return { created: false, reason: "already_referred" };
+
+  // Insert + award signup bonus in one go.
+  await sql`
+    INSERT INTO referrals (referrer_hash, referred_hash, status, signup_bonus, points_awarded)
+    VALUES (${referrerHash}, ${referredHash}, 'pending', ${REFERRAL_SIGNUP_BONUS}, ${REFERRAL_SIGNUP_BONUS})
+  `;
+  await creditRewardPoints(
+    referrerHash,
+    REFERRAL_SIGNUP_BONUS,
+    "referral_signup",
+    `Referral bonus: friend signed up`
+  );
+  return { created: true };
+}
+
+/**
+ * Called when a user verifies a truth — if they were referred and their referral
+ * is still pending, mark it complete and award the referrer a completion bonus.
+ */
+export async function completePendingReferral(referredHash: string): Promise<boolean> {
+  const sql = getDb();
+  const rows = (await sql`SELECT id, referrer_hash, status, completion_bonus FROM referrals
+    WHERE referred_hash = ${referredHash} AND status = 'pending' LIMIT 1`) as unknown as
+    { id: number; referrer_hash: string; status: string; completion_bonus: number }[];
+  if (rows.length === 0) return false;
+
+  const r = rows[0];
+  await sql`UPDATE referrals SET status = 'completed', points_awarded = points_awarded + ${REFERRAL_COMPLETION_BONUS},
+    completion_bonus = ${REFERRAL_COMPLETION_BONUS}, completed_at = NOW() WHERE id = ${r.id}`;
+  await creditRewardPoints(
+    r.referrer_hash,
+    REFERRAL_COMPLETION_BONUS,
+    "referral_completion",
+    `Referral bonus: friend made first verified contribution`
+  );
+  return true;
+}
+
+export type ReferralStats = {
+  code: string;
+  link: string;
+  invited: number;
+  pending: number;
+  completed: number;
+  pointsEarned: number;
+};
+
+export async function getReferralStats(userHash: string): Promise<ReferralStats> {
+  const sql = getDb();
+  const rows = (await sql`SELECT status, points_awarded FROM referrals WHERE referrer_hash = ${userHash}`) as unknown as
+    { status: string; points_awarded: number }[];
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  return {
+    code: userHash,
+    link: appUrl ? `${appUrl}/?ref=${encodeURIComponent(userHash)}` : `/?ref=${encodeURIComponent(userHash)}`,
+    invited: rows.length,
+    pending: rows.filter((r) => r.status === "pending").length,
+    completed: rows.filter((r) => r.status === "completed").length,
+    pointsEarned: rows.reduce((sum, r) => sum + (r.points_awarded || 0), 0),
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -901,6 +1012,27 @@ export async function createOrganization(data: {
   return mapOrganization(rows[0]);
 }
 
+export type OrganizationPublicStats = {
+  truthsPublished: number;
+  verifiedTruths: number;
+  members: number;
+  openVacancies: number;
+};
+
+export async function getOrganizationPublicStats(id: number): Promise<OrganizationPublicStats> {
+  const sql = getDb();
+  const truths = (await sql`SELECT COUNT(*) as c FROM micro_truths WHERE organization_id = ${id}`) as unknown as { c: number }[];
+  const verified = (await sql`SELECT COUNT(*) as c FROM micro_truths WHERE organization_id = ${id} AND status = 'verified'`) as unknown as { c: number }[];
+  const members = (await sql`SELECT COUNT(*) as c FROM org_members WHERE organization_id = ${id}`) as unknown as { c: number }[];
+  const vacancies = (await sql`SELECT COUNT(*) as c FROM vacancies WHERE organization_id = ${id} AND status = 'open'`) as unknown as { c: number }[];
+  return {
+    truthsPublished: Number(truths[0]?.c ?? 0),
+    verifiedTruths: Number(verified[0]?.c ?? 0),
+    members: Number(members[0]?.c ?? 0),
+    openVacancies: Number(vacancies[0]?.c ?? 0),
+  };
+}
+
 export async function getAgencyAccountByEmail(email: string) {
   const sql = getDb();
   const rows = (await sql`SELECT * FROM agency_accounts WHERE email = ${email}`) as unknown as SqlRow[];
@@ -938,9 +1070,9 @@ export async function updateAgencyAccount(id: number, data: Partial<{ displayNam
   return rows[0] ? mapAgencyAccount(rows[0]) : undefined;
 }
 
-export async function updateOrganizationProfile(id: number, data: Partial<{ description: string; contactEmail: string; contactPhone: string; website: string; region: string; city: string }>) {
+export async function updateOrganizationProfile(id: number, data: Partial<{ description: string; contactEmail: string; contactPhone: string; website: string; region: string; city: string; tagline?: string | null; accentColor?: string | null; subdomain?: string | null }>) {
   const sql = getDb();
-  const rows = (await sql`UPDATE organizations SET description = COALESCE(${data.description ?? null}, description), contact_email = COALESCE(${data.contactEmail ?? null}, contact_email), contact_phone = COALESCE(${data.contactPhone ?? null}, contact_phone), website = COALESCE(${data.website ?? null}, website), region = COALESCE(${data.region ?? null}, region), city = COALESCE(${data.city ?? null}, city) WHERE id = ${id} RETURNING *`) as unknown as SqlRow[];
+  const rows = (await sql`UPDATE organizations SET description = COALESCE(${data.description ?? null}, description), contact_email = COALESCE(${data.contactEmail ?? null}, contact_email), contact_phone = COALESCE(${data.contactPhone ?? null}, contact_phone), website = COALESCE(${data.website ?? null}, website), region = COALESCE(${data.region ?? null}, region), city = COALESCE(${data.city ?? null}, city), tagline = COALESCE(${data.tagline ?? null}, tagline), accent_color = COALESCE(${data.accentColor ?? null}, accent_color), subdomain = ${data.subdomain === undefined ? null : data.subdomain} WHERE id = ${id} RETURNING *`) as unknown as SqlRow[];
   return rows[0] ? mapOrganization(rows[0]) : undefined;
 }
 
