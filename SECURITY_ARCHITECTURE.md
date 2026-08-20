@@ -156,8 +156,10 @@ request after deployment (no manual migration step required).
 
 ## 6. Monitoring & Alerting
 
-- A Vercel cron (`/api/security/alerts`, every 15 min) scans for
+- A Vercel cron (`/api/security/alerts`) scans for
   unacknowledged high/critical events and creates `security_alerts`.
+  On the Hobby plan the cron runs once daily (6:00 UTC); upgrading the
+  Vercel project to Pro enables sub-daily (e.g. every 15 min) sweeps.
 - The engine auto-creates alerts for any verdict with severity `high` or
   `critical`.
 - Mitigation actions (`block_ip`, `suspend_token`, `challenge_2fa`,
