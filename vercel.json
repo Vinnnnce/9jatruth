@@ -27,7 +27,7 @@
     },
     {
       "path": "/api/security/alerts",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 6 * * *"
     }
   ],
   "headers": [
