@@ -1214,7 +1214,74 @@ export async function ensureDbInitialized() {
   // Verification badge columns on the entities that can be verified.
   _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE`);
   _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS verification_badge TEXT`);
-  _q.push(sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS verification_badge TEXT`);
+ _q.push(sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS verification_badge TEXT`);
+
+  // ─── Politics feature: parties, candidates, scorecards, events, abuse signals ───
+  _q.push(sql`CREATE TABLE IF NOT EXISTS political_parties (
+    id SERIAL PRIMARY KEY,
+    acronym TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    color TEXT,
+    logo_url TEXT,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS political_candidates (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    party_acronym TEXT,
+    office TEXT NOT NULL,
+    geo_id TEXT,
+    state TEXT,
+    election_year INTEGER,
+    bio TEXT,
+    photo_url TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_candidates_party ON political_candidates(party_acronym)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_candidates_geo ON political_candidates(geo_id, election_year)`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS political_scorecards (
+    id SERIAL PRIMARY KEY,
+    candidate_id INTEGER NOT NULL,
+    category TEXT NOT NULL,
+    metric TEXT NOT NULL,
+    score INTEGER NOT NULL DEFAULT 0,
+    source TEXT,
+    period TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_scorecards_candidate ON political_scorecards(candidate_id)`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS political_events (
+    id SERIAL PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    candidate_id INTEGER,
+    party_acronym TEXT,
+    geo_id TEXT,
+    state TEXT,
+    lga TEXT,
+    ward TEXT,
+    description TEXT NOT NULL,
+    evidence_url TEXT,
+    submitted_by TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    ai_verdict TEXT,
+    ai_confidence INTEGER,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_events_geo ON political_events(geo_id, state)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_events_status ON political_events(status, created_at DESC)`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS political_abuse_signals (
+    id SERIAL PRIMARY KEY,
+    signal_type TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'medium',
+    details JSONB,
+    detected_by TEXT NOT NULL DEFAULT 'system',
+    resolved BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_abuse_signals_severity ON political_abuse_signals(severity, resolved, created_at DESC)`);
 
   await sql.transaction(_q as any);
 

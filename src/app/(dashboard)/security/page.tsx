@@ -35,6 +35,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { AdminSecurity } from "@/components/admin-security";
+import { AdminAbuseMonitoring } from "@/components/admin-abuse-monitoring";
 
 export default function SecurityMemberPage() {
   const me = useQuery({
@@ -220,9 +221,13 @@ export default function SecurityMemberPage() {
             {has("security.fraud.view") && <TabsTrigger value="fraud">Fraud</TabsTrigger>}
             {has("security.content.review") && <TabsTrigger value="content">Content</TabsTrigger>}
             {has("security.members.manage") && <TabsTrigger value="members">Members</TabsTrigger>}
+            {has("security.threats.view") && <TabsTrigger value="abuse">Abuse</TabsTrigger>}
           </TabsList>
           <TabsContent value="overview" className="space-y-4">
             <AdminSecurity />
+          </TabsContent>
+          <TabsContent value="abuse" className="space-y-4">
+            <AdminAbuseMonitoring />
           </TabsContent>
         </Tabs>
       )}

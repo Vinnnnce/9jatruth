@@ -98,8 +98,13 @@ type AiCompareResult = {
     winner: "a" | "b" | "tie";
     riskA: number;
     riskB: number;
+    livabilityA: number;
+    livabilityB: number;
     categories: { name: string; a: string; b: string; advantage: "a" | "b" | "tie" }[];
     recommendations: string[];
+    anomalies: { neighborhood: "a" | "b"; issue: string; severity: "low" | "medium" | "high" }[];
+    forecast: { a: string; b: string };
+    costComparison: string;
     confidence: number;
   };
   let aiAnalysis: string | null = null;
@@ -122,8 +127,13 @@ JSON schema:
   "winner": "a" | "b" | "tie",
   "riskA": 0-100 (risk score for A, higher = riskier),
   "riskB": 0-100 (risk score for B, higher = riskier),
+  "livabilityA": 0-100 (overall livability score for A),
+  "livabilityB": 0-100 (overall livability score for B),
   "categories": [{ "name": "Power"|"Fuel"|"Traffic"|"Prices"|"Safety", "a": "short label for A", "b": "short label for B", "advantage": "a"|"b"|"tie" }],
   "recommendations": ["3-5 practical, actionable recommendations for residents/visitors"],
+  "anomalies": [{ "neighborhood": "a"|"b", "issue": "short description of an anomaly or red flag", "severity": "low"|"medium"|"high" }],
+  "forecast": { "a": "7-day outlook for A in one sentence", "b": "7-day outlook for B in one sentence" },
+  "costComparison": "one sentence comparing cost of living / prices between the two",
   "confidence": 0-100
 }`;
 
@@ -137,11 +147,16 @@ JSON schema:
           winner: "tie",
           riskA: 50,
           riskB: 50,
+          livabilityA: 50,
+          livabilityB: 50,
           categories: [],
           recommendations: [],
+          anomalies: [],
+          forecast: { a: "", b: "" },
+          costComparison: "",
           confidence: 0,
         },
-        { temperature: 0.3, maxOutputTokens: 1000 }
+        { temperature: 0.3, maxOutputTokens: 1200 }
       );
       aiResult = data as AiCompareResult;
       aiSource = source;

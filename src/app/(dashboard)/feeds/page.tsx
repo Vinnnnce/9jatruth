@@ -472,20 +472,23 @@ export default function Feeds() {
                         <ShieldCheck className="h-2.5 w-2.5" />
                         Trust: {truth.trustScore ?? 50}
                       </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-5 w-5 p-0 ml-auto text-muted-foreground hover:text-red-500"
-                        disabled={deleteTruthMutation.isPending && deleteTruthMutation.variables === truth.id}
-                        onClick={() => {
-                          if (confirm("Delete this post? This cannot be undone.")) {
-                            deleteTruthMutation.mutate(truth.id);
-                          }
-                        }}
-                        data-testid={`button-delete-truth-${truth.id}`}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                      {truth.isAuthor && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 w-5 p-0 ml-auto text-muted-foreground hover:text-red-500"
+                          disabled={deleteTruthMutation.isPending && deleteTruthMutation.variables === truth.id}
+                          onClick={() => {
+                            if (confirm("Delete this post? This cannot be undone.")) {
+                              deleteTruthMutation.mutate(truth.id);
+                            }
+                          }}
+                          data-testid={`button-delete-truth-${truth.id}`}
+                          title="Delete your post"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

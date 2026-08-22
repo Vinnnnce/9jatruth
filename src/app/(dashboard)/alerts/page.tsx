@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { AgencyLogo } from "@/components/agency-logo";
 import { getAgencyByType } from "@/lib/emergency-agencies";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
+import { useToast } from "@/components/hooks/use-toast";
 import {
   Zap, Fuel, Car, Tag, Shield, MapPin, AlertTriangle, AlertCircle, Info, Clock, Bell, BellRing,
   Phone, Siren, Activity, Brain, Navigation, ChevronDown, Search, Loader2, Stethoscope,
@@ -510,6 +512,9 @@ function AITriageSection() {
 
 // === Main Alerts Page ===
 export default function Alerts() {
+  const { supported, permission, subscribed, configured, subscribe, unsubscribe } = usePushNotifications();
+  const { toast } = useToast();
+  const [pushLoading, setPushLoading] = useState(false);
   const { data, isLoading, isError } = useQuery<Alert[]>({
     queryKey: ["/api/alerts"],
     queryFn: async () => {
@@ -549,39 +554,77 @@ export default function Alerts() {
       {/* Push Notification Section */}
       <Card className="border-border">
         <CardContent className="p-4">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <BellRing className="h-5 w-5 text-primary" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                {subscribed ? <BellRing className="h-5 w-5 text-primary" /> : <Bell className="h-5 w-5 text-muted-foreground" />}
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium">Push Notifications</p>
-                <p className="text-xs text-muted-foreground">Get alerts delivered to your device in real time</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {!supported
+                    ? "Push not supported on this device"
+                    : permission === "denied"
+                    ? "Blocked — enable in browser settings"
+                    : !configured
+                    ? "Server not configured yet"
+                    : subscribed
+                    ? "Enabled — receiving real-time alerts"
+                    : "Get alerts delivered to your device in real time"}
+                </p>
               </div>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1"
-              onClick={async () => {
-                try {
-                  const reg = await navigator.serviceWorker?.getRegistration();
-                  if (!reg) {
-                    await navigator.serviceWorker?.register("/sw.js");
+            {!supported ? (
+              <Badge variant="outline" className="text-[10px] self-start sm:self-auto">Unsupported</Badge>
+            ) : (
+              <Button
+                size="sm"
+                variant={subscribed ? "outline" : "default"}
+                className="gap-1.5 w-full sm:w-auto"
+                disabled={pushLoading || permission === "denied"}
+                onClick={async () => {
+                  setPushLoading(true);
+                  try {
+                    if (subscribed) {
+                      const ok = await unsubscribe();
+                      toast({
+                        title: ok ? "Push disabled" : "Could not disable",
+                        description: ok ? "You will stop receiving alerts." : "Please try again.",
+                        variant: ok ? "default" : "destructive",
+                      });
+                    } else {
+                      const ok = await subscribe();
+                      if (ok) {
+                        toast({
+                          title: "Push enabled",
+                          description: "You will now receive real-time alerts for your areas.",
+                        });
+                      } else {
+                        toast({
+                          title: "Could not enable push",
+                          description: permission === "denied"
+                            ? "Notifications are blocked. Enable in browser settings."
+                            : "Check your browser permissions and try again.",
+                          variant: "destructive",
+                        });
+                      }
+                    }
+                  } catch {
+                    toast({ title: "Something went wrong", description: "Please try again later.", variant: "destructive" });
+                  } finally {
+                    setPushLoading(false);
                   }
-                  const permission = await Notification.requestPermission();
-                  if (permission === "granted") {
-                    new Notification("9jatruth Alerts", {
-                      body: "Push notifications enabled. You will receive alerts for critical events.",
-                    });
-                  }
-                } catch {
-                  // SW not available
-                }
-              }}
-            >
-              <Bell className="h-3.5 w-3.5" /> Enable Push
-            </Button>
+                }}
+              >
+                {pushLoading ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {subscribed ? "Disabling..." : "Enabling..."}</>
+                ) : subscribed ? (
+                  <><Bell className="h-3.5 w-3.5" /> Disable Push</>
+                ) : (
+                  <><BellRing className="h-3.5 w-3.5" /> Enable Push</>
+                )}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

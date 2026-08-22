@@ -132,22 +132,23 @@ export async function PATCH(request: Request) {
   `;
 
   // When approved, apply the verification badge to the underlying entity.
+  // 'business' requests are modeled as organizations, so they apply the badge
+  // to the organizations table just like an 'organization' request.
   if (status === "approved") {
     try {
-      if (vr.entity_type === "organization") {
+      if (vr.entity_type === "organization" || vr.entity_type === "business") {
         await sql`UPDATE organizations SET verified = 1, verification_badge = ${vr.badge_type || 'verified'} WHERE id = ${Number(vr.entity_id)}`;
       } else if (vr.entity_type === "user") {
         await sql`UPDATE platform_users SET is_verified = TRUE, verification_badge = ${vr.badge_type || 'verified'} WHERE id = ${Number(vr.entity_id)}`;
       } else if (vr.entity_type === "news") {
         await sql`UPDATE news_articles SET is_verified = TRUE, verification_badge = ${vr.badge_type || 'verified'} WHERE id = ${Number(vr.entity_id)}`;
       }
-      // 'business' entities are modeled as organizations; nothing else to update.
     } catch (applyErr) {
       console.error("[verifications] badge apply error (non-fatal):", applyErr);
     }
   } else if (status === "rejected") {
     try {
-      if (vr.entity_type === "organization") {
+      if (vr.entity_type === "organization" || vr.entity_type === "business") {
         await sql`UPDATE organizations SET verification_badge = NULL WHERE id = ${Number(vr.entity_id)}`;
       } else if (vr.entity_type === "user") {
         await sql`UPDATE platform_users SET verification_badge = NULL WHERE id = ${Number(vr.entity_id)}`;

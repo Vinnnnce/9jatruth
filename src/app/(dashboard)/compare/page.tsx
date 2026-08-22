@@ -411,6 +411,53 @@ function AICompareSection({ neighborhoodA, neighborhoodB, nameA, nameB }: {
                 </ul>
               </div>
             )}
+
+            {/* Livability scores + forecast */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="rounded-md bg-muted/30 p-2 space-y-1">
+                <p className="text-[9px] uppercase text-muted-foreground">Livability Scores</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] w-16 shrink-0 truncate">{nameA}</span>
+                  <Progress value={result.livabilityA ?? 0} className="h-1.5" />
+                  <span className="text-[10px] font-mono w-6 text-right">{result.livabilityA ?? 0}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] w-16 shrink-0 truncate">{nameB}</span>
+                  <Progress value={result.livabilityB ?? 0} className="h-1.5" />
+                  <span className="text-[10px] font-mono w-6 text-right">{result.livabilityB ?? 0}</span>
+                </div>
+              </div>
+              <div className="rounded-md bg-muted/30 p-2 space-y-1">
+                <p className="text-[9px] uppercase text-muted-foreground">7-Day Forecast</p>
+                <p className="text-[10px]"><span className="text-muted-foreground">{nameA}:</span> {result.forecast?.a || "—"}</p>
+                <p className="text-[10px]"><span className="text-muted-foreground">{nameB}:</span> {result.forecast?.b || "—"}</p>
+              </div>
+            </div>
+
+            {/* Anomalies + cost comparison */}
+            {(Array.isArray(result.anomalies) && result.anomalies.length > 0) || result.costComparison ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {Array.isArray(result.anomalies) && result.anomalies.length > 0 && (
+                  <div className="rounded-md border border-amber-500/20 bg-amber-500/5 p-2 space-y-1">
+                    <p className="text-[9px] uppercase text-amber-500 font-medium">Anomalies & Red Flags</p>
+                    <ul className="space-y-0.5">
+                      {result.anomalies.slice(0, 5).map((an: any, i: number) => (
+                        <li key={i} className="text-[10px] flex gap-1.5">
+                          <Badge variant="outline" className="text-[8px] capitalize shrink-0">{(an.neighborhood === "a" ? nameA : nameB).slice(0, 8)}</Badge>
+                          <span className={an.severity === "high" ? "text-red-500" : an.severity === "medium" ? "text-amber-500" : "text-muted-foreground"}>{an.issue}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {result.costComparison && (
+                  <div className="rounded-md bg-muted/30 p-2 space-y-1">
+                    <p className="text-[9px] uppercase text-muted-foreground">Cost Comparison</p>
+                    <p className="text-[10px]">{result.costComparison}</p>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         )}
 

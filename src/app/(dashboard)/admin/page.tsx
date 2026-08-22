@@ -56,6 +56,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { AdminAnalytics } from "@/components/admin-analytics";
 import { VerifiedBadge } from "@/components/verified-badge";
 import { AdminSecurity } from "@/components/admin-security";
+import { AdminPolitics } from "@/components/admin-politics";
 
 import {
   BarChart,
@@ -920,6 +921,9 @@ export default function AdminDashboard() {
           </TabsTrigger>
           <TabsTrigger value="security" data-testid="tab-security">
             Security
+          </TabsTrigger>
+          <TabsTrigger value="politics" data-testid="tab-politics">
+            Politics
           </TabsTrigger>
         </TabsList>
 
@@ -2430,6 +2434,13 @@ export default function AdminDashboard() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ----------------------------------------------------------------- */}
+        {/* Politics — parties, candidates, scorecards, event moderation      */}
+        {/* ----------------------------------------------------------------- */}
+        <TabsContent value="politics" className="space-y-4">
+          <AdminPolitics />
         </TabsContent>
       </Tabs>
     </div>
