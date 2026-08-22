@@ -57,7 +57,7 @@ const FAQS = [
   },
   {
     q: "How can I report a problem or give feedback?",
-    a: "You can use the feedback popup available on every page after launch, or contact us directly. We actively monitor and fix issues through our self-healing UI system, which detects and reports broken components automatically.",
+    a: "You can use the feedback popup available on every page after launch, or contact us directly. We actively monitor the platform and fix issues as they are reported.",
   },
 ];
 
