@@ -157,7 +157,30 @@ export function withSecurity(handler: Handler, options: SecurityOptions = {}) {
     }
 
     if (options.requirePermission) {
-      const isSuper = isSuperAdminEmailCheck(email);
+      // Super admin bypass: match ANY verified Clerk email, not just the
+      // primary, so the dashboard stays consistent with admin-auth.ts when
+      // 9jatruthofficial@gmail.com is a secondary verified email.
+      let isSuper = isSuperAdminEmailCheck(email);
+      if (!isSuper && clerkUserId) {
+        try {
+          const u = await currentUser();
+          const target = (
+            process.env.SUPER_ADMIN_EMAIL || "9jatruthofficial@gmail.com"
+          )
+            .toLowerCase()
+            .trim();
+          const verifiedEmails = (u?.emailAddresses ?? [])
+            .filter(
+              (e: any) =>
+                (e.verification?.status ?? e.verificationStatus) === "verified"
+            )
+            .map((e: any) => (e.emailAddress || "").toLowerCase().trim())
+            .filter(Boolean);
+          isSuper = verifiedEmails.includes(target);
+        } catch {
+          // fall through to permission check
+        }
+      }
       if (!isSuper) {
         const { permissions } = await resolveMemberPermissions({
           email,

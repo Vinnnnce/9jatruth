@@ -32,14 +32,14 @@ export async function isSuperAdmin(): Promise<boolean> {
       const user = await currentUser();
       if (!user) return false;
       const target = getSuperAdminEmail();
+      // Only grant super admin when 9jatruthofficial@gmail.com is a VERIFIED
+      // email on the Clerk account (primary or secondary). The primary email
+      // is always present in emailAddresses, so no separate fallback is needed.
       const verifiedEmails = (user.emailAddresses ?? [])
-        .filter((e: any) => e.verification?.status === "verified" || e.verificationStatus === "verified")
+        .filter((e: any) => (e.verification?.status ?? e.verificationStatus) === "verified")
         .map((e: any) => (e.emailAddress || "").toLowerCase().trim())
         .filter(Boolean);
-      // Also include the primary email even if verification status shape differs
-      const primary = user.primaryEmailAddress?.emailAddress?.toLowerCase().trim();
-      const candidates = new Set([...verifiedEmails, ...(primary ? [primary] : [])]);
-      return candidates.has(target);
+      return new Set(verifiedEmails).has(target);
     }
 
     // Fallback: check via env var for dev mode
