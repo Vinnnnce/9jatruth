@@ -20,6 +20,8 @@ const DEFAULT_REWARD_RULES = {
   aiVerified: 15,
   dailyStreak: 5,
   disputedPenalty: -10,
+  referralSignup: 50,
+  referralCompletion: 100,
 };
 
 const DEFAULT_SITE_CONTROLS = {

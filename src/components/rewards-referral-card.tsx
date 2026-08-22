@@ -17,10 +17,33 @@ type ReferralStats = {
   pointsEarned: number;
 };
 
+type RewardRules = {
+  referralSignup?: number;
+  referralCompletion?: number;
+  truthSubmission?: number;
+  corroboration?: number;
+  aiVerified?: number;
+  dailyStreak?: number;
+  disputedPenalty?: number;
+};
+
 export function RewardsReferralCard() {
   const { toast } = useToast();
   const [copied, setCopied] = useState<"link" | "code" | null>(null);
   const [generated, setGenerated] = useState(false);
+
+  // Live reward rules from the super-admin dashboard (site_settings.reward_rules).
+  const { data: rules } = useQuery<RewardRules>({
+    queryKey: ["/api/admin/settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/settings");
+      if (!res.ok) return {};
+      const json = await res.json();
+      return json.rewardRules ?? {};
+    },
+  });
+  const signupBonus = rules?.referralSignup ?? 50;
+  const completionBonus = rules?.referralCompletion ?? 100;
 
   const { data, isLoading, isError } = useQuery<ReferralStats>({
     queryKey: ["/api/rewards/referrals"],
@@ -71,14 +94,14 @@ export function RewardsReferralCard() {
           <Users className="h-4 w-4 text-emerald-500" />
           Affiliate & Referrals
           <span className="ml-1 text-[9px] font-normal text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
-            Earn 50 + 100 pts
+            Earn {signupBonus} + {completionBonus} pts
           </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Invite friends to 9jatruth. You earn <strong className="text-foreground">50 points</strong> when
-          they sign up with your link, and a <strong className="text-foreground">100-point bonus</strong> when
+          Invite friends to 9jatruth. You earn <strong className="text-foreground">{signupBonus} points</strong> when
+          they sign up with your link, and a <strong className="text-foreground">{completionBonus}-point bonus</strong> when
           they make their first verified contribution. Build a network of trusted reporters and earn
           ongoing rewards.
         </p>
@@ -153,7 +176,7 @@ export function RewardsReferralCard() {
           <ol className="text-[11px] text-muted-foreground space-y-1">
             <li>1. Share your referral link with friends and family.</li>
             <li>2. They sign up on 9jatruth using your link.</li>
-            <li>3. You get 50 points instantly, +100 when they verify their first truth.</li>
+            <li>3. You get {signupBonus} points instantly, +{completionBonus} when they verify their first truth.</li>
             <li>4. Redeem your points for airtime, data, gift cards & vouchers below.</li>
           </ol>
         </div>

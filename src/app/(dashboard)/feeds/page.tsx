@@ -331,12 +331,12 @@ export default function Feeds() {
   return (
     <div className="min-h-screen pb-8 bg-background text-foreground">
       <div className="max-w-7xl mx-auto px-4 md:px-6 pt-4 space-y-4">
-        {/* ─── Summary Grid (2x2) ─── */}
-        <div className="grid grid-cols-2 gap-2.5">
-          <SummaryCard icon={Newspaper} label="Active Truths" value={summary?.activeTruths ?? 0} colorClass="text-neon-green" />
-          <SummaryCard icon={Building2} label="Neighborhoods" value={summary?.neighborhoods ?? 0} colorClass="text-electric-blue" />
-          <SummaryCard icon={ShieldCheck} label="Avg Safety Index" value={summary?.avgSafetyIndex ?? 0} colorClass="text-neon-green" />
-          <SummaryCard icon={Gauge} label="Avg Price Index" value={summary?.avgPriceIndex ?? 0} colorClass="text-purple-glow" />
+        {/* ─── Summary Grid (responsive: 2 cols mobile, 4 cols desktop) ─── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <SummaryCard icon={Newspaper} label="Active Truths" value={summary?.activeTruths ?? 0} colorClass="text-neon-green" loading={!summary} />
+          <SummaryCard icon={Building2} label="Neighborhoods" value={summary?.neighborhoods ?? 0} colorClass="text-electric-blue" loading={!summary} />
+          <SummaryCard icon={ShieldCheck} label="Avg Safety Index" value={summary?.avgSafetyIndex ?? 0} colorClass="text-neon-green" loading={!summary} />
+          <SummaryCard icon={Gauge} label="Avg Price Index" value={summary?.avgPriceIndex ?? 0} colorClass="text-purple-glow" loading={!summary} />
         </div>
 
         {/* ─── Geo Filters + Sort ─── */}
@@ -737,20 +737,22 @@ function SummaryCard({
   label,
   value,
   colorClass,
+  loading,
 }: {
   icon: typeof Zap;
   label: string;
   value: number | string;
   colorClass: string;
+  loading?: boolean;
 }) {
   return (
-    <div className="rounded-2xl p-4 space-y-2 bg-card border border-border">
-      <Icon className={`h-4 w-4 ${colorClass}`} />
-      <div>
-        <p className="text-xl font-bold text-foreground">
-          {typeof value === "number" ? value.toLocaleString() : value}
+    <div className="rounded-2xl p-3 sm:p-4 space-y-1.5 sm:space-y-2 bg-card border border-border min-w-0">
+      <Icon className={`h-4 w-4 ${colorClass} ${loading ? "animate-pulse" : ""}`} />
+      <div className="min-w-0">
+        <p className="text-lg sm:text-xl font-bold text-foreground truncate">
+          {loading ? "—" : typeof value === "number" ? value.toLocaleString() : value}
         </p>
-        <p className="text-[10px] uppercase tracking-normal text-muted-foreground">{label}</p>
+        <p className="text-[9px] sm:text-[10px] uppercase tracking-normal text-muted-foreground truncate">{label}</p>
       </div>
     </div>
   );

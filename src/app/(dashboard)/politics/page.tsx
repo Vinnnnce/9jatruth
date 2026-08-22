@@ -211,23 +211,46 @@ export default function PoliticsPage() {
 }
 
 function CandidatesSection() {
+  const [filters, setFilters] = useState({ office: "", state: "", type: "", search: "" });
+  const qs = new URLSearchParams();
+  if (filters.office) qs.set("office", filters.office);
+  if (filters.state) qs.set("state", filters.state);
+  if (filters.type) qs.set("type", filters.type);
+  if (filters.search) qs.set("search", filters.search);
   const { data, isLoading } = useQuery({
-    queryKey: ["/api/politics/candidates"],
-    queryFn: () => apiRequest("GET", "/api/politics/candidates").then((r) => r.json()),
+    queryKey: [`/api/politics/candidates?${qs.toString()}`],
+    queryFn: () => apiRequest("GET", `/api/politics/candidates?${qs.toString()}`).then((r) => r.json()),
+    refetchInterval: 45000,
   });
   const candidates = data?.candidates ?? [];
+  const NIGERIA_STATES = ["Abia","Adamawa","Akwa Ibom","Anambra","Bauchi","Bayelsa","Benue","Borno","Cross River","Delta","Ebonyi","Edo","Ekiti","Enugu","FCT (Abuja)","Gombe","Imo","Jigawa","Kaduna","Kano","Katsina","Kebbi","Kogi","Kwara","Lagos","Nasarawa","Niger","Ogun","Ondo","Osun","Oyo","Plateau","Rivers","Sokoto","Taraba","Yobe","Zamfara"];
+  const OFFICES = [{ v: "", l: "All offices" }, { v: "presidential", l: "Presidential" }, { v: "governor", l: "Governor" }, { v: "senate", l: "Senate" }, { v: "house", l: "House of Reps" }, { v: "lga_chairman", l: "LGA Chairman" }, { v: "councillor", l: "Councillor" }];
+  const TYPES = [{ v: "", l: "All" }, { v: "incumbent", l: "Incumbents" }, { v: "candidate", l: "Candidates" }, { v: "aspirant", l: "Aspirants" }, { v: "nominee", l: "Nominees" }];
   return (
     <Card className="border-border">
-      <CardHeader className="pb-2"><CardTitle className="text-sm font-display flex items-center gap-2"><Users className="h-4 w-4" /> Candidates</CardTitle></CardHeader>
-      <CardContent>
+      <CardHeader className="pb-2"><CardTitle className="text-sm font-display flex items-center gap-2"><Users className="h-4 w-4" /> Candidates & Officeholders</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <Input placeholder="Search name" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} className="text-xs" />
+          <Select value={filters.office} onValueChange={(v) => setFilters({ ...filters, office: v })}><SelectTrigger className="text-xs"><SelectValue placeholder="Office" /></SelectTrigger><SelectContent>{OFFICES.map((o) => <SelectItem key={o.l} value={o.v}>{o.l}</SelectItem>)}</SelectContent></Select>
+          <Select value={filters.state} onValueChange={(v) => setFilters({ ...filters, state: v })}><SelectTrigger className="text-xs"><SelectValue placeholder="State" /></SelectTrigger><SelectContent className="max-h-60">{[{ v: "", l: "All states" }, ...NIGERIA_STATES.map((s) => ({ v: s, l: s }))].map((o) => <SelectItem key={o.l} value={o.v}>{o.l}</SelectItem>)}</SelectContent></Select>
+          <Select value={filters.type} onValueChange={(v) => setFilters({ ...filters, type: v })}><SelectTrigger className="text-xs"><SelectValue placeholder="Type" /></SelectTrigger><SelectContent>{TYPES.map((o) => <SelectItem key={o.l} value={o.v}>{o.l}</SelectItem>)}</SelectContent></Select>
+        </div>
         {isLoading && <Skeleton className="h-20 w-full" />}
-        {candidates.length === 0 && !isLoading && <p className="text-xs text-muted-foreground">No candidates added yet. Super admins can add candidates from the Politics admin tab.</p>}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {candidates.length === 0 && !isLoading && <p className="text-xs text-muted-foreground">No candidates match. Super admins manage candidate metadata from the Politics admin tab.</p>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {candidates.map((c: any) => <CandidateCard key={c.id} candidate={c} />)}
         </div>
+        {candidates.length > 0 && <p className="text-[10px] text-muted-foreground">{candidates.length} result(s) · live data refreshed every 45s.</p>}
       </CardContent>
     </Card>
   );
+}
+
+function parseArr(v: unknown): string[] {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.map(String);
+  try { const p = JSON.parse(v as string); return Array.isArray(p) ? p.map(String) : []; } catch { return v ? String(v).split("\n") : []; }
 }
 
 function CandidateCard({ candidate: c }: { candidate: any }) {
@@ -239,26 +262,42 @@ function CandidateCard({ candidate: c }: { candidate: any }) {
   });
   const scorecards = data?.scorecards ?? [];
   const avg = scorecards.length > 0 ? Math.round(scorecards.reduce((s: number, x: any) => s + (Number(x.score) || 0), 0) / scorecards.length) : null;
+  const education = parseArr(c.education_background);
+  const businesses = parseArr(c.businesses);
+  const sources = parseArr(c.source_urls);
+  const manifestoSummary = c.manifesto_summary || c.manifesto;
   return (
-    <div className="rounded-md border border-border p-2 text-xs space-y-1">
-      <div className="flex items-center gap-2">
-        <span className="font-medium">{c.name}</span>
-        <Badge variant="outline" className="text-[9px] capitalize">{c.office}</Badge>
-        {c.party_acronym && <span className="h-2 w-2 rounded-full" style={{ background: c.party_color || "hsl(var(--primary))" }} title={c.party_name} />}
-        {avg !== null && <Badge variant="outline" className="text-[9px] ml-auto">Score {avg}/100</Badge>}
+    <div className="rounded-md border border-border p-3 text-xs space-y-2 hover:border-primary/40 transition">
+      <div className="flex items-start gap-2">
+        {c.photo_url ? <img src={c.photo_url} alt={c.name} className="h-12 w-12 rounded-full object-cover flex-shrink-0" /> : <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center text-[10px] text-muted-foreground flex-shrink-0">{c.name?.slice(0, 2).toUpperCase()}</div>}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1 flex-wrap">
+            <span className="font-medium truncate">{c.name}</span>
+            {c.record_type && <Badge variant="outline" className={`text-[8px] capitalize ${c.record_type === "incumbent" ? "text-emerald-500" : "text-blue-500"}`}>{c.record_type}</Badge>}
+          </div>
+          <div className="flex items-center gap-1 flex-wrap mt-0.5">
+            <Badge variant="outline" className="text-[8px] capitalize">{c.office?.replace("_", " ")}</Badge>
+            {c.party_acronym && <Badge variant="outline" className="text-[8px]"><span className="h-1.5 w-1.5 rounded-full mr-0.5" style={{ background: c.party_color || "hsl(var(--primary))" }} />{c.party_acronym}</Badge>}
+            {avg !== null && <Badge variant="outline" className="text-[8px] ml-auto">Score {avg}/100</Badge>}
+          </div>
+          <p className="text-muted-foreground text-[10px] mt-0.5 truncate">{c.state || "—"}{c.lga ? ` · ${c.lga}` : ""}{c.ward ? ` · ${c.ward}` : ""}{c.election_year ? ` · ${c.election_year}` : ""}</p>
+        </div>
       </div>
-      <p className="text-muted-foreground">{c.party_name || c.party_acronym} {c.state ? `· ${c.state}` : ""} {c.election_year ? `· ${c.election_year}` : ""}</p>
-      {c.bio && <p className="text-muted-foreground line-clamp-2">{c.bio}</p>}
-      <button className="text-[10px] text-primary underline" onClick={() => setOpen((v) => !v)}>{open ? "Hide" : "View"} scorecard</button>
+      {c.autobiography || c.bio ? <p className="text-muted-foreground line-clamp-2">{c.autobiography || c.bio}</p> : null}
+      {manifestoSummary && <p className="text-muted-foreground line-clamp-2 italic">“{manifestoSummary.slice(0, 160)}…”</p>}
+      <button className="text-[10px] text-primary underline" onClick={() => setOpen((v) => !v)}>{open ? "Hide details" : "View profile & scorecard"}</button>
       {open && (
-        <div className="space-y-1">
+        <div className="space-y-2 border-t border-border pt-2">
+          {c.political_background && <div><span className="font-medium">Political background:</span> <span className="text-muted-foreground">{c.political_background}</span></div>}
+          {education.length > 0 && <div><span className="font-medium">Education:</span> <ul className="text-muted-foreground list-disc list-inside">{education.slice(0, 5).map((e, i) => <li key={i}>{e}</li>)}</ul></div>}
+          {businesses.length > 0 && <div><span className="font-medium">Businesses:</span> <ul className="text-muted-foreground list-disc list-inside">{businesses.slice(0, 5).map((e, i) => <li key={i}>{e}</li>)}</ul></div>}
+          {c.health_status && <div><span className="font-medium">Health:</span> <span className="text-muted-foreground">{c.health_status}</span></div>}
+          {c.manifesto && <div><span className="font-medium">Manifesto:</span> <p className="text-muted-foreground line-clamp-4">{c.manifesto}</p></div>}
+          {c.achievements && parseArr(c.achievements).length > 0 && <div><span className="font-medium">Achievements:</span> <ul className="text-muted-foreground list-disc list-inside">{parseArr(c.achievements).slice(0, 4).map((e, i) => <li key={i}>{e}</li>)}</ul></div>}
+          {sources.length > 0 && <div><span className="font-medium">Sources:</span> <ul className="text-muted-foreground list-disc list-inside break-all">{sources.slice(0, 4).map((e, i) => <li key={i}><a href={e} target="_blank" rel="noopener noreferrer" className="text-primary underline">{e.slice(0, 60)}</a></li>)}</ul></div>}
+          <div className="flex items-center gap-1 text-[9px] text-muted-foreground"><CheckCircle2 className="h-3 w-3" /> {c.verification_status || "unverified"}{c.data_confidence ? ` · ${c.data_confidence}% confidence` : ""}</div>
           {scorecards.length === 0 && <p className="text-[10px] text-muted-foreground">No scorecard metrics yet.</p>}
-          {scorecards.map((s: any) => (
-            <div key={s.id} className="flex justify-between text-[10px]">
-              <span className="text-muted-foreground">{s.category} · {s.metric}</span>
-              <span className="font-mono">{s.score}/100</span>
-            </div>
-          ))}
+          {scorecards.map((s: any) => (<div key={s.id} className="flex justify-between text-[10px]"><span className="text-muted-foreground">{s.category} · {s.metric}</span><span className="font-mono">{s.score}/100</span></div>))}
         </div>
       )}
     </div>

@@ -552,6 +552,30 @@ export async function redeemReward(userHash: string, amount: number, description
 const REFERRAL_SIGNUP_BONUS = 50;
 const REFERRAL_COMPLETION_BONUS = 100;
 
+/**
+ * Reads the referral signup/completion bonus from super-admin reward_rules in site_settings.
+ * Falls back to the hardcoded defaults when the setting is absent or invalid.
+ * This makes changes made from the super admin dashboard reflect on the rewards feature.
+ */
+async function getConfiguredReferralBonus(): Promise<{ signup: number; completion: number }> {
+  try {
+    const sql = getDb();
+    const rows = (await sql`SELECT value FROM site_settings WHERE key = 'reward_rules' LIMIT 1`) as unknown as any[];
+    if (rows.length > 0 && rows[0].value) {
+      const val = typeof rows[0].value === "string" ? JSON.parse(rows[0].value) : rows[0].value;
+      const signup = Number(val?.referralSignup);
+      const completion = Number(val?.referralCompletion);
+      return {
+        signup: Number.isFinite(signup) && signup >= 0 ? signup : REFERRAL_SIGNUP_BONUS,
+        completion: Number.isFinite(completion) && completion >= 0 ? completion : REFERRAL_COMPLETION_BONUS,
+      };
+    }
+  } catch {
+    // fall through to defaults
+  }
+  return { signup: REFERRAL_SIGNUP_BONUS, completion: REFERRAL_COMPLETION_BONUS };
+}
+
 /** Credit points to a user (ledger entry + balance update). Returns the ledger row. */
 export async function creditRewardPoints(
   userHash: string,
@@ -586,14 +610,17 @@ export async function recordReferral(
   const existing = (await sql`SELECT id FROM referrals WHERE referred_hash = ${referredHash} LIMIT 1`) as unknown as { id: number }[];
   if (existing.length > 0) return { created: false, reason: "already_referred" };
 
+  // Use the bonus configured in the super-admin dashboard (site_settings.reward_rules).
+  const { signup } = await getConfiguredReferralBonus();
+
   // Insert + award signup bonus in one go.
   await sql`
     INSERT INTO referrals (referrer_hash, referred_hash, status, signup_bonus, points_awarded)
-    VALUES (${referrerHash}, ${referredHash}, 'pending', ${REFERRAL_SIGNUP_BONUS}, ${REFERRAL_SIGNUP_BONUS})
+    VALUES (${referrerHash}, ${referredHash}, 'pending', ${signup}, ${signup})
   `;
   await creditRewardPoints(
     referrerHash,
-    REFERRAL_SIGNUP_BONUS,
+    signup,
     "referral_signup",
     `Referral bonus: friend signed up`
   );
@@ -612,11 +639,12 @@ export async function completePendingReferral(referredHash: string): Promise<boo
   if (rows.length === 0) return false;
 
   const r = rows[0];
-  await sql`UPDATE referrals SET status = 'completed', points_awarded = points_awarded + ${REFERRAL_COMPLETION_BONUS},
-    completion_bonus = ${REFERRAL_COMPLETION_BONUS}, completed_at = NOW() WHERE id = ${r.id}`;
+  const { completion } = await getConfiguredReferralBonus();
+  await sql`UPDATE referrals SET status = 'completed', points_awarded = points_awarded + ${completion},
+    completion_bonus = ${completion}, completed_at = NOW() WHERE id = ${r.id}`;
   await creditRewardPoints(
     r.referrer_hash,
-    REFERRAL_COMPLETION_BONUS,
+    completion,
     "referral_completion",
     `Referral bonus: friend made first verified contribution`
   );
@@ -636,14 +664,17 @@ export async function getReferralStats(userHash: string): Promise<ReferralStats>
   const sql = getDb();
   const rows = (await sql`SELECT status, points_awarded FROM referrals WHERE referrer_hash = ${userHash}`) as unknown as
     { status: string; points_awarded: number }[];
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  // Canonical referral domain is always 9jatruth.com (never the vercel.app preview domain).
+  // An override is allowed only via NEXT_PUBLIC_REFERRAL_DOMAIN for custom domains.
+  const override = process.env.NEXT_PUBLIC_REFERRAL_DOMAIN?.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const base = override || "9jatruth.com";
   // Clean, shareable short-link: https://9jatruth.com/r/<code>
   // The code is the referrer's stable userHash (a mix of letters & numbers)
   // which resolves directly when the /r/[code] route redirects to ?ref=<code>.
   const path = `/r/${encodeURIComponent(userHash)}`;
   return {
     code: userHash,
-    link: appUrl ? `${appUrl.replace(/\/$/, "")}${path}` : path,
+    link: `https://${base}${path}`,
     invited: rows.length,
     pending: rows.filter((r) => r.status === "pending").length,
     completed: rows.filter((r) => r.status === "completed").length,

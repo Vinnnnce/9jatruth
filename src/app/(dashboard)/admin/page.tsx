@@ -574,6 +574,8 @@ export default function AdminDashboard() {
     aiVerified: number;
     dailyStreak: number;
     disputedPenalty: number;
+    referralSignup: number;
+    referralCompletion: number;
   };
   type SiteControls = {
     maintenanceMode: boolean;
@@ -1817,6 +1819,8 @@ export default function AdminDashboard() {
                       ["Verified by AI as authentic", "aiVerified"],
                       ["Daily streak bonus", "dailyStreak"],
                       ["Disputed truth penalty", "disputedPenalty"],
+                      ["Referral signup bonus", "referralSignup"],
+                      ["Referral completion bonus", "referralCompletion"],
                     ] as const).map(([label, key]) => (
                       <div key={key} className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
                         <span>{label}</span>

@@ -1238,8 +1238,69 @@ export async function ensureDbInitialized() {
     photo_url TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
   )`);
+  // ── Full candidate metadata (2027 election + incumbents) ──
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS lga TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS ward TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS senatorial_district TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS federal_constituency TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS state_constituency TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS office_level TEXT`); // federal|state|lga
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS record_type TEXT NOT NULL DEFAULT 'candidate'`); // incumbent|candidate|aspirant|nominee|unverified
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS gender TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS date_of_birth TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS place_of_birth TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS hometown TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS nationality TEXT DEFAULT 'Nigerian'`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS state_of_origin TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS local_govt_of_origin TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS autobiography TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS education_background TEXT`); // JSON array
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS previous_political_positions TEXT`); // JSON array
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS political_background TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS businesses TEXT`); // JSON array
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS business_interests TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS net_worth TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS assets_declared TEXT`); // JSON
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS health_status TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS health_disclosure_url TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS manifesto TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS manifesto_summary TEXT`); // AI-generated
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS campaign_slogan TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS key_policies TEXT`); // JSON array
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS phone TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS email TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS website TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS facebook TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS twitter TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS instagram TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS linkedin TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS running_mate TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS incumbent_since TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS term_start TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS term_end TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS previous_party TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS criminal_record TEXT`); // JSON array
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS corruption_allegations TEXT`); // JSON array
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS court_cases TEXT`); // JSON array
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS achievements TEXT`); // JSON array
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS controversies TEXT`); // JSON array
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS verification_status TEXT NOT NULL DEFAULT 'unverified'`); // unverified|pending|verified|disputed
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS data_confidence INTEGER DEFAULT 0`); // 0-100
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS source_urls TEXT`); // JSON array
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS ai_risk_flags TEXT`); // JSON array
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS ai_summary TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS ai_comparison TEXT`); // JSON
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS ai_last_analyzed TIMESTAMPTZ`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS views INTEGER DEFAULT 0`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS updated_by TEXT`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
   _q.push(sql`CREATE INDEX IF NOT EXISTS idx_candidates_party ON political_candidates(party_acronym)`);
   _q.push(sql`CREATE INDEX IF NOT EXISTS idx_candidates_geo ON political_candidates(geo_id, election_year)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_candidates_office ON political_candidates(office, office_level)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_candidates_state ON political_candidates(state, lga)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_candidates_record ON political_candidates(record_type, election_year)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_candidates_verification ON political_candidates(verification_status)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_candidates_search ON political_candidates USING gin (to_tsvector('simple', coalesce(name,'') || ' ' || coalesce(bio,'') || ' ' || coalesce(autobiography,'') || ' ' || coalesce(manifesto,'')))`);
   _q.push(sql`CREATE TABLE IF NOT EXISTS political_scorecards (
     id SERIAL PRIMARY KEY,
     candidate_id INTEGER NOT NULL,
