@@ -395,6 +395,11 @@ export async function ensureDbInitialized() {
   _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS village TEXT`);
   _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS region TEXT`);
 
+  // user_hash + username are queried via JOIN on platform_users (see neon-storage.getTruths)
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS user_hash TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS username TEXT`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_platform_users_user_hash ON platform_users(user_hash)`);
+
   // ─── Geo Hierarchy Reference Tables ───
   _q.push(sql`CREATE TABLE IF NOT EXISTS regions (
     id SERIAL PRIMARY KEY,

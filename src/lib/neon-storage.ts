@@ -2047,14 +2047,20 @@ export async function upsertPlatformUser(data: {
   email: string;
   displayName?: string | null;
   avatarUrl?: string | null;
+  username?: string | null;
 }) {
   const sql = getDb();
+  // Derive the user_hash the same way getUserId() does (dev_ + sha256(clerkUserId)[:12])
+  // so micro_truths / reward_ledger / verifications rows created via getUserId()
+  // JOIN back to this platform_users row (see neon-storage.getTruths).
+  const { createHash } = await import("node:crypto");
+  const userHash = `dev_${createHash("sha256").update(data.clerkUserId).digest("hex").substring(0, 12)}`;
   const existing = (await sql`SELECT * FROM platform_users WHERE clerk_user_id = ${data.clerkUserId}`) as unknown as SqlRow[];
   if (existing[0]) {
-    const rows = (await sql`UPDATE platform_users SET email = ${data.email}, display_name = COALESCE(${data.displayName ?? null}, display_name), avatar_url = COALESCE(${data.avatarUrl ?? null}, avatar_url), updated_at = NOW() WHERE clerk_user_id = ${data.clerkUserId} RETURNING *`) as unknown as SqlRow[];
+    const rows = (await sql`UPDATE platform_users SET email = ${data.email}, display_name = COALESCE(${data.displayName ?? null}, display_name), avatar_url = COALESCE(${data.avatarUrl ?? null}, avatar_url), username = COALESCE(${data.username ?? null}, username), user_hash = COALESCE(NULLIF(user_hash, ''), ${userHash}), updated_at = NOW() WHERE clerk_user_id = ${data.clerkUserId} RETURNING *`) as unknown as SqlRow[];
     return rows[0];
   }
-  const rows = (await sql`INSERT INTO platform_users (clerk_user_id, email, display_name, avatar_url) VALUES (${data.clerkUserId}, ${data.email}, ${data.displayName ?? null}, ${data.avatarUrl ?? null}) RETURNING *`) as unknown as SqlRow[];
+  const rows = (await sql`INSERT INTO platform_users (clerk_user_id, email, display_name, avatar_url, username, user_hash) VALUES (${data.clerkUserId}, ${data.email}, ${data.displayName ?? null}, ${data.avatarUrl ?? null}, ${data.username ?? null}, ${userHash}) RETURNING *`) as unknown as SqlRow[];
   return rows[0];
 }
 
