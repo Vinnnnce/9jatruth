@@ -130,7 +130,10 @@ export function HyperPersonalizedDashboard() {
     queryFn: async () => {
       const res = await fetch("/api/dashboard");
       if (!res.ok) return [];
-      return res.json();
+      const d = await res.json();
+      // Defend against non-array responses (e.g. an envelope object) —
+      // calling .slice() on an object throws "X.slice is not a function".
+      return Array.isArray(d) ? d : [];
     },
     staleTime: 60000,
   });
@@ -141,7 +144,8 @@ export function HyperPersonalizedDashboard() {
     queryFn: async () => {
       const res = await fetch("/api/ai/feed-predictions");
       if (!res.ok) return [];
-      return res.json();
+      const d = await res.json();
+      return Array.isArray(d) ? d : (Array.isArray(d?.predictions) ? d.predictions : (Array.isArray(d?.picks) ? d.picks : []));
     },
     staleTime: 60000,
   });
@@ -152,7 +156,9 @@ export function HyperPersonalizedDashboard() {
     queryFn: async () => {
       const res = await fetch("/api/trends");
       if (!res.ok) return [];
-      return res.json();
+      const d = await res.json();
+      // /api/trends returns { categoryTrends: [...] } — normalize to an array.
+      return Array.isArray(d) ? d : (Array.isArray(d?.categoryTrends) ? d.categoryTrends : (Array.isArray(d?.trends) ? d.trends : []));
     },
     staleTime: 60000,
   });
@@ -184,8 +190,8 @@ export function HyperPersonalizedDashboard() {
 
     // Tailor the briefing to the user's top interest categories. Pull the
     // top 3 categories from the intent signal, falling back to behavior.
-    const topInterests = (intent.surfaceAhead?.slice(0, 3).map((s) => s.category))
-      || categoryBehavior.slice(0, 3).map((b) => b.category);
+    const topInterests = (Array.isArray(intent.surfaceAhead) ? intent.surfaceAhead : []).slice(0, 3).map((s) => s.category)
+      || (Array.isArray(categoryBehavior) ? categoryBehavior : []).slice(0, 3).map((b) => b.category);
     const greeting = (() => {
       const h = new Date().getHours();
       if (h < 12) return "Good morning";
@@ -384,7 +390,7 @@ export function HyperPersonalizedDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {(trends as any[])?.slice(0, 5).map((trend, i) => (
+                {(Array.isArray(trends) ? trends : []).slice(0, 5).map((trend, i) => (
                   <div key={i} className="flex items-center gap-2 py-1.5 border-b border-border/30 last:border-0">
                     <span className="text-[10px] text-muted-foreground">{i + 1}.</span>
                     <span className="text-xs truncate flex-1">{trend.category || trend.label || "Trending topic"}</span>
@@ -407,7 +413,7 @@ export function HyperPersonalizedDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {dashboardData[0]?.recentTruths?.slice(0, 5).map((truth: any, i: number) => (
+                {(Array.isArray(dashboardData[0]?.recentTruths) ? dashboardData[0].recentTruths : []).slice(0, 5).map((truth: any, i: number) => (
                   <div key={i} className="py-1.5 border-b border-border/30 last:border-0">
                     <p className="text-xs truncate">{truth.content?.slice(0, 60)}</p>
                     <div className="flex items-center gap-1 mt-0.5">
@@ -433,7 +439,7 @@ export function HyperPersonalizedDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {(aiPicks as any[])?.slice(0, 5).map((pick, i) => (
+                {(Array.isArray(aiPicks) ? aiPicks : []).slice(0, 5).map((pick, i) => (
                   <div key={i} className="py-1.5 border-b border-border/30 last:border-0">
                     <p className="text-xs truncate">{pick.title || pick.content?.slice(0, 60) || "AI recommendation"}</p>
                     {pick.reason && (
@@ -457,7 +463,7 @@ export function HyperPersonalizedDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {dashboardData?.[0]?.predictions?.slice(0, 3).map((pred: any, i: number) => (
+                {(Array.isArray(dashboardData?.[0]?.predictions) ? dashboardData[0].predictions : []).slice(0, 3).map((pred: any, i: number) => (
                   <div key={i} className="py-1.5 border-b border-border/30 last:border-0">
                     <p className="text-xs truncate">{pred.prediction?.slice(0, 70)}</p>
                     <div className="flex items-center gap-1 mt-0.5">

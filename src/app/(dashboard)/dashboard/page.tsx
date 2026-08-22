@@ -158,7 +158,7 @@ export default function DashboardPage() {
             <div>
               <p className="text-[10px] uppercase text-muted-foreground">Scam Alerts</p>
               <p className="text-sm font-medium">
-                {data.filter(n => n.recentTruths.some(t => t.category === "safety" && t.content.toLowerCase().includes("scam"))).length} active
+                {data.filter(n => Array.isArray(n.recentTruths) && n.recentTruths.some(t => t.category === "safety" && (t.content || "").toLowerCase().includes("scam"))).length} active
               </p>
             </div>
           </CardContent>
@@ -172,7 +172,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {data.reduce((sum, n) => sum + n.recentTruths.length, 0)}
+              {data.reduce((sum, n) => sum + (Array.isArray(n.recentTruths) ? n.recentTruths.length : 0), 0)}
             </div>
           </CardContent>
         </Card>
@@ -203,7 +203,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {data.reduce((sum, n) => sum + n.predictions.length, 0)}
+              {data.reduce((sum, n) => sum + (Array.isArray(n.predictions) ? n.predictions.length : 0), 0)}
             </div>
           </CardContent>
         </Card>
