@@ -637,9 +637,13 @@ export async function getReferralStats(userHash: string): Promise<ReferralStats>
   const rows = (await sql`SELECT status, points_awarded FROM referrals WHERE referrer_hash = ${userHash}`) as unknown as
     { status: string; points_awarded: number }[];
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  // Clean, shareable short-link: https://9jatruth.com/r/<code>
+  // The code is the referrer's stable userHash (a mix of letters & numbers)
+  // which resolves directly when the /r/[code] route redirects to ?ref=<code>.
+  const path = `/r/${encodeURIComponent(userHash)}`;
   return {
     code: userHash,
-    link: appUrl ? `${appUrl}/?ref=${encodeURIComponent(userHash)}` : `/?ref=${encodeURIComponent(userHash)}`,
+    link: appUrl ? `${appUrl.replace(/\/$/, "")}${path}` : path,
     invited: rows.length,
     pending: rows.filter((r) => r.status === "pending").length,
     completed: rows.filter((r) => r.status === "completed").length,

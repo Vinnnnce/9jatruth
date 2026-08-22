@@ -92,6 +92,12 @@ export async function PUT(
       break;
     case "publish":
       newStatus = "published";
+      // Publishing with a verification badge also marks the article verified.
+      if (data.verificationBadge) {
+        isVerified = true;
+        verificationBadge = data.verificationBadge;
+        newTrustScore = Math.min(100, article.trust_score + data.trustBoost);
+      }
       break;
     case "unpublish":
       newStatus = "draft";
@@ -99,9 +105,6 @@ export async function PUT(
   }
 
   // Update article
-  const publishedAtClause =
-    data.action === "publish" ? ", published_at = COALESCE(published_at, NOW())" : "";
-
   await sql`
     UPDATE news_articles
     SET status = ${newStatus},
@@ -112,6 +115,12 @@ export async function PUT(
         updated_at = NOW()
     WHERE id = ${parsedId.data.id}
   `;
+
+  // On publish, stamp published_at (only the first time) so the article
+  // surfaces in the public feed ordered by recency.
+  if (data.action === "publish") {
+    await sql`UPDATE news_articles SET published_at = COALESCE(published_at, NOW()) WHERE id = ${parsedId.data.id}`;
+  }
 
   // Award accuracy incentive if verifying with bonus
   if (data.action === "verify" && data.accuracyBonus > 0) {

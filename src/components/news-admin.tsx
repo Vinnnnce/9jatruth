@@ -89,7 +89,7 @@ function timeAgo(dateStr: string): string {
 export function NewsAdmin() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<string>("pending_review");
+  const [statusFilter, setStatusFilter] = useState<string>("draft");
   const [pendingAction, setPendingAction] = useState<{
     articleId: number;
     action: "verify" | "reject" | "archive" | "award";
@@ -97,26 +97,39 @@ export function NewsAdmin() {
   } | null>(null);
 
   const { data, isLoading } = useQuery<AdminResponse>({
-    queryKey: ["/api/news/admin", statusFilter],
+    queryKey: ["/api/admin/news", statusFilter],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/news/admin?status=${statusFilter}`);
+      const res = await apiRequest("GET", `/api/admin/news?status=${statusFilter}&limit=100`);
       return res.json();
     },
   });
 
   const actionMutation = useMutation({
-    mutationFn: (data: { articleId: number; action: string }) =>
-      apiRequest("POST", `/api/news/admin/${data.articleId}/action`, { action: data.action }),
+    mutationFn: (data: {
+      articleId: number;
+      action: string;
+      verificationBadge?: string;
+      trustBoost?: number;
+      accuracyBonus?: number;
+    }) =>
+      apiRequest("PUT", `/api/admin/news/${data.articleId}`, {
+        action: data.action,
+        verificationBadge: data.verificationBadge,
+        trustBoost: data.trustBoost ?? 0,
+        accuracyBonus: data.accuracyBonus ?? 0,
+      }),
     onSuccess: (_d, variables) => {
       const labels: Record<string, string> = {
         verify: "Article verified and published",
         reject: "Article rejected",
         archive: "Article archived",
         award: "Accuracy incentive awarded",
+        publish: "Article published",
       };
       toast({ title: labels[variables.action] || "Action completed" });
-      queryClient.invalidateQueries({ queryKey: ["/api/news/admin"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/news"] });
       queryClient.invalidateQueries({ queryKey: ["/api/news/feed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/news"] });
       setPendingAction(null);
     },
     onError: (err: Error) => {
@@ -128,8 +141,9 @@ export function NewsAdmin() {
     mutationFn: (id: number) => apiRequest("DELETE", `/api/news/${id}`),
     onSuccess: () => {
       toast({ title: "Article deleted", description: "The article has been permanently removed." });
-      queryClient.invalidateQueries({ queryKey: ["/api/news/admin"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/news"] });
       queryClient.invalidateQueries({ queryKey: ["/api/news/feed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/news"] });
     },
     onError: (err: Error) => {
       toast({ title: "Delete failed", description: err.message, variant: "destructive" });
@@ -142,9 +156,29 @@ export function NewsAdmin() {
     setPendingAction({ articleId: article.id, action, title: article.title });
   };
 
+  // Map the UI button intents onto the /api/admin/news/[id] action schema.
+  // "verify" = verify + publish, "award" = accuracy incentive (verify + bonus).
   const confirmAction = () => {
     if (!pendingAction) return;
-    actionMutation.mutate({ articleId: pendingAction.articleId, action: pendingAction.action });
+    const { articleId, action } = pendingAction;
+    if (action === "verify") {
+      actionMutation.mutate({
+        articleId,
+        action: "publish",
+        verificationBadge: "verified",
+        trustBoost: 5,
+      });
+    } else if (action === "award") {
+      actionMutation.mutate({
+        articleId,
+        action: "verify",
+        verificationBadge: "verified",
+        accuracyBonus: 50,
+        trustBoost: 10,
+      });
+    } else {
+      actionMutation.mutate({ articleId, action });
+    }
   };
 
   const actionDescriptions: Record<string, string> = {

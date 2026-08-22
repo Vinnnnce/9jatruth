@@ -24,6 +24,7 @@ import { useMemo, useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { isSuperAdminProfile, getDashboardType } from "@/lib/admin-auth-client";
+import { NIGERIA_LGAS } from "@/lib/nigeria-locations";
 import { useToast } from "@/components/hooks/use-toast";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1171,7 +1172,11 @@ export default function AdminDashboard() {
                   <GeoFilter
                     label="LGA"
                     value={geoFilters.lga}
-                    options={geo?.lgas ?? []}
+                    options={
+                      geoFilters.state
+                        ? NIGERIA_LGAS[geoFilters.state] ?? []
+                        : geo?.lgas ?? []
+                    }
                     onChange={(v) => setGeoField("lga", v)}
                     testId="select-lga"
                   />

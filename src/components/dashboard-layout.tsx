@@ -19,7 +19,7 @@ import {
 import { SokeLogoFull, SokeLogo } from "@/components/logo";
 import { OfflineStatus } from "@/components/offline-status";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { UserButton, SignedIn, SignedOut, SignInButton, SignUpButton } from "@clerk/nextjs";
+import { UserButton, SignedIn, SignInButton, SignUpButton, useUser } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import { isSuperAdminProfile, getDashboardType } from "@/lib/admin-auth-client";
 import { NotificationBell } from "@/components/notification-bell";
@@ -287,38 +287,67 @@ function TopBar() {
           </span>
         </div>
         <ThemeToggle />
-        {isClerkConfigured && (
-          <>
-            <SignedIn>
-              <NotificationBell />
-              <UserButton afterSignOutUrl="/sign-in" />
-            </SignedIn>
-            <SignedOut>
-              <SignInButton mode="modal">
-                <button className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted">
-                  Log In
-                </button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button className="text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 transition-colors px-4 py-1.5 rounded-md">
-                  Sign Up
-                </button>
-              </SignUpButton>
-            </SignedOut>
-          </>
-        )}
-        {!isClerkConfigured && (
-          <>
-            <Link href="/sign-in" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted">
-              Log In
-            </Link>
-            <Link href="/sign-up" className="text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 transition-colors px-4 py-1.5 rounded-md">
-              Sign Up
-            </Link>
-          </>
-        )}
+        <NavbarAuth />
       </div>
     </header>
+  );
+}
+
+/**
+ * NavbarAuth — always renders visible Log In / Sign Up entry points.
+ *
+ * Previously the buttons were gated behind Clerk's <SignedOut>, which renders
+ * nothing while Clerk is loading or if its frontend SDK fails to initialise
+ * (e.g. an unreachable custom domain). That left the navbar with no auth
+ * buttons at all. This component instead always shows plain <Link> buttons to
+ * the Clerk-hosted sign-in / sign-up pages, and swaps them for the signed-in
+ * controls (NotificationBell + UserButton) once Clerk confirms a session.
+ */
+function NavbarAuth() {
+  if (!isClerkConfigured) {
+    return (
+      <>
+        <Link href="/sign-in" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted">
+          Log In
+        </Link>
+        <Link href="/sign-up" className="text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 transition-colors px-4 py-1.5 rounded-md">
+          Sign Up
+        </Link>
+      </>
+    );
+  }
+
+  return <ClerkAuthButtons />;
+}
+
+function ClerkAuthButtons() {
+  const { isSignedIn, isLoaded } = useUser();
+
+  // Signed in → show account controls only.
+  if (isSignedIn) {
+    return (
+      <SignedIn>
+        <NotificationBell />
+        <UserButton afterSignOutUrl="/sign-in" />
+      </SignedIn>
+    );
+  }
+
+  // Loading or signed out → always show visible entry buttons so the navbar
+  // is never missing auth actions, even before Clerk finishes initialising.
+  return (
+    <>
+      <SignInButton mode="modal">
+        <button className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted">
+          {isLoaded ? "Log In" : "Log In"}
+        </button>
+      </SignInButton>
+      <SignUpButton mode="modal">
+        <button className="text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 transition-colors px-4 py-1.5 rounded-md">
+          Sign Up
+        </button>
+      </SignUpButton>
+    </>
   );
 }
 

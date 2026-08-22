@@ -34,6 +34,7 @@ export default function AgenciesDirectoryPage() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("All");
   const [state, setState] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("name");
   // "detecting" | "detected" | "failed" — tracks the IP auto-location lookup
   const [locationStatus, setLocationStatus] = useState<
     "detecting" | "detected" | "failed"
@@ -95,7 +96,7 @@ export default function AgenciesDirectoryPage() {
   }, [data]);
 
   const filtered = useMemo(() => {
-    return EMERGENCY_AGENCIES.filter((a) => {
+    const list = EMERGENCY_AGENCIES.filter((a) => {
       const matchesQuery =
         !query ||
         a.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -105,7 +106,14 @@ export default function AgenciesDirectoryPage() {
       const matchesCat = category === "All" || a.category === category;
       return matchesQuery && matchesCat;
     });
-  }, [query, category]);
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      if (sortBy === "category") return a.category.localeCompare(b.category) || a.name.localeCompare(b.name);
+      if (sortBy === "state") return (a.headquartersState || "").localeCompare(b.headquartersState || "") || a.name.localeCompare(b.name);
+      return a.name.localeCompare(b.name); // default: name A–Z
+    });
+    return sorted;
+  }, [query, category, sortBy]);
 
   return (
     <div className="space-y-6 p-4 md:p-6 max-w-6xl mx-auto">
@@ -150,6 +158,16 @@ export default function AgenciesDirectoryPage() {
           <SelectContent>
             <SelectItem value="all">All states</SelectItem>
             {NIGERIAN_STATES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={sortBy} onValueChange={setSortBy}>
+          <SelectTrigger className="sm:w-44">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="name">Sort: Name (A–Z)</SelectItem>
+            <SelectItem value="category">Sort: Category</SelectItem>
+            <SelectItem value="state">Sort: HQ State</SelectItem>
           </SelectContent>
         </Select>
       </div>

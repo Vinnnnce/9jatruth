@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/hooks/use-toast";
+import { NIGERIA_LGAS } from "@/lib/nigeria-locations";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bold,
@@ -93,7 +94,10 @@ export default function CreateArticlePage() {
   });
 
   const states = geoHierarchy?.states ?? [];
-  const lgas = geoHierarchy?.lgas ?? [];
+  // Show only the LGAs that belong to the selected state. Falls back to the
+  // full hierarchy list when no state is chosen. Fixes the bug where the LGA
+  // dropdown showed all 774 LGAs regardless of the selected state.
+  const lgas = state ? NIGERIA_LGAS[state] ?? [] : geoHierarchy?.lgas ?? [];
 
   const createMutation = useMutation({
     mutationFn: (data: {

@@ -6,6 +6,7 @@ import {
   getClerkUserId,
 } from "@/lib/api-helpers";
 import { csrfCheck } from "@/lib/security";
+import { isSuperAdmin } from "@/lib/admin-auth";
 import { z } from "zod";
 
 const idParamSchema = z.object({
@@ -182,6 +183,13 @@ export async function DELETE(
 
   const clerkUserId = await getClerkUserId();
   if (!clerkUserId) return Response.json({ message: "Unauthorized" }, { status: 401 });
+
+  // Only the super admin may delete articles (this endpoint is used by the
+  // News admin panel). Without this, any signed-in user could delete content.
+  const isAdmin = await isSuperAdmin();
+  if (!isAdmin) {
+    return Response.json({ message: "Forbidden — Super admin access required" }, { status: 403 });
+  }
 
   const csrfError = csrfCheck(request);
   if (csrfError) return csrfError;
