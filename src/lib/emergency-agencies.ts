@@ -432,3 +432,38 @@ export const NIGERIAN_STATES: string[] = [
   "Kwara", "Lagos", "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo",
   "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara", "FCT",
 ];
+
+/**
+ * Normalize a free-form region/state string (e.g. from an IP geolocation
+ * provider) into one of the canonical NIGERIAN_STATES values, or null.
+ * Handles common variants like "Federal Capital Territory" -> "FCT",
+ * "Akwa-Ibom" -> "Akwa Ibom", and extra suffixes like "State".
+ */
+export function normalizeNigerianState(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const cleaned = raw.trim();
+  if (!cleaned) return null;
+
+  // Strip trailing "State" / "/ Abuja" noise
+  const noStateSuffix = cleaned.replace(/\s*[\/,]?\s*state\b/gi, "").trim();
+
+  const variants: Record<string, string> = {
+    "federal capital territory": "FCT",
+    "fct": "FCT",
+    "abuja": "FCT",
+    "akwa ibom": "Akwa Ibom",
+    "akwa-ibom": "Akwa Ibom",
+    "cross river": "Cross River",
+    "cross-river": "Cross River",
+    "niger delta": "Delta",
+  };
+
+  const key = noStateSuffix.toLowerCase();
+  if (variants[key]) return variants[key];
+
+  // Match against the canonical list, ignoring spaces/hyphens and case
+  const compact = (s: string) => s.toLowerCase().replace(/[\s-]+/g, "");
+  const target = compact(noStateSuffix);
+  const match = NIGERIAN_STATES.find((s) => compact(s) === target);
+  return match ?? null;
+}
