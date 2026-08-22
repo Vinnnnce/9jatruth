@@ -52,7 +52,8 @@ export default function SignUpPage() {
               formButtonPrimary:
                 "bg-primary text-primary-foreground hover:bg-primary/90",
               formFieldInput:
-                "bg-background border-border text-foreground",
+                "bg-background border-border text-foreground placeholder:text-muted-foreground/70",
+              formFieldLabel: "text-muted-foreground",
               footerActionLink: "text-primary hover:text-primary/80",
               identityPreviewText: "text-foreground",
               identityPreviewEditButton: "text-primary",
