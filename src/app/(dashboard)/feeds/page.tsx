@@ -165,6 +165,30 @@ export default function Feeds() {
   const [geoFilter, setGeoFilter] = useState<{ state: string; lga: string }>({ state: "", lga: "" });
   const [sortBy, setSortBy] = useState<"recent" | "nearest" | "trending" | "trust">("recent");
 
+  // "Dev" toggle — shows the community questionnaire section even when none
+  // is published yet, so admins/contributors can preview the survey UX.
+  // Persists in localStorage so the preference survives page refreshes.
+  const [devMode, setDevMode] = useState<boolean>(false);
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("9jatruth:feeds-dev-mode");
+      if (stored === "true") setDevMode(true);
+    } catch {
+      // ignore (private mode / SSR)
+    }
+  }, []);
+  const toggleDevMode = useCallback(() => {
+    setDevMode((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem("9jatruth:feeds-dev-mode", String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
   // Fetch geo hierarchy for filter dropdowns (states and lgas only)
   const { data: geoHierarchy } = useQuery<{ states: string[]; lgas: string[] }>({
     queryKey: ["/api/geo/hierarchy"],
@@ -320,6 +344,14 @@ export default function Feeds() {
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-medium uppercase text-muted-foreground">Filter by Location</span>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleDevMode}
+                title="Toggle Dev mode to preview the community questionnaire"
+                className={`h-7 rounded-md text-[10px] px-2 border transition-colors ${devMode ? "bg-primary text-primary-foreground border-primary" : "bg-background text-foreground border-border"}`}
+              >
+                Dev {devMode ? "On" : "Off"}
+              </button>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as "recent" | "nearest" | "trending" | "trust")}
@@ -496,7 +528,7 @@ export default function Feeds() {
         )}
 
         {/* ─── Active Questionnaires ─── */}
-        <QuestionnaireSection />
+        <QuestionnaireSection forceShow={devMode} />
 
         {/* ─── Additional dashboard widgets row (POS, Weather, Scam Alerts) ─── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1281,7 +1313,7 @@ function LikeButton({ truthId }: { truthId: number }) {
 }
 
 // ─── Questionnaire Section (displayed on feeds) ───
-function QuestionnaireSection() {
+function QuestionnaireSection({ forceShow = false }: { forceShow?: boolean }) {
   const { data, isLoading } = useQuery({
     queryKey: ["/api/questionnaire"],
     queryFn: async () => {
@@ -1293,7 +1325,23 @@ function QuestionnaireSection() {
 
   const questionnaires = Array.isArray(data) ? data : (data?.questionnaires || []);
 
-  if (isLoading || !questionnaires || questionnaires.length === 0) return null;
+  // Dev mode: when no live questionnaire exists, show a preview questionnaire
+  // so the survey UX can be reviewed end-to-end before publishing.
+  const DEV_QUESTIONNAIRE = {
+    id: "dev-preview",
+    questionnaireType: "Community Pulse (Dev Preview)",
+    questions: [
+      "How safe do you feel in your neighborhood?",
+      "Have you experienced a service outage this week?",
+      "How would you rate local emergency response?",
+    ],
+    responses: [],
+  };
+  const devQuestionnaires =
+    forceShow && questionnaires.length === 0 ? [DEV_QUESTIONNAIRE] : [];
+  const visible = [...questionnaires, ...devQuestionnaires];
+
+  if (isLoading || !visible || visible.length === 0) return null;
 
   return (
     <div className="space-y-2">

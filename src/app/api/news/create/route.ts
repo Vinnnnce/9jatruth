@@ -90,16 +90,32 @@ export async function POST(request: Request) {
     title = sanitizeText(String(formData.get("title") || ""));
     excerpt = formData.get("excerpt") ? sanitizeText(String(formData.get("excerpt"))) : null;
     content = String(formData.get("content") || "");
-    category = String(formData.get("category") || "local");
+    // Normalize category to lowercase — the editor sends capitalized labels
+    // (e.g. "Politics") but the DB/news feed expects the canonical lowercase
+    // category key. Without this, unknown categories silently fall back to
+    // "general" and the article never appears in the expected feed filter.
+    category = String(formData.get("category") || "local").trim().toLowerCase();
     state = formData.get("state") ? String(formData.get("state")) : null;
     lga = formData.get("lga") ? String(formData.get("lga")) : null;
-    status = String(formData.get("status") || "draft");
+    status = String(formData.get("status") || "draft").toLowerCase();
 
     const tagsRaw = formData.get("tags");
     tags = tagsRaw ? String(tagsRaw).split(",").map((t) => t.trim()).filter(Boolean) : [];
 
     coverImageUrl = formData.get("coverImageUrl") ? String(formData.get("coverImageUrl")) : null;
-    mediaUrls = formData.get("mediaUrls") ? JSON.parse(String(formData.get("mediaUrls"))) : [];
+    // Harden mediaUrls parsing — a malformed value used to throw an unhandled
+    // 500. Now we fall back to an empty array.
+    const mediaUrlsRaw = formData.get("mediaUrls");
+    if (mediaUrlsRaw) {
+      try {
+        const parsed = JSON.parse(String(mediaUrlsRaw));
+        mediaUrls = Array.isArray(parsed) ? parsed.filter((u) => typeof u === "string") : [];
+      } catch {
+        mediaUrls = [];
+      }
+    } else {
+      mediaUrls = [];
+    }
 
     // Process uploaded files (cover + media)
     const uploadedMediaUrls: string[] = [];
@@ -156,6 +172,15 @@ export async function POST(request: Request) {
       body = await request.json();
     } catch {
       return Response.json({ message: "Invalid JSON" }, { status: 400 });
+    }
+
+    // Normalize category case (client sends "Politics" → "politics") so the
+    // Zod enum validates instead of returning a 400 validation error.
+    if (body && typeof body.category === "string") {
+      body.category = body.category.trim().toLowerCase();
+    }
+    if (body && typeof body.status === "string") {
+      body.status = body.status.trim().toLowerCase();
     }
 
     const parsed = validate(createWithMediaSchema, body);

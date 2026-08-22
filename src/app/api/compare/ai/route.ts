@@ -1,7 +1,7 @@
 import { ensureDbInitialized, getDb } from "@/lib/db";
 import { csrfCheck } from "@/lib/security";
 import { rateLimit, getClientIP } from "@/lib/rate-limiter";
-import { isKimiConfigured, generateKimiText } from "@/lib/kimi";
+import { isAiConfigured, generateAiJson, generateAiText } from "@/lib/ai-providers";
 
 /**
  * POST /api/compare/ai
@@ -89,32 +89,80 @@ export async function POST(request: Request) {
     recentTruths: recentTruthsB.map(t => ({ category: t.category, content: String(t.content).slice(0, 100), trustScore: t.trust_score })),
   };
 
-  // Generate AI comparison
+  // Generate AI comparison using the Deepseek + Kimi K3 ensemble (Deepseek
+  // primary, Kimi fallback). Returns BOTH a structured analysis object and a
+  // plain-text summary so the UI can render rich widgets and a readable report.
+type AiCompareResult = {
+    summary: string;
+    verdict: string;
+    winner: "a" | "b" | "tie";
+    riskA: number;
+    riskB: number;
+    categories: { name: string; a: string; b: string; advantage: "a" | "b" | "tie" }[];
+    recommendations: string[];
+    confidence: number;
+  };
   let aiAnalysis: string | null = null;
+  let aiResult: AiCompareResult | null = null;
+  let aiSource: "deepseek" | "kimi" | "fallback" | null = isAiConfigured() ? null : null;
 
-  if (isKimiConfigured()) {
-    const systemPrompt = `You are a neighborhood comparison analyst for 9jatruth, a community truth platform. Compare two neighborhoods side-by-side based on their live conditions and metrics. Provide:
-1. Overall comparison summary (which neighborhood is better overall and why)
-2. Category-by-category breakdown (Power, Fuel, Traffic, Prices, Safety)
-3. Risk assessment for each neighborhood
-4. Recommendation: which area is safer/more livable
-Keep the analysis under 400 words and be specific with numbers.`;
+  if (isAiConfigured()) {
+    const systemPrompt = `You are a neighborhood comparison analyst for 9jatruth, a Nigerian community truth platform. Compare two neighborhoods side-by-side based on live conditions and metrics. Be specific with the numbers provided, objective, and practical for residents, businesses, and visitors.`;
 
-    const userPrompt = `Compare these two neighborhoods:
+    const userPrompt = `Compare these two neighborhoods and respond with ONLY a JSON object.
 
-Neighborhood A: ${JSON.stringify(dataA, null, 2)}
+Neighborhood A (${dataA.name}, ${dataA.region}): ${JSON.stringify(dataA, null, 2)}
 
-Neighborhood B: ${JSON.stringify(dataB, null, 2)}
+Neighborhood B (${dataB.name}, ${dataB.region}): ${JSON.stringify(dataB, null, 2)}
 
-Provide a detailed side-by-side comparison.`;
+JSON schema:
+{
+  "summary": "2-3 sentence overall comparison",
+  "verdict": "one short sentence naming the better neighborhood and why",
+  "winner": "a" | "b" | "tie",
+  "riskA": 0-100 (risk score for A, higher = riskier),
+  "riskB": 0-100 (risk score for B, higher = riskier),
+  "categories": [{ "name": "Power"|"Fuel"|"Traffic"|"Prices"|"Safety", "a": "short label for A", "b": "short label for B", "advantage": "a"|"b"|"tie" }],
+  "recommendations": ["3-5 practical, actionable recommendations for residents/visitors"],
+  "confidence": 0-100
+}`;
 
     try {
-      aiAnalysis = await generateKimiText(systemPrompt, userPrompt, {
-        temperature: 0.3,
-        maxOutputTokens: 800,
-      });
+      const { data, source } = await generateAiJson(
+        systemPrompt,
+        userPrompt,
+        {
+          summary: "AI comparison unavailable.",
+          verdict: "Unable to determine a winner.",
+          winner: "tie",
+          riskA: 50,
+          riskB: 50,
+          categories: [],
+          recommendations: [],
+          confidence: 0,
+        },
+        { temperature: 0.3, maxOutputTokens: 1000 }
+      );
+      aiResult = data as AiCompareResult;
+      aiSource = source;
+      // Also produce a readable plain-text report for sharing / fallback UI.
+      aiAnalysis = aiResult?.summary
+        ? `${aiResult.summary}\n\nVerdict: ${aiResult.verdict}`
+        : null;
     } catch (err) {
-      console.error("[Compare AI] Analysis failed:", err);
+      console.error("[Compare AI] Structured analysis failed:", err);
+      // Last-resort: plain text via the ensemble.
+      try {
+        const textRes = await generateAiText(
+          "You are a neighborhood comparison analyst for 9jatruth.",
+          `Compare these two Nigerian neighborhoods in under 200 words:\nA: ${JSON.stringify(dataA)}\nB: ${JSON.stringify(dataB)}`,
+          { temperature: 0.3, maxOutputTokens: 600 }
+        );
+        aiAnalysis = textRes.text;
+        aiSource = textRes.source;
+      } catch {
+        // give up gracefully
+      }
     }
   }
 
@@ -157,7 +205,9 @@ Provide a detailed side-by-side comparison.`;
     neighborhoodB: dataB,
     metrics,
     aiAnalysis,
-    aiPowered: !!aiAnalysis,
+    aiResult,
+    aiPowered: !!(aiResult || aiAnalysis),
+    aiSource,
   });
 }
 

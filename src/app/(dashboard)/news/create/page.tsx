@@ -87,6 +87,9 @@ export default function CreateArticlePage() {
   const [aiTopic, setAiTopic] = useState("");
   const [aiTone, setAiTone] = useState("neutral");
   const [showAiPanel, setShowAiPanel] = useState(false);
+  // Advanced AI tools state
+  const [aiToolResult, setAiToolResult] = useState<any | null>(null);
+  const [aiToolPending, setAiToolPending] = useState<string | null>(null);
 
   // Geo hierarchy
   const { data: geoHierarchy } = useQuery<{ states: string[]; lgas: string[] }>({
@@ -170,6 +173,43 @@ export default function CreateArticlePage() {
       lga: lga || undefined,
       tone: aiTone,
     });
+  };
+
+  // Advanced AI tools — runs an ensemble-backed helper on the current draft.
+  const runAiTool = async (tool: string) => {
+    const content = getContent();
+    if (!content && !title) {
+      toast({ title: "Write some content first", variant: "destructive" });
+      return;
+    }
+    setAiToolPending(tool);
+    setAiToolResult(null);
+    try {
+      const res = await apiRequest("POST", "/api/news/ai-tool", {
+        tool,
+        title,
+        excerpt,
+        content,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || "AI tool failed");
+      }
+      const data = await res.json();
+      setAiToolResult({ tool, ...data });
+      // Auto-apply where it makes sense.
+      if (tool === "auto_tag" && Array.isArray(data.tags)) {
+        setTags(prev => Array.from(new Set([...prev, ...data.tags])).slice(0, 10));
+      }
+      toast({
+        title: "AI tool complete",
+        description: `Source: ${data.source === "deepseek" ? "Deepseek" : data.source === "kimi" ? "Kimi K3" : "fallback"}`,
+      });
+    } catch (err: any) {
+      toast({ title: "AI tool failed", description: err?.message || "Try again", variant: "destructive" });
+    } finally {
+      setAiToolPending(null);
+    }
   };
 
   const focusEditor = () => editorRef.current?.focus();
@@ -419,27 +459,100 @@ export default function CreateArticlePage() {
 
                 {/* Advanced AI Capabilities */}
                 <div className="pt-2 border-t space-y-2">
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Advanced AI Tools</p>
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                    Advanced AI Tools
+                    <Badge variant="outline" className="text-[8px] border-purple-500/30 text-purple-500">Deepseek + Kimi</Badge>
+                  </p>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button">
-                      <Sparkles className="h-2.5 w-2.5 text-purple-500" /> Key Points
+                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button" disabled={!!aiToolPending} onClick={() => runAiTool("key_points")}>
+                      {aiToolPending === "key_points" ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Sparkles className="h-2.5 w-2.5 text-purple-500" />} Key Points
                     </Button>
-                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button">
-                      <ShieldCheck className="h-2.5 w-2.5 text-green-500" /> Fact Check
+                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button" disabled={!!aiToolPending} onClick={() => runAiTool("fact_check")}>
+                      {aiToolPending === "fact_check" ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <ShieldCheck className="h-2.5 w-2.5 text-green-500" />} Fact Check
                     </Button>
-                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button">
-                      <TagIcon className="h-2.5 w-2.5 text-blue-500" /> Auto-Tag
+                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button" disabled={!!aiToolPending} onClick={() => runAiTool("auto_tag")}>
+                      {aiToolPending === "auto_tag" ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <TagIcon className="h-2.5 w-2.5 text-blue-500" />} Auto-Tag
                     </Button>
-                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button">
-                      <TrendingUp className="h-2.5 w-2.5 text-orange-500" /> SEO Optimize
+                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button" disabled={!!aiToolPending} onClick={() => runAiTool("seo")}>
+                      {aiToolPending === "seo" ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <TrendingUp className="h-2.5 w-2.5 text-orange-500" />} SEO Optimize
                     </Button>
-                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button">
-                      <Brain className="h-2.5 w-2.5 text-purple-500" /> Expand Content
+                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button" disabled={!!aiToolPending} onClick={() => runAiTool("expand")}>
+                      {aiToolPending === "expand" ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Brain className="h-2.5 w-2.5 text-purple-500" />} Expand Content
                     </Button>
-                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button">
-                      <Sparkles className="h-2.5 w-2.5 text-primary" /> Translate
+                    <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" type="button" disabled={!!aiToolPending} onClick={() => runAiTool("translate")}>
+                      {aiToolPending === "translate" ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Sparkles className="h-2.5 w-2.5 text-primary" />} Translate
                     </Button>
                   </div>
+
+                  {/* AI tool result panel */}
+                  {aiToolResult && (
+                    <div className="rounded-md border border-purple-500/20 bg-purple-500/5 p-2.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] uppercase tracking-wide text-purple-500 font-medium">
+                          {aiToolResult.tool.replace(/_/g, " ")} Result
+                        </p>
+                        <Badge variant="outline" className="text-[8px] capitalize">{aiToolResult.source}</Badge>
+                      </div>
+                      {aiToolResult.tool === "key_points" && Array.isArray(aiToolResult.points) && (
+                        <ul className="space-y-0.5">
+                          {aiToolResult.points.map((p: string, i: number) => (
+                            <li key={i} className="text-[10px] flex gap-1.5"><span className="text-purple-500 shrink-0">•</span><span>{p}</span></li>
+                          ))}
+                        </ul>
+                      )}
+                      {aiToolResult.tool === "fact_check" && Array.isArray(aiToolResult.claims) && (
+                        <ul className="space-y-1">
+                          {aiToolResult.claims.map((c: any, i: number) => (
+                            <li key={i} className="text-[10px] rounded bg-background/60 p-1.5">
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <Badge variant="outline" className={`text-[8px] capitalize ${c.verdict === "verified" ? "text-green-500" : c.verdict === "likely_false" ? "text-red-500" : "text-amber-500"}`}>{c.verdict || "unverified"}</Badge>
+                              </div>
+                              <p className="font-medium">{c.claim}</p>
+                              {c.note && <p className="text-muted-foreground">{c.note}</p>}
+                            </li>
+                          ))}
+                          {aiToolResult.claims.length === 0 && <li className="text-[10px] text-muted-foreground">No verifiable claims found.</li>}
+                        </ul>
+                      )}
+                      {aiToolResult.tool === "auto_tag" && Array.isArray(aiToolResult.tags) && (
+                        <div className="flex flex-wrap gap-1">
+                          {aiToolResult.tags.map((t: string) => (
+                            <Badge key={t} variant="outline" className="text-[9px]">#{t}</Badge>
+                          ))}
+                        </div>
+                      )}
+                      {aiToolResult.tool === "seo" && aiToolResult.seo && (
+                        <div className="space-y-1 text-[10px]">
+                          {aiToolResult.seo.metaTitle && <p><span className="text-muted-foreground">Title:</span> {aiToolResult.seo.metaTitle}</p>}
+                          {aiToolResult.seo.metaDescription && <p><span className="text-muted-foreground">Desc:</span> {aiToolResult.seo.metaDescription}</p>}
+                          {aiToolResult.seo.slug && <p><span className="text-muted-foreground">Slug:</span> {aiToolResult.seo.slug}</p>}
+                          {Array.isArray(aiToolResult.seo.keywords) && aiToolResult.seo.keywords.length > 0 && (
+                            <div className="flex flex-wrap gap-1 pt-0.5">
+                              {aiToolResult.seo.keywords.map((k: string) => <Badge key={k} variant="outline" className="text-[8px]">{k}</Badge>)}
+                            </div>
+                          )}
+                          {(aiToolResult.seo.metaDescription || aiToolResult.seo.slug) && (
+                            <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => { if (aiToolResult.seo.metaDescription) setExcerpt(aiToolResult.seo.metaDescription); toast({ title: "SEO applied to excerpt" }); }}>
+                              Apply to excerpt
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                      {(aiToolResult.tool === "expand" || aiToolResult.tool === "translate") && aiToolResult.content && (
+                        <div className="space-y-1.5">
+                          <div className="rounded bg-background/60 p-1.5 text-[10px] prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: aiToolResult.content }} />
+                          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => {
+                            if (editorRef.current) {
+                              editorRef.current.innerHTML += aiToolResult.content;
+                              toast({ title: aiToolResult.tool === "expand" ? "Content expanded" : `Translated to ${aiToolResult.language || "selected language"}` });
+                            }
+                          }}>
+                            {aiToolResult.tool === "expand" ? "Append to article" : "Replace article with translation"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

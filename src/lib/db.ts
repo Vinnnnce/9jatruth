@@ -26,7 +26,7 @@ export function getDb(): NeonQueryFunction<true, true> {
  */
 let initialized = false;
 
-export const SCHEMA_VERSION = "2026-08-22-v1";
+export const SCHEMA_VERSION = "2026-08-22-v2";
 
 export async function ensureDbInitialized() {
   if (initialized) return;
@@ -1177,6 +1177,45 @@ export async function ensureDbInitialized() {
     timestamp BIGINT NOT NULL
   )`);
   _q.push(sql`CREATE INDEX IF NOT EXISTS idx_telemetry_identity ON request_telemetry(identity_hash, timestamp DESC)`);
+
+  // ─── NEW: Site Settings (key/value store for super-admin dashboard controls) ───
+  // Powers "Save Rules" / "AI Optimize" reward rules, feature toggles, and any
+  // other setting the super admin dashboard needs to persist and apply live
+  // across the website (no redeploy required — routes read this at request time).
+  _q.push(sql`CREATE TABLE IF NOT EXISTS site_settings (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL,
+    category TEXT NOT NULL DEFAULT 'general',
+    updated_by TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+
+  // ─── NEW: Verification Requests (business/org/user/news verification badges) ───
+  _q.push(sql`CREATE TABLE IF NOT EXISTS verification_requests (
+    id SERIAL PRIMARY KEY,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    entity_name TEXT NOT NULL,
+    requested_by TEXT,
+    contact_email TEXT,
+    reason TEXT,
+    evidence_url TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    badge_type TEXT NOT NULL DEFAULT 'verified',
+    reviewed_by TEXT,
+    reviewed_at TIMESTAMPTZ,
+    admin_notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_verification_requests_status ON verification_requests(status)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_verification_requests_entity ON verification_requests(entity_type, entity_id)`);
+
+  // Verification badge columns on the entities that can be verified.
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS verification_badge TEXT`);
+  _q.push(sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS verification_badge TEXT`);
+
   await sql.transaction(_q as any);
 
   // Seed geo hierarchy reference data (Nigeria regions/states only — no demo posts)
@@ -1277,6 +1316,26 @@ export async function ensureDbInitialized() {
     for (const c of cats) {
       await sql`INSERT INTO reward_categories (name, description, icon) VALUES (${c.name}, ${c.description}, ${c.icon})`;
     }
+  }
+
+  // Seed default site settings (reward credit rules + site controls) so the
+  // super admin dashboard's "Save Rules" form has values to load on first use.
+  try {
+    const DEFAULT_REWARD_RULES = {
+      truthSubmission: 20,
+      corroboration: 10,
+      aiVerified: 15,
+      dailyStreak: 5,
+      disputedPenalty: -10,
+    };
+    await sql`INSERT INTO site_settings (key, value, category)
+      VALUES ('reward_rules', ${JSON.stringify(DEFAULT_REWARD_RULES)}::jsonb, 'rewards')
+      ON CONFLICT (key) DO NOTHING`;
+    await sql`INSERT INTO site_settings (key, value, category)
+      VALUES ('site_controls', ${JSON.stringify({ maintenanceMode: false, registrationOpen: true, newsPublishingOpen: true, bannerText: '', bannerActive: false })}::jsonb, 'site')
+      ON CONFLICT (key) DO NOTHING`;
+  } catch (settingsErr) {
+    console.error("[DB Init] Site settings seed error (non-fatal):", settingsErr);
   }
 
 

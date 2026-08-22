@@ -275,9 +275,11 @@ function AICompareSection({ neighborhoodA, neighborhoodB, nameA, nameB }: {
   neighborhoodA: number; neighborhoodB: number; nameA: string; nameB: string;
 }) {
   const [analysis, setAnalysis] = useState<string | null>(null);
+  const [result, setResult] = useState<any | null>(null);
   const [metrics, setMetrics] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<string | null>(null);
 
   const handleAnalyze = async () => {
     setLoading(true);
@@ -290,13 +292,19 @@ function AICompareSection({ neighborhoodA, neighborhoodB, nameA, nameB }: {
       if (!res.ok) throw new Error("Analysis failed");
       const data = await res.json();
       setAnalysis(data.aiAnalysis);
+      setResult(data.aiResult ?? null);
       setMetrics(data.metrics);
+      setSource(data.aiSource ?? null);
     } catch {
       setError("Could not run AI comparison.");
     } finally {
       setLoading(false);
     }
   };
+
+  const winnerLabel = result?.winner === "a" ? nameA : result?.winner === "b" ? nameB : "Tie";
+  const riskColor = (r: number) =>
+    r >= 70 ? "text-red-500" : r >= 40 ? "text-amber-500" : "text-green-500";
 
   return (
     <Card className="border-border border-purple-500/20">
@@ -305,19 +313,19 @@ function AICompareSection({ neighborhoodA, neighborhoodB, nameA, nameB }: {
           <Sparkles className="h-4 w-4 text-purple-500" />
           AI Side-by-Side Comparison
           <Badge variant="outline" className="text-[8px] ml-1 border-purple-500/30 text-purple-500">
-            Kimi K3
+            {source ? `Deepseek + Kimi` : "Kimi K3"}
           </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {!analysis && !loading && !error && (
+        {!analysis && !result && !loading && !error && (
           <div className="text-center py-4">
             <p className="text-xs text-muted-foreground mb-3">
               Run AI analysis to compare {nameA} vs {nameB} with live conditions, risk assessment, and recommendations.
             </p>
             <Button size="sm" onClick={handleAnalyze} className="gap-1" data-testid="btn-ai-compare">
               <Sparkles className="h-3.5 w-3.5" />
-              Analyze with AI
+              Compare with AI
             </Button>
           </div>
         )}
@@ -346,28 +354,72 @@ function AICompareSection({ neighborhoodA, neighborhoodB, nameA, nameB }: {
           </div>
         )}
 
-        {analysis && (
+        {result && (
           <div className="space-y-3">
-            <div className="rounded-md bg-purple-500/5 border border-purple-500/20 p-3">
-              <p className="text-[10px] uppercase tracking-wide text-purple-500 font-medium mb-1.5">AI Analysis</p>
-              <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                {analysis}
-              </p>
+            {/* Verdict + winner badge */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="default" className="text-[10px] gap-1">
+                <Shield className="h-3 w-3" /> Winner: {winnerLabel}
+              </Badge>
+              {typeof result.confidence === "number" && (
+                <Badge variant="outline" className="text-[9px]">{result.confidence}% confidence</Badge>
+              )}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-              <div className="rounded-md bg-muted/30 p-2">
-                <p className="text-[9px] uppercase text-muted-foreground">Risk Assessment</p>
-                <p className="text-[10px] mt-0.5">AI-powered risk evaluation based on safety, infrastructure, and economic indicators.</p>
+
+            {/* Risk gauges */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-md bg-muted/30 p-2 space-y-1">
+                <p className="text-[9px] uppercase text-muted-foreground">{nameA} Risk</p>
+                <div className="flex items-center gap-2">
+                  <Progress value={result.riskA ?? 0} className="h-1.5" />
+                  <span className={`text-[10px] font-mono ${riskColor(result.riskA ?? 0)}`}>{result.riskA ?? 0}</span>
+                </div>
               </div>
-              <div className="rounded-md bg-muted/30 p-2">
-                <p className="text-[9px] uppercase text-muted-foreground">Smart Recommendations</p>
-                <p className="text-[10px] mt-0.5">Context-aware suggestions for residents, businesses, and visitors.</p>
-              </div>
-              <div className="rounded-md bg-muted/30 p-2">
-                <p className="text-[9px] uppercase text-muted-foreground">Trend Forecasting</p>
-                <p className="text-[10px] mt-0.5">Predictive analysis of future conditions based on historical patterns.</p>
+              <div className="rounded-md bg-muted/30 p-2 space-y-1">
+                <p className="text-[9px] uppercase text-muted-foreground">{nameB} Risk</p>
+                <div className="flex items-center gap-2">
+                  <Progress value={result.riskB ?? 0} className="h-1.5" />
+                  <span className={`text-[10px] font-mono ${riskColor(result.riskB ?? 0)}`}>{result.riskB ?? 0}</span>
+                </div>
               </div>
             </div>
+
+            {/* Category advantage table */}
+            {Array.isArray(result.categories) && result.categories.length > 0 && (
+              <div className="rounded-md border border-border overflow-hidden">
+                {result.categories.map((c: any, i: number) => (
+                  <div key={i} className="grid grid-cols-3 text-[10px] border-b border-border last:border-0">
+                    <div className="p-1.5 bg-muted/30 font-medium">{c.name}</div>
+                    <div className={`p-1.5 ${c.advantage === "a" ? "text-green-500 font-medium" : ""}`}>{c.a}</div>
+                    <div className={`p-1.5 ${c.advantage === "b" ? "text-green-500 font-medium" : ""}`}>{c.b}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Recommendations */}
+            {Array.isArray(result.recommendations) && result.recommendations.length > 0 && (
+              <div className="rounded-md bg-muted/30 p-2 space-y-1">
+                <p className="text-[9px] uppercase text-muted-foreground">AI Recommendations</p>
+                <ul className="space-y-0.5">
+                  {result.recommendations.slice(0, 5).map((r: string, i: number) => (
+                    <li key={i} className="text-[10px] flex gap-1.5">
+                      <span className="text-purple-500 shrink-0">•</span>
+                      <span>{r}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {analysis && !result && (
+          <div className="rounded-md bg-purple-500/5 border border-purple-500/20 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-purple-500 font-medium mb-1.5">AI Analysis</p>
+            <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
+              {analysis}
+            </p>
           </div>
         )}
       </CardContent>

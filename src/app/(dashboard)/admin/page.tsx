@@ -97,7 +97,11 @@ import {
   Plus,
   ClipboardList,
   Save,
+  Sliders,
 } from "lucide-react";
+
+import { Switch } from "@/components/ui/switch";
+import { CardDescription } from "@/components/ui/card";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -374,7 +378,12 @@ export default function AdminDashboard() {
   const [rewardStatusFilter, setRewardStatusFilter] = useState<string>("all");
 
   // Profile — super admin gate
-  const { data: profile, isLoading: profileLoading, isError: profileError } = useQuery<UserProfile>({
+  const {
+    data: profile,
+    isLoading: profileLoading,
+    isError: profileError,
+    refetch: refetchProfile,
+  } = useQuery<UserProfile>({
     queryKey: ["/api/user/profile"],
     retry: 1,
   });
@@ -554,6 +563,160 @@ export default function AdminDashboard() {
   });
 
   // -----------------------------------------------------------------------
+  // Site settings: reward credit rules + site controls (Save Rules / AI
+  // Optimize / responsive site-control panel).
+  // -----------------------------------------------------------------------
+
+  type RewardRules = {
+    truthSubmission: number;
+    corroboration: number;
+    aiVerified: number;
+    dailyStreak: number;
+    disputedPenalty: number;
+  };
+  type SiteControls = {
+    maintenanceMode: boolean;
+    registrationOpen: boolean;
+    newsPublishingOpen: boolean;
+    bannerText: string;
+    bannerActive: boolean;
+  };
+
+  const {
+    data: siteSettings,
+    isLoading: siteSettingsLoading,
+  } = useQuery<{ rewardRules: RewardRules; siteControls: SiteControls; aiConfigured: boolean }>({
+    queryKey: ["/api/admin/settings"],
+    enabled: isSuperAdmin,
+    retry: 1,
+  });
+
+  const [editableRules, setEditableRules] = useState<RewardRules | null>(null);
+  const [editableControls, setEditableControls] = useState<SiteControls | null>(null);
+  const [aiSuggestion, setAiSuggestion] = useState<{ proposedRules: RewardRules; rationale: string; source: string } | null>(null);
+
+  // Sync server data into local editable state once loaded (only the first
+  // time, so in-progress edits aren't clobbered by background refetches).
+  useEffect(() => {
+    if (siteSettings?.rewardRules && !editableRules) {
+      setEditableRules(siteSettings.rewardRules);
+    }
+    if (siteSettings?.siteControls && !editableControls) {
+      setEditableControls(siteSettings.siteControls);
+    }
+  }, [siteSettings, editableRules, editableControls]);
+
+  const saveSettingsMutation = useMutation({
+    mutationFn: async (payload: { rewardRules?: RewardRules; siteControls?: SiteControls }) => {
+      const res = await apiRequest("PUT", "/api/admin/settings", payload);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] });
+      if (data?.rewardRules) setEditableRules(data.rewardRules);
+      if (data?.siteControls) setEditableControls(data.siteControls);
+      toast({ title: "Settings saved", description: "Your changes are now live across the site." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const aiOptimizeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/settings", {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setAiSuggestion({ proposedRules: data.proposedRules, rationale: data.rationale, source: data.source });
+      toast({
+        title: "AI suggestion ready",
+        description: data.source === "fallback" ? "AI providers unavailable — showing current values." : `Optimized by ${data.source}.`,
+      });
+    },
+    onError: (err: Error) => {
+      toast({ title: "AI Optimize failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  function handleSaveRules() {
+    if (!editableRules) return;
+    saveSettingsMutation.mutate({ rewardRules: editableRules });
+  }
+
+  function handleApplyAiSuggestion() {
+    if (!aiSuggestion) return;
+    setEditableRules(aiSuggestion.proposedRules);
+    saveSettingsMutation.mutate({ rewardRules: aiSuggestion.proposedRules });
+    setAiSuggestion(null);
+  }
+
+  function handleSaveControls() {
+    if (!editableControls) return;
+    saveSettingsMutation.mutate({ siteControls: editableControls });
+  }
+
+  // -----------------------------------------------------------------------
+  // Verification requests (business / organization / user / news)
+  // -----------------------------------------------------------------------
+
+  const [verificationStatusFilter, setVerificationStatusFilter] = useState<string>("pending");
+
+  type VerificationRequest = {
+    id: number;
+    entity_type: string;
+    entity_id: string;
+    entity_name: string;
+    requested_by?: string | null;
+    contact_email?: string | null;
+    reason?: string | null;
+    evidence_url?: string | null;
+    status: string;
+    badge_type: string;
+    created_at: string;
+  };
+
+  const verificationsQueryKey = useMemo(() => {
+    const params = new URLSearchParams();
+    if (verificationStatusFilter && verificationStatusFilter !== "all") {
+      params.set("status", verificationStatusFilter);
+    }
+    const qs = params.toString();
+    return qs ? `/api/admin/verifications?${qs}` : "/api/admin/verifications";
+  }, [verificationStatusFilter]);
+
+  const {
+    data: verificationsData,
+    isLoading: verificationsLoading,
+    isError: verificationsError,
+  } = useQuery<{ requests: VerificationRequest[]; stats: { total: number; pending: number } }>({
+    queryKey: [verificationsQueryKey],
+    enabled: isSuperAdmin,
+    retry: 1,
+  });
+
+  const verificationRequests = verificationsData?.requests ?? [];
+
+  const reviewVerificationMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: "approved" | "rejected" }) => {
+      const res = await apiRequest("PATCH", `/api/admin/verifications?id=${id}`, { status });
+      return res.json();
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/verifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({
+        title: `Verification ${vars.status}`,
+        description: `Request #${vars.id} has been ${vars.status}.`,
+      });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // -----------------------------------------------------------------------
   // Derived / filtered data
   // -----------------------------------------------------------------------
 
@@ -650,6 +813,30 @@ export default function AdminDashboard() {
     );
   }
 
+  // Show a recoverable error state BEFORE the access-denied gate. Previously
+  // a transient /api/user/profile failure (e.g. a cold serverless DB init that
+  // timed out) fell through to the "Access Denied" card below — which made the
+  // whole dashboard appear to vanish intermittently. Now we surface a retry.
+  if (profileError) {
+    return (
+      <div className="p-4 md:p-6 max-w-2xl mx-auto flex items-center justify-center min-h-[60vh]">
+        <Card className="border-amber-500/30 w-full" data-testid="card-profile-error">
+          <CardContent className="p-8 text-center space-y-3">
+            <AlertCircle className="h-10 w-10 mx-auto text-amber-500" />
+            <h1 className="text-xl font-display font-700">Couldn’t load admin session</h1>
+            <p className="text-sm text-muted-foreground">
+              Your admin profile couldn’t be verified right now. This is usually a
+              brief connection hiccup — retry to continue.
+            </p>
+            <Button onClick={() => refetchProfile()} variant="default" className="gap-1">
+              <Loader2 className="h-4 w-4" /> Retry loading dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!isSuperAdmin || dashboardType !== "admin") {
     return (
       <div className="p-4 md:p-6 max-w-2xl mx-auto flex items-center justify-center min-h-[60vh]">
@@ -672,22 +859,6 @@ export default function AdminDashboard() {
   // Render
   // -----------------------------------------------------------------------
 
-  if (profileError) {
-    return (
-      <div className="p-6 max-w-7xl mx-auto">
-        <div className="rounded-xl p-6 space-y-3 bg-card border border-red-500/30">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-red-500" />
-            <p className="text-sm font-medium">Failed to load admin profile</p>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Could not verify admin access. Please refresh the page or try again later.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <ErrorBoundary>
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6" data-testid="page-admin-dashboard">
@@ -708,7 +879,7 @@ export default function AdminDashboard() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList data-testid="tabs-admin" className="flex flex-wrap h-auto">
+        <TabsList data-testid="tabs-admin" className="flex flex-wrap h-auto gap-1 overflow-x-auto pb-1">
           <TabsTrigger value="overview" data-testid="tab-overview">
             Overview
           </TabsTrigger>
@@ -729,6 +900,17 @@ export default function AdminDashboard() {
           </TabsTrigger>
           <TabsTrigger value="settings" data-testid="tab-settings">
             Settings
+          </TabsTrigger>
+          <TabsTrigger value="site-control" data-testid="tab-site-control">
+            Site Control
+          </TabsTrigger>
+          <TabsTrigger value="verifications" data-testid="tab-verifications">
+            Verification
+            {(verificationsData?.stats?.pending ?? 0) > 0 && (
+              <Badge variant="destructive" className="h-4 px-1 text-[9px]">
+                {verificationsData?.stats?.pending}
+              </Badge>
+            )}
           </TabsTrigger>
           <TabsTrigger value="weekly-review" data-testid="tab-weekly-review">
             Weekly Review
@@ -1608,53 +1790,105 @@ export default function AdminDashboard() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-medium">Credit Rules</p>
-                  <Badge variant="outline" className="text-[9px] gap-0.5">
-                    <Sparkles className="h-2.5 w-2.5 text-purple-500" /> AI-Optimized
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] gap-0.5"
+                    title={siteSettingsLoading ? "Loading..." : "Last saved value is live across the site"}
+                  >
+                    <Sparkles className="h-2.5 w-2.5 text-purple-500" />
+                    {siteSettingsLoading ? "Loading" : "Live"}
                   </Badge>
                 </div>
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
-                    <span>Truth submission</span>
-                    <div className="flex items-center gap-2">
-                      <Input type="number" defaultValue={20} className="h-6 w-16 text-xs" />
-                      <Badge variant="secondary">credits</Badge>
-                    </div>
+                {siteSettingsLoading ? (
+                  <div className="space-y-1">
+                    {[...Array(5)].map((_, i) => (
+                      <Skeleton key={i} className="h-8 w-full" />
+                    ))}
                   </div>
-                  <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
-                    <span>Corroboration received</span>
-                    <div className="flex items-center gap-2">
-                      <Input type="number" defaultValue={10} className="h-6 w-16 text-xs" />
-                      <Badge variant="secondary">credits</Badge>
-                    </div>
+                ) : editableRules ? (
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    {([
+                      ["Truth submission", "truthSubmission"],
+                      ["Corroboration received", "corroboration"],
+                      ["Verified by AI as authentic", "aiVerified"],
+                      ["Daily streak bonus", "dailyStreak"],
+                      ["Disputed truth penalty", "disputedPenalty"],
+                    ] as const).map(([label, key]) => (
+                      <div key={key} className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
+                        <span>{label}</span>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            value={String(editableRules[key])}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10);
+                              setEditableRules((prev) =>
+                                prev ? { ...prev, [key]: Number.isFinite(val) ? val : 0 } : prev
+                              );
+                            }}
+                            className="h-6 w-16 text-xs"
+                          />
+                          <Badge variant={key === "disputedPenalty" ? "destructive" : "secondary"}>
+                            credits
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
-                    <span>Verified by AI as authentic</span>
-                    <div className="flex items-center gap-2">
-                      <Input type="number" defaultValue={15} className="h-6 w-16 text-xs" />
-                      <Badge variant="secondary">credits</Badge>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground">Could not load rules.</p>
+                )}
+
+                {/* AI suggestion banner */}
+                {aiSuggestion && (
+                  <div className="rounded-md border border-purple-500/30 bg-purple-500/5 p-2.5 space-y-1.5">
+                    <div className="flex items-center gap-1">
+                      <Sparkles className="h-3 w-3 text-purple-500" />
+                      <span className="text-[10px] uppercase tracking-wide text-purple-500 font-medium">
+                        AI Suggestion ({aiSuggestion.source})
+                      </span>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
-                    <span>Daily streak bonus</span>
-                    <div className="flex items-center gap-2">
-                      <Input type="number" defaultValue={5} className="h-6 w-16 text-xs" />
-                      <Badge variant="secondary">credits</Badge>
+                    <p className="text-[10px] text-muted-foreground">{aiSuggestion.rationale}</p>
+                    <div className="flex flex-wrap gap-1 text-[9px]">
+                      {(Object.entries(aiSuggestion.proposedRules) as [string, number][]).map(
+                        ([k, v]) => (
+                          <Badge key={k} variant="outline" className="text-[9px]">
+                            {k}: {v}
+                          </Badge>
+                        )
+                      )}
                     </div>
+                    <Button
+                      size="sm"
+                      className="h-6 text-xs gap-1"
+                      onClick={handleApplyAiSuggestion}
+                      disabled={saveSettingsMutation.isPending}
+                    >
+                      Apply & Save
+                    </Button>
                   </div>
-                  <div className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2">
-                    <span>Disputed truth penalty</span>
-                    <div className="flex items-center gap-2">
-                      <Input type="number" defaultValue={-10} className="h-6 w-16 text-xs" />
-                      <Badge variant="destructive">credits</Badge>
-                    </div>
-                  </div>
-                </div>
+                )}
+
                 <div className="flex items-center gap-2 pt-2">
-                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
-                    <Save className="h-3 w-3" /> Save Rules
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="h-7 text-xs gap-1"
+                    onClick={handleSaveRules}
+                    disabled={saveSettingsMutation.isPending || !editableRules}
+                  >
+                    <Save className="h-3 w-3" />
+                    {saveSettingsMutation.isPending ? "Saving..." : "Save Rules"}
                   </Button>
-                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
-                    <Sparkles className="h-3 w-3 text-purple-500" /> AI Optimize
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => aiOptimizeMutation.mutate()}
+                    disabled={aiOptimizeMutation.isPending}
+                  >
+                    <Sparkles className="h-3 w-3 text-purple-500" />
+                    {aiOptimizeMutation.isPending ? "Optimizing..." : "AI Optimize"}
                   </Button>
                 </div>
               </div>
@@ -1965,6 +2199,237 @@ export default function AdminDashboard() {
         </TabsContent>
         <TabsContent value="security" className="space-y-4">
           <AdminSecurity />
+        </TabsContent>
+
+        {/* --------------------------------------------------------------- */}
+        {/* Site Control — control website-wide state from the dashboard     */}
+        {/* --------------------------------------------------------------- */}
+        <TabsContent value="site-control" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-display flex items-center gap-2">
+                <Sliders className="h-4 w-4 text-primary" /> Site Control
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Toggle platform-wide state and broadcast a banner to users in real time.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {siteSettingsLoading ? (
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : editableControls ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between rounded-md border border-border p-3">
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium">Maintenance Mode</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Temporarily take the site offline for non-admins.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={editableControls.maintenanceMode}
+                      onCheckedChange={(c) =>
+                        setEditableControls((p) => (p ? { ...p, maintenanceMode: c } : p))
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border border-border p-3">
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium">New User Registration</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Allow new account signups.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={editableControls.registrationOpen}
+                      onCheckedChange={(c) =>
+                        setEditableControls((p) => (p ? { ...p, registrationOpen: c } : p))
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border border-border p-3">
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium">News Publishing</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Allow contributors to submit news articles.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={editableControls.newsPublishingOpen}
+                      onCheckedChange={(c) =>
+                        setEditableControls((p) => (p ? { ...p, newsPublishingOpen: c } : p))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium">Announcement Banner</p>
+                      <Switch
+                        checked={editableControls.bannerActive}
+                        onCheckedChange={(c) =>
+                          setEditableControls((p) => (p ? { ...p, bannerActive: c } : p))
+                        }
+                      />
+                    </div>
+                    <Input
+                      value={editableControls.bannerText}
+                      onChange={(e) =>
+                        setEditableControls((p) => (p ? { ...p, bannerText: e.target.value } : p))
+                      }
+                      placeholder="Banner message shown site-wide (e.g. Scheduled maintenance Saturday 2-4am)"
+                      className="text-xs"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      onClick={handleSaveControls}
+                      disabled={saveSettingsMutation.isPending}
+                    >
+                      {saveSettingsMutation.isPending ? "Saving..." : "Save Controls"}
+                    </Button>
+                    {editableControls.maintenanceMode && (
+                      <Badge variant="destructive" className="text-[9px]">
+                        Site is in maintenance mode
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <EmptyState icon={Sliders} message="Could not load site controls." />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* --------------------------------------------------------------- */}
+        {/* Verification — approve/reject verification requests             */}
+        {/* --------------------------------------------------------------- */}
+        <TabsContent value="verifications" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-display flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-primary" /> Verification Requests
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Review and approve verification badges for businesses, organizations, users, and news outlets.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Select
+                value={verificationStatusFilter}
+                onValueChange={setVerificationStatusFilter}
+              >
+                <SelectTrigger className="h-8 text-xs w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending" className="text-xs">Pending</SelectItem>
+                  <SelectItem value="approved" className="text-xs">Approved</SelectItem>
+                  <SelectItem value="rejected" className="text-xs">Rejected</SelectItem>
+                  <SelectItem value="all" className="text-xs">All</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {verificationsLoading ? (
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, i) => (
+                    <Skeleton key={i} className="h-20 w-full" />
+                  ))}
+                </div>
+              ) : verificationsError ? (
+                <div className="rounded-md bg-destructive/5 border border-destructive/20 p-3 text-xs text-destructive">
+                  Could not load verification requests. Check that the database migration ran.
+                </div>
+              ) : verificationRequests.length === 0 ? (
+                <EmptyState icon={ShieldCheck} message="No verification requests in this status." />
+              ) : (
+                <div className="space-y-2">
+                  {verificationRequests.map((vr) => (
+                    <div
+                      key={vr.id}
+                      className="rounded-md border border-border p-3 space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Badge variant="outline" className="text-[9px] capitalize">
+                            {vr.entity_type}
+                          </Badge>
+                          <span className="text-xs font-medium truncate">{vr.entity_name}</span>
+                        </div>
+                        <Badge
+                          variant={
+                            vr.status === "approved"
+                              ? "default"
+                              : vr.status === "rejected"
+                              ? "destructive"
+                              : "secondary"
+                          }
+                          className="text-[9px] capitalize"
+                        >
+                          {vr.status}
+                        </Badge>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        Requested by {vr.requested_by || "—"}
+                        {vr.contact_email ? ` · ${vr.contact_email}` : ""}
+                      </p>
+                      {vr.reason && (
+                        <p className="text-[10px] text-muted-foreground line-clamp-2">
+                          {vr.reason}
+                        </p>
+                      )}
+                      {vr.evidence_url && (
+                        <a
+                          href={vr.evidence_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-primary underline"
+                        >
+                          View evidence
+                        </a>
+                      )}
+                      {vr.status === "pending" && (
+                        <div className="flex gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs"
+                            disabled={reviewVerificationMutation.isPending}
+                            onClick={() =>
+                              reviewVerificationMutation.mutate({
+                                id: vr.id,
+                                status: "approved",
+                              })
+                            }
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            disabled={reviewVerificationMutation.isPending}
+                            onClick={() =>
+                              reviewVerificationMutation.mutate({
+                                id: vr.id,
+                                status: "rejected",
+                              })
+                            }
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
