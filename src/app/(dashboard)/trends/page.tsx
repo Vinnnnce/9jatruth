@@ -43,7 +43,17 @@ export default function Trends() {
     queryKey: ["/api/trends"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/trends");
-      return res.json();
+      const d = await res.json();
+      // Normalize: /api/trends returns {categoryTrends, neighborhoodTrends,
+      // timeSeriesData, topNeighborhoods} on success, but the error fallback
+      // returns {hourlyData} instead of timeSeriesData — coerce all to arrays
+      // so .map()/.slice() never throws on a non-array.
+      return {
+        categoryTrends: Array.isArray(d?.categoryTrends) ? d.categoryTrends : [],
+        neighborhoodTrends: Array.isArray(d?.neighborhoodTrends) ? d.neighborhoodTrends : [],
+        timeSeriesData: Array.isArray(d?.timeSeriesData) ? d.timeSeriesData : (Array.isArray(d?.hourlyData) ? d.hourlyData : []),
+        topNeighborhoods: Array.isArray(d?.topNeighborhoods) ? d.topNeighborhoods : [],
+      };
     },
     retry: 1,
   });
