@@ -113,7 +113,22 @@ const isUserApiRoute = createRouteMatcher([
 
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
 const isOrgRoute = createRouteMatcher(["/org(.*)"]);
-const isUserRoute = createRouteMatcher(["/user(.*)", "/security(.*)"]);
+// User-only pages — require a signed-in user. Truth/news writes are also
+// auth-checked at the route handler, so /submit and /news/create must be
+// protected here to keep the creation flows behind authentication.
+const isUserRoute = createRouteMatcher([
+  "/user(.*)",
+  "/security(.*)",
+  "/account(.*)",
+  "/profile(.*)",
+  "/advanced-settings(.*)",
+  "/settings(.*)",
+  "/dashboard(.*)",
+  "/submit(.*)",
+  "/news/create(.*)",
+  "/activity(.*)",
+  "/rewards(.*)",
+]);
 
 // When Clerk is not configured, use a pass-through middleware
 const passThrough = () => NextResponse.next();
