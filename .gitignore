@@ -42,3 +42,4 @@ data.db-shm
 .idea
 public/uploads/*
 !public/uploads/.gitkeep
+.env.vercel

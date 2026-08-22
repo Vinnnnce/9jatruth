@@ -26,9 +26,26 @@ export function getDb(): NeonQueryFunction<true, true> {
  */
 let initialized = false;
 
+export const SCHEMA_VERSION = "2026-08-22-v1";
+
 export async function ensureDbInitialized() {
   if (initialized) return;
   const sql = getDb();
+
+  // Fast path: if the schema is already at the current version, skip ALL
+  // initialization (DDL + seeding). This makes cold serverless starts a
+  // single round-trip instead of 100s of sequential queries that exceed
+  // Vercel's function timeout and cause 504s across every API route.
+  try {
+    const v = (await sql`SELECT version FROM schema_migrations WHERE version = ${SCHEMA_VERSION} LIMIT 1`) as any;
+    if (v && v.length > 0) {
+      initialized = true;
+      return;
+    }
+  } catch {
+    // schema_migrations table doesn't exist yet — fall through to full init.
+  }
+
   // Batch ALL schema DDL into a single HTTP round-trip to Neon.
   // 80+ sequential CREATE/ALTER queries on a cold serverless function exceed
   // Vercel's 10s timeout -> 504/500 on /api/health & /api/waitlist.
@@ -1260,7 +1277,10 @@ export async function ensureDbInitialized() {
 
   try {
     const { seedEmergencyContacts } = await import("@/lib/emergency-agencies-seed");
-    await seedEmergencyContacts(sql);
+    const ecCount = (await sql`SELECT COUNT(*) as count FROM emergency_contacts`) as any;
+    if ((ecCount as any)[0].count === 0) {
+      await seedEmergencyContacts(sql);
+    }
   } catch (seedErr) {
     console.error("[DB Init] Emergency contacts seed error (non-fatal):", seedErr);
   }
@@ -1279,6 +1299,14 @@ export async function ensureDbInitialized() {
 
   } catch (err) {
     console.error('[DB Init] Non-fatal error during initialization (continuing):', err);
+  }
+
+  // Mark the schema version so future cold starts skip the full init.
+  try {
+    await sql`CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT NOW())`;
+    await sql`INSERT INTO schema_migrations (version) VALUES (${SCHEMA_VERSION}) ON CONFLICT (version) DO UPDATE SET version = EXCLUDED.version`;
+  } catch {
+    // non-fatal — the next cold start will retry the full init.
   }
 
   initialized = true;
