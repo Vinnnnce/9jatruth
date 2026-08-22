@@ -26,7 +26,7 @@ export function getDb(): NeonQueryFunction<true, true> {
  */
 let initialized = false;
 
-export const SCHEMA_VERSION = "2026-08-22-v2";
+export const SCHEMA_VERSION = "2026-08-22-v3";
 
 export async function ensureDbInitialized() {
   if (initialized) return;

@@ -11,6 +11,7 @@ import { z } from "zod";
  * POST /api/politics/parties        → super-admin create/update a party
  */
 export async function GET() {
+  try {
   await ensureDbInitialized();
   const sql = getDb();
   let rows = (await sql`SELECT * FROM political_parties ORDER BY acronym`) as unknown as any[];
@@ -31,6 +32,10 @@ export async function GET() {
     }
   }
   return Response.json({ parties: rows });
+  } catch (err: any) {
+    console.error("[politics/parties] GET failed:", err);
+    return Response.json({ message: err?.message || "Internal error", stack: err?.stack }, { status: 500 });
+  }
 }
 
 const partySchema = z.object({
