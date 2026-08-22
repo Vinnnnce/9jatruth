@@ -101,6 +101,12 @@ export async function GET(request: Request) {
       })),
       grouped,
       total: rows.length,
+    }, {
+      headers: {
+        // Agency contacts change rarely — cache at the edge for 5 min and serve
+        // stale content for up to a day while revalidating, for faster loads.
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=86400",
+      },
     });
   } catch (err) {
     console.error("[api/emergency-contacts] Error:", err);
