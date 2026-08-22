@@ -29,7 +29,7 @@ export default function PoliticsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [year, setYear] = useState("2023");
-  const [selectedState, setSelectedState] = useState("abia");
+  const [selectedState, setSelectedState] = useState("");
   const [factClaim, setFactClaim] = useState("");
 
   const parties = useQuery({
@@ -42,7 +42,7 @@ export default function PoliticsPage() {
   });
   const results = useQuery({
     queryKey: ["/api/politics/nigeria2?resource=state-results", year, selectedState],
-    queryFn: () => apiRequest("GET", `/api/politics/nigeria2?resource=state-results&year=${year}&state=${selectedState}`).then((r) => r.json()),
+    queryFn: () => apiRequest("GET", `/api/politics/nigeria2?resource=state-results&year=${year}&geo_id=${encodeURIComponent(selectedState)}`).then((r) => r.json()),
     enabled: !!selectedState,
   });
   const events = useQuery({
@@ -136,10 +136,10 @@ export default function PoliticsPage() {
                 <div>
                   <Label className="text-xs">State</Label>
                   <Select value={selectedState} onValueChange={setSelectedState}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Select state" /></SelectTrigger>
                     <SelectContent className="max-h-60">
                       {statesData.map((s: any) => (
-                        <SelectItem key={s.geo_id} value={s.name.toLowerCase().replace(/\s+/g, "-")}>{s.name}</SelectItem>
+                        <SelectItem key={s.geo_id} value={s.geo_id}>{s.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
