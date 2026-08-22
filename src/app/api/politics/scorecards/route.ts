@@ -12,8 +12,17 @@ export async function GET(request: Request) {
   await ensureDbInitialized();
   const candidateId = new URL(request.url).searchParams.get("candidate_id");
   const sql = getDb();
-  if (!candidateId) return Response.json({ message: "candidate_id required" }, { status: 400 });
-  const rows = (await sql`SELECT * FROM political_scorecards WHERE candidate_id = ${Number(candidateId)} ORDER BY category, metric`) as unknown as any[];
+  if (candidateId) {
+    const rows = (await sql`SELECT * FROM political_scorecards WHERE candidate_id = ${Number(candidateId)} ORDER BY category, metric`) as unknown as any[];
+    return Response.json({ scorecards: rows });
+  }
+  // No candidate_id: list all scorecards with the candidate name joined.
+  const rows = (await sql`
+    SELECT s.*, c.name AS candidate_name
+    FROM political_scorecards s
+    LEFT JOIN political_candidates c ON s.candidate_id = c.id
+    ORDER BY c.name, s.category, s.metric
+  `) as unknown as any[];
   return Response.json({ scorecards: rows });
 }
 

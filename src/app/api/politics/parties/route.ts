@@ -34,7 +34,7 @@ export async function GET() {
   return Response.json({ parties: rows });
   } catch (err: any) {
     console.error("[politics/parties] GET failed:", err);
-    return Response.json({ message: err?.message || "Internal error", stack: err?.stack }, { status: 500 });
+    return Response.json({ message: "Failed to load parties" }, { status: 500 });
   }
 }
 

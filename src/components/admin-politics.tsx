@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { CheckCircle2, XCircle, Trash2, Plus, Users, Vote, ShieldAlert } from "lucide-react";
+import { CheckCircle2, XCircle, Trash2, Plus, Users, Vote, ShieldAlert, Flag, Trophy } from "lucide-react";
 
 export function AdminPolitics() {
   const qc = useQueryClient();
@@ -20,7 +20,8 @@ export function AdminPolitics() {
 
   const parties = useQuery({ queryKey: ["/api/politics/parties"], queryFn: () => apiRequest("GET", "/api/politics/parties").then((r) => r.json()) });
   const candidates = useQuery({ queryKey: ["/api/politics/candidates"], queryFn: () => apiRequest("GET", "/api/politics/candidates").then((r) => r.json()) });
-  const events = useQuery({ queryKey: ["/api/politics/events?status=all"], queryFn: () => apiRequest("GET", "/api/politics/events?status=all").then((r) => r.json()) });
+  const ngStates = useQuery({ queryKey: ["/api/politics/nigeria2?resource=states"], queryFn: () => apiRequest("GET", "/api/politics/nigeria2?resource=states").then((r) => r.json()) });
+  const events = useQuery({ queryKey: ["/api/admin/politics/events"], queryFn: () => apiRequest("GET", "/api/admin/politics/events?status=all").then((r) => r.json()) });
 
   const modMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>
@@ -33,10 +34,10 @@ export function AdminPolitics() {
     onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
   });
 
-  const [cand, setCand] = useState({ name: "", party_acronym: "", office: "governor", state: "", election_year: "", bio: "" });
+  const [cand, setCand] = useState({ name: "", party_acronym: "", office: "governor", geo_id: "", state: "", election_year: "", bio: "" });
   const candMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/politics/candidates", data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/politics/candidates"] }); toast({ title: "Candidate added" }); setCand({ name: "", party_acronym: "", office: "governor", state: "", election_year: "", bio: "" }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/politics/candidates"] }); toast({ title: "Candidate added" }); setCand({ name: "", party_acronym: "", office: "governor", geo_id: "", state: "", election_year: "", bio: "" }); },
     onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
   });
 
@@ -92,8 +93,12 @@ export function AdminPolitics() {
                 <SelectContent><SelectItem value="presidential">Presidential</SelectItem><SelectItem value="governor">Governor</SelectItem><SelectItem value="senate">Senate</SelectItem><SelectItem value="house">House</SelectItem></SelectContent>
               </Select>
               <Input placeholder="State" value={cand.state} onChange={(e) => setCand({ ...cand, state: e.target.value })} />
-              <Input placeholder="Year (2023)" value={cand.election_year} onChange={(e) => setCand({ ...cand, election_year: e.target.value })} />
+              <Select value={cand.geo_id} onValueChange={(v) => { const s = (ngStates.data?.states || []).find((x: any) => x.geo_id === v); setCand({ ...cand, geo_id: v, state: s?.name ?? cand.state }); }}>
+                <SelectTrigger><SelectValue placeholder="Geo (Nigeria2)" /></SelectTrigger>
+                <SelectContent className="max-h-60">{(ngStates.data?.states || []).map((s: any) => <SelectItem key={s.geo_id} value={s.geo_id}>{s.name}</SelectItem>)}</SelectContent>
+              </Select>
             </div>
+            <Input placeholder="Election year (2023)" value={cand.election_year} onChange={(e) => setCand({ ...cand, election_year: e.target.value })} />
             <Textarea placeholder="Bio (optional)" value={cand.bio} onChange={(e) => setCand({ ...cand, bio: e.target.value })} rows={2} />
             <Button size="sm" disabled={candMutation.isPending || !cand.name} onClick={() => candMutation.mutate({ ...cand, election_year: cand.election_year ? Number(cand.election_year) : null })}><Plus className="h-4 w-4 mr-1" /> Add</Button>
           </CardContent>
@@ -113,6 +118,14 @@ export function AdminPolitics() {
               </div>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Scorecards */}
+      <Card className="border-border">
+        <CardHeader className="pb-2"><CardTitle className="text-sm font-display flex items-center gap-2"><Trophy className="h-4 w-4" /> Candidate Scorecards</CardTitle></CardHeader>
+        <CardContent className="space-y-2">
+          <ScorecardForm candidates={candidatesData} />
         </CardContent>
       </Card>
 
@@ -140,6 +153,54 @@ export function AdminPolitics() {
           ))}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function ScorecardForm({ candidates }: { candidates: any[] }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [sc, setSc] = useState({ candidate_id: "", category: "Governance", metric: "", score: "80", notes: "" });
+  const set = (k: string, v: string) => setSc((f) => ({ ...f, [k]: v }));
+  const scorecards = useQuery({
+    queryKey: ["/api/politics/scorecards"],
+    queryFn: () => apiRequest("GET", "/api/politics/scorecards").then((r) => r.json()),
+  });
+  const mutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/politics/scorecards", data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/politics/scorecards"] }); qc.invalidateQueries({ queryKey: ["/api/politics/candidates"] }); toast({ title: "Scorecard saved" }); setSc({ ...sc, metric: "" }); },
+    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+  const all = scorecards.data?.scorecards ?? [];
+  return (
+    <div className="space-y-2">
+      {candidates.length === 0 && <p className="text-xs text-muted-foreground">Add a candidate first.</p>}
+      {candidates.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <Select value={sc.candidate_id} onValueChange={(v) => set("candidate_id", v)}>
+            <SelectTrigger><SelectValue placeholder="Candidate" /></SelectTrigger>
+            <SelectContent className="max-h-60">{candidates.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={sc.category} onValueChange={(v) => set("category", v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{["Governance", "Transparency", "Performance", "Integrity", "Development"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+          </Select>
+          <Input placeholder="Metric (e.g. Project delivery)" value={sc.metric} onChange={(e) => set("metric", e.target.value)} />
+          <Input type="number" min={0} max={100} placeholder="Score" value={sc.score} onChange={(e) => set("score", e.target.value)} />
+          <Input className="col-span-2 sm:col-span-1" placeholder="Notes (optional)" value={sc.notes} onChange={(e) => set("notes", e.target.value)} />
+          <Button size="sm" disabled={mutation.isPending || !sc.candidate_id || !sc.metric} onClick={() => mutation.mutate({ candidate_id: Number(sc.candidate_id), category: sc.category, metric: sc.metric, score: Number(sc.score), notes: sc.notes || undefined })}><Plus className="h-4 w-4 mr-1" /> Save</Button>
+        </div>
+      )}
+      {all.length > 0 && (
+        <div className="space-y-1 mt-1">
+          {all.slice(0, 12).map((s: any) => (
+            <div key={s.id} className="flex justify-between text-[10px]">
+              <span className="text-muted-foreground">{s.candidate_name || `#${s.candidate_id}`} · {s.category} · {s.metric}</span>
+              <span className="font-mono">{s.score}/100</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

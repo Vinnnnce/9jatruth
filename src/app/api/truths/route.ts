@@ -32,12 +32,13 @@ export async function GET(request: Request) {
   // Compute authorship server-side so the client can safely hide the delete
   // control for posts the viewer did not publish. The DELETE endpoint
   // re-checks ownership, so this is defense-in-depth, not the only gate.
+  // Preserve the legacy array response shape (callers normalize it themselves).
   const viewerHash = await getUserId(request).catch(() => null);
   const withAuthorship = (result || []).map((t: any) => ({
     ...t,
     isAuthor: !!(viewerHash && t.userHash && t.userHash === viewerHash),
   }));
-  return Response.json({ truths: withAuthorship });
+  return Response.json(withAuthorship);
 }
 
 export async function POST(request: Request) {

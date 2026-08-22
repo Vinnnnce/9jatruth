@@ -52,9 +52,8 @@ export default function PoliticsPage() {
   });
 
   const submitMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/politics/events", data),
-    onSuccess: (res: any) => {
-      const r = res.json ? null : res;
+    mutationFn: async (data: any) => (await apiRequest("POST", "/api/politics/events", data)).json(),
+    onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ["/api/politics/events"] });
       toast({ title: "Report submitted", description: "Your political report was submitted for review." });
     },
@@ -62,10 +61,9 @@ export default function PoliticsPage() {
   });
 
   const factCheckMutation = useMutation({
-    mutationFn: (claim: string) => apiRequest("POST", "/api/politics/fact-check", { claim }),
-    onSuccess: async (res) => {
-      const data = await res.json();
-      const r = data.result;
+    mutationFn: async (claim: string) => (await apiRequest("POST", "/api/politics/fact-check", { claim })).json(),
+    onSuccess: (data: any) => {
+      const r = data?.result;
       toast({
         title: `Verdict: ${r?.verdict ?? "unknown"} (${r?.confidence ?? 0}% confidence)`,
         description: r?.reasoning ?? "Analysis complete.",
@@ -154,7 +152,7 @@ export default function PoliticsPage() {
 
         {/* Submit Report */}
         <TabsContent value="submit" className="space-y-4">
-          <SubmitReportForm onSubmit={(data) => submitMutation.mutate(data)} loading={submitMutation.isPending} />
+          <SubmitReportForm states={statesData} onSubmit={(data) => submitMutation.mutate(data)} loading={submitMutation.isPending} />
           {submitMutation.data && (
             <Card className="border-amber-500/30">
               <CardContent className="p-3 text-xs space-y-1">
@@ -225,45 +223,86 @@ function CandidatesSection() {
         {isLoading && <Skeleton className="h-20 w-full" />}
         {candidates.length === 0 && !isLoading && <p className="text-xs text-muted-foreground">No candidates added yet. Super admins can add candidates from the Politics admin tab.</p>}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {candidates.map((c: any) => (
-            <div key={c.id} className="rounded-md border border-border p-2 text-xs space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{c.name}</span>
-                <Badge variant="outline" className="text-[9px] capitalize">{c.office}</Badge>
-                {c.party_acronym && <span className="h-2 w-2 rounded-full" style={{ background: c.party_color || "hsl(var(--primary))" }} title={c.party_name} />}
-              </div>
-              <p className="text-muted-foreground">{c.party_name || c.party_acronym} {c.state ? `· ${c.state}` : ""} {c.election_year ? `· ${c.election_year}` : ""}</p>
-              {c.bio && <p className="text-muted-foreground line-clamp-2">{c.bio}</p>}
-            </div>
-          ))}
+          {candidates.map((c: any) => <CandidateCard key={c.id} candidate={c} />)}
         </div>
       </CardContent>
     </Card>
   );
 }
 
+function CandidateCard({ candidate: c }: { candidate: any }) {
+  const [open, setOpen] = useState(false);
+  const { data } = useQuery({
+    queryKey: ["/api/politics/scorecards", c.id],
+    queryFn: () => apiRequest("GET", `/api/politics/scorecards?candidate_id=${c.id}`).then((r) => r.json()),
+    enabled: open,
+  });
+  const scorecards = data?.scorecards ?? [];
+  const avg = scorecards.length > 0 ? Math.round(scorecards.reduce((s: number, x: any) => s + (Number(x.score) || 0), 0) / scorecards.length) : null;
+  return (
+    <div className="rounded-md border border-border p-2 text-xs space-y-1">
+      <div className="flex items-center gap-2">
+        <span className="font-medium">{c.name}</span>
+        <Badge variant="outline" className="text-[9px] capitalize">{c.office}</Badge>
+        {c.party_acronym && <span className="h-2 w-2 rounded-full" style={{ background: c.party_color || "hsl(var(--primary))" }} title={c.party_name} />}
+        {avg !== null && <Badge variant="outline" className="text-[9px] ml-auto">Score {avg}/100</Badge>}
+      </div>
+      <p className="text-muted-foreground">{c.party_name || c.party_acronym} {c.state ? `· ${c.state}` : ""} {c.election_year ? `· ${c.election_year}` : ""}</p>
+      {c.bio && <p className="text-muted-foreground line-clamp-2">{c.bio}</p>}
+      <button className="text-[10px] text-primary underline" onClick={() => setOpen((v) => !v)}>{open ? "Hide" : "View"} scorecard</button>
+      {open && (
+        <div className="space-y-1">
+          {scorecards.length === 0 && <p className="text-[10px] text-muted-foreground">No scorecard metrics yet.</p>}
+          {scorecards.map((s: any) => (
+            <div key={s.id} className="flex justify-between text-[10px]">
+              <span className="text-muted-foreground">{s.category} · {s.metric}</span>
+              <span className="font-mono">{s.score}/100</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ResultsDisplay({ data }: { data: any }) {
-  // data is the Nigeria2 state-results payload (LGAs, senate/house, evidence).
-  const lgas = data?.lgas || data?.results || [];
-  const summary = data?.summary || data?.national_summary;
+  // Nigeria2 state-results shape: { year, geo_id, state, presidential: {parties, winner, results}, governor: {...}, senate: {...}, evidence }
+  const offices = ["presidential", "governor", "senate", "house"] as const;
+  const partyResults = (office: string) => {
+    const o = data?.[office];
+    if (!o) return null;
+    const parties = o.parties || o.results || [];
+    if (Array.isArray(parties) && parties.length > 0) return parties;
+    // Some shapes nest party vote counts as an object keyed by acronym.
+    if (parties && typeof parties === "object") return Object.entries(parties).map(([k, v]) => ({ party: k, votes: v }));
+    return null;
+  };
+  const hasAnyOffice = offices.some((o) => data?.[o]);
   return (
     <div className="space-y-3 text-xs">
-      {summary && (
+      {!hasAnyOffice && (
         <div className="rounded-md bg-muted/30 p-2">
-          <p className="font-medium mb-1">Summary</p>
-          <pre className="text-[10px] overflow-auto max-h-32 whitespace-pre-wrap">{JSON.stringify(summary, null, 2)}</pre>
+          <p className="text-muted-foreground">No detailed results available for this state/year. Try 2023.</p>
+          <pre className="text-[10px] overflow-auto max-h-32 whitespace-pre-wrap mt-1">{JSON.stringify(data, null, 2).slice(0, 600)}</pre>
         </div>
       )}
-      {Array.isArray(lgas) && lgas.length > 0 && (
-        <div className="rounded-md border border-border p-2">
-          <p className="font-medium mb-1">LGA Results ({lgas.length})</p>
-          <div className="space-y-1 max-h-60 overflow-auto">
-            {lgas.slice(0, 20).map((lga: any, i: number) => (
-              <div key={i} className="text-[10px] text-muted-foreground">{lga.name || lga.lga || lga.geo_id || `Row ${i + 1}`}</div>
-            ))}
+      {offices.map((office) => {
+        const parties = partyResults(office);
+        if (!parties) return null;
+        return (
+          <div key={office} className="rounded-md border border-border p-2">
+            <p className="font-medium mb-1 capitalize">{office} Results</p>
+            <div className="space-y-0.5 max-h-48 overflow-auto">
+              {parties.map((p: any, i: number) => (
+                <div key={i} className="flex justify-between text-[10px]">
+                  <span className="font-mono">{p.party || p.acronym || p.name || "—"}</span>
+                  <span className="text-muted-foreground font-mono">{p.votes ?? p.votes_count ?? p.count ?? ""}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })}
       <p className="text-[10px] text-muted-foreground italic">Figures are transcribed evidence from INEC result sheets, not official counts. Source: api.nigeria2.com</p>
     </div>
   );
@@ -296,10 +335,11 @@ function OutliersSection({ year }: { year: string }) {
   );
 }
 
-function SubmitReportForm({ onSubmit, loading }: { onSubmit: (data: any) => void; loading: boolean }) {
+function SubmitReportForm({ states, onSubmit, loading }: { states: any[]; onSubmit: (data: any) => void; loading: boolean }) {
   const [form, setForm] = useState({
     event_type: "candidate_visit",
     party_acronym: "",
+    geo_id: "",
     state: "",
     lga: "",
     ward: "",
@@ -307,6 +347,10 @@ function SubmitReportForm({ onSubmit, loading }: { onSubmit: (data: any) => void
     evidence_url: "",
   });
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const onStateChange = (geo_id: string) => {
+    const s = states.find((x: any) => x.geo_id === geo_id);
+    setForm((f) => ({ ...f, geo_id, state: s?.name ?? "" }));
+  };
   return (
     <Card className="border-border">
       <CardHeader className="pb-2"><CardTitle className="text-sm font-display flex items-center gap-2"><Send className="h-4 w-4" /> Submit a Political Micro-Truth</CardTitle></CardHeader>
@@ -321,7 +365,14 @@ function SubmitReportForm({ onSubmit, loading }: { onSubmit: (data: any) => void
             </Select>
           </div>
           <div><Label className="text-xs">Party (optional)</Label><Input value={form.party_acronym} onChange={(e) => set("party_acronym", e.target.value.toUpperCase())} placeholder="e.g. APC" /></div>
-          <div><Label className="text-xs">State</Label><Input value={form.state} onChange={(e) => set("state", e.target.value)} placeholder="e.g. Lagos" /></div>
+          <div><Label className="text-xs">State</Label>
+            <Select value={form.geo_id} onValueChange={onStateChange}>
+              <SelectTrigger><SelectValue placeholder="Select state" /></SelectTrigger>
+              <SelectContent className="max-h-60">
+                {states.map((s: any) => <SelectItem key={s.geo_id} value={s.geo_id}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           <div><Label className="text-xs">LGA (optional)</Label><Input value={form.lga} onChange={(e) => set("lga", e.target.value)} placeholder="e.g. Ikeja" /></div>
         </div>
         <div><Label className="text-xs">Ward (optional)</Label><Input value={form.ward} onChange={(e) => set("ward", e.target.value)} placeholder="e.g. 03-01-01" /></div>

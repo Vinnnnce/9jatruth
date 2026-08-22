@@ -19,7 +19,11 @@ export async function GET(request: Request) {
   await ensureDbInitialized();
   const { searchParams } = new URL(request.url);
   const state = searchParams.get("state");
-  const status = searchParams.get("status") || "approved";
+  // Public callers only ever see approved events. Super-admins can pass
+  // status=all (and manage pending/flagged/rejected via the protected
+  // /api/admin/politics/events route) so unreviewed reports never leak.
+  const reqStatus = searchParams.get("status") || "approved";
+  const status = reqStatus === "all" ? "approved" : reqStatus;
   const limit = Math.min(Number(searchParams.get("limit") || 50), 100);
   const sql = getDb();
   const rows = (await sql`
@@ -27,7 +31,7 @@ export async function GET(request: Request) {
     FROM political_events e
     LEFT JOIN political_candidates c ON e.candidate_id = c.id
     WHERE (${state ?? null}::text IS NULL OR e.state = ${state ?? null})
-      AND (${status === "all"}::boolean OR e.status = ${status})
+      AND e.status = ${status}
     ORDER BY e.created_at DESC
     LIMIT ${limit}
   `) as unknown as any[];
@@ -73,6 +77,8 @@ export async function POST(request: Request) {
   // AI fake-news / plausibility check via the ensemble.
   let aiVerdict = "unverified";
   let aiConfidence = 0;
+  let aiReasoning = "";
+  let aiFlags: string[] = [];
   if (isAiConfigured()) {
     try {
       const { data } = await generateAiJson(
@@ -83,11 +89,8 @@ export async function POST(request: Request) {
       );
       aiVerdict = data.verdict || "unverified";
       aiConfidence = Number(data.confidence) || 0;
-      // Suspicious / likely_false submissions go straight to pending review.
-      if (aiVerdict === "suspicious" || aiVerdict === "likely_false") {
-        await sql`INSERT INTO political_abuse_signals (signal_type, entity_type, entity_id, severity, details, detected_by)
-          VALUES ('suspicious_report', 'political_event', '0', ${aiVerdict === "likely_false" ? "high" : "medium"}, ${JSON.stringify({ reasoning: data.reasoning, flags: data.flags, description: d.description })}::jsonb, 'ai')`;
-      }
+      aiReasoning = data.reasoning || "";
+      aiFlags = data.flags || [];
     } catch (err) {
       console.error("[politics/events] AI fact-check failed:", err);
     }
@@ -99,5 +102,17 @@ export async function POST(request: Request) {
     VALUES (${d.event_type}, ${d.candidate_id ?? null}, ${d.party_acronym ?? null}, ${d.geo_id ?? null}, ${d.state ?? null}, ${d.lga ?? null}, ${d.ward ?? null}, ${sanitizeText(d.description)}, ${d.evidence_url || null}, ${submittedBy}, ${status}, ${aiVerdict}, ${aiConfidence})
     RETURNING *
   `) as unknown as any[];
+  const eventId = inserted[0]?.id ?? 0;
+
+  // Log suspicious submissions with the real event id (deduped by signal+entity).
+  if (aiVerdict === "suspicious" || aiVerdict === "likely_false") {
+    try {
+      await sql`INSERT INTO political_abuse_signals (signal_type, entity_type, entity_id, severity, details, detected_by)
+        VALUES ('suspicious_report', 'political_event', ${String(eventId)}, ${aiVerdict === "likely_false" ? "high" : "medium"}, ${JSON.stringify({ reasoning: aiReasoning, flags: aiFlags, description: d.description.slice(0, 300) })}::jsonb, 'ai')
+        ON CONFLICT DO NOTHING`;
+    } catch (e) {
+      console.error("[politics/events] signal log failed:", e);
+    }
+  }
   return Response.json({ event: inserted[0], aiVerdict, aiConfidence });
 }

@@ -76,18 +76,27 @@ export async function GET(request: Request) {
     LIMIT 20
   `) as unknown as any[];
 
-  // Persist newly-detected brigading/coordinated patterns as signals.
+  // Persist newly-detected brigading/coordinated patterns as signals — but
+  // only when no unresolved signal of the same type+entity already exists,
+  // so polling doesn't create duplicates.
+  const existingUnresolved = new Set(
+    recentSignals.filter((s) => !s.resolved).map((s) => `${s.signal_type}:${s.entity_type}:${s.entity_id}`)
+  );
   for (const b of brigading) {
+    const key = `brigading:truth:${b.truth_id}`;
+    if (existingUnresolved.has(key)) continue;
     await sql`INSERT INTO political_abuse_signals (signal_type, entity_type, entity_id, severity, details, detected_by)
       VALUES ('brigading', 'truth', ${String(b.truth_id)}, ${b.recent_disputes >= 10 ? "high" : "medium"},
-        ${JSON.stringify({ recent_disputes: b.recent_disputes, total_disputes: b.total_disputes, trust_score: b.trust_score, content_preview: b.content })}::jsonb, 'system-detector')
-      ON CONFLICT DO NOTHING`;
+        ${JSON.stringify({ recent_disputes: b.recent_disputes, total_disputes: b.total_disputes, trust_score: b.trust_score, content_preview: b.content })}::jsonb, 'system-detector')`;
+    existingUnresolved.add(key);
   }
   for (const c of coordinated) {
+    const key = `coordinated_downvote:user:${c.user_hash}`;
+    if (existingUnresolved.has(key)) continue;
     await sql`INSERT INTO political_abuse_signals (signal_type, entity_type, entity_id, severity, details, detected_by)
       VALUES ('coordinated_downvote', 'user', ${c.user_hash}, ${c.dispute_count >= 8 ? "high" : "medium"},
-        ${JSON.stringify({ dispute_count: c.dispute_count, distinct_targets: c.distinct_targets, window_start: c.window_start, window_end: c.window_end })}::jsonb, 'system-detector')
-      ON CONFLICT DO NOTHING`;
+        ${JSON.stringify({ dispute_count: c.dispute_count, distinct_targets: c.distinct_targets, window_start: c.window_start, window_end: c.window_end })}::jsonb, 'system-detector')`;
+    existingUnresolved.add(key);
   }
 
   const unresolved = recentSignals.filter((s) => !s.resolved).length;
