@@ -8,6 +8,7 @@ import {
 } from "@/lib/neon-storage";
 import { getClerkUserId, getIpLocation } from "@/lib/api-helpers";
 import { currentUser } from "@clerk/nextjs/server";
+import { isSuperAdmin } from "@/lib/admin-auth";
 
 /**
  * Get the current user's platform profile. Falls back to Clerk user data
@@ -100,6 +101,11 @@ export async function GET(request: Request) {
     organization = await getOrganization(platformUser.organization_id);
   }
 
+  // Server-verified super admin flag, derived from the Clerk user's verified
+  // emails (not the DB flag) so the admin dashboard shows reliably even when
+  // the platform_users.email hasn't synced to the super admin address yet.
+  const superAdmin = await isSuperAdmin();
+
   return Response.json({
     id: platformUser.id,
     clerkUserId: platformUser.clerk_user_id,
@@ -108,6 +114,7 @@ export async function GET(request: Request) {
     avatarUrl: platformUser.avatar_url,
     role: platformUser.role,
     isAdmin: platformUser.is_admin,
+    isSuperAdmin: superAdmin,
     isOrgAdmin: platformUser.is_org_admin,
     organizationId: platformUser.organization_id,
     organization: organization

@@ -10,8 +10,18 @@ import { isSuperAdminEmail, SUPER_ADMIN_EMAIL } from "./admin-auth-client";
 export { isSuperAdminEmail, SUPER_ADMIN_EMAIL };
 
 /**
+ * The super admin email, overridable via the SUPER_ADMIN_EMAIL env var.
+ * Defaults to the designated 9jatruth official address.
+ */
+export function getSuperAdminEmail(): string {
+  return (process.env.SUPER_ADMIN_EMAIL || SUPER_ADMIN_EMAIL).toLowerCase().trim();
+}
+
+/**
  * Server-side: Check if the current request user is the super admin.
- * Uses Clerk's currentUser() to get the email directly.
+ * Matches ANY verified email address on the Clerk user (not just the primary),
+ * so the super admin still works if 9jatruthofficial@gmail.com is a secondary
+ * verified email. Falls back to the env var when Clerk isn't configured.
  */
 export async function isSuperAdmin(): Promise<boolean> {
   try {
@@ -21,10 +31,15 @@ export async function isSuperAdmin(): Promise<boolean> {
     if (isClerkConfigured) {
       const user = await currentUser();
       if (!user) return false;
-      const email = user.emailAddresses?.find(
-        (e: any) => e.id === user.primaryEmailAddressId
-      )?.emailAddress || user.emailAddresses?.[0]?.emailAddress || "";
-      return isSuperAdminEmail(email);
+      const target = getSuperAdminEmail();
+      const verifiedEmails = (user.emailAddresses ?? [])
+        .filter((e: any) => e.verification?.status === "verified" || e.verificationStatus === "verified")
+        .map((e: any) => (e.emailAddress || "").toLowerCase().trim())
+        .filter(Boolean);
+      // Also include the primary email even if verification status shape differs
+      const primary = user.primaryEmailAddress?.emailAddress?.toLowerCase().trim();
+      const candidates = new Set([...verifiedEmails, ...(primary ? [primary] : [])]);
+      return candidates.has(target);
     }
 
     // Fallback: check via env var for dev mode

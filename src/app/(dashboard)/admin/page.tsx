@@ -109,6 +109,7 @@ type UserProfile = {
   name?: string;
   isAdmin?: boolean;
   is_admin?: boolean;
+  isSuperAdmin?: boolean;
   isOrgAdmin?: boolean;
   is_org_admin?: boolean;
   organizationId?: number | null;

@@ -20,15 +20,21 @@ type ReferralStats = {
 export function RewardsReferralCard() {
   const { toast } = useToast();
   const [copied, setCopied] = useState<"link" | "code" | null>(null);
+  const [generated, setGenerated] = useState(false);
 
-  const { data, isLoading } = useQuery<ReferralStats>({
+  const { data, isLoading, isError } = useQuery<ReferralStats>({
     queryKey: ["/api/rewards/referrals"],
+    enabled: generated,
     queryFn: async () => {
       const res = await fetch("/api/rewards/referrals");
       if (!res.ok) throw new Error("failed");
       return res.json();
     },
   });
+
+  const generate = () => {
+    setGenerated(true);
+  };
 
   const copy = async (text: string, kind: "link" | "code") => {
     try {
@@ -77,46 +83,67 @@ export function RewardsReferralCard() {
           ongoing rewards.
         </p>
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-2">
-          <Stat label="Invited" value={isLoading ? null : data?.invited ?? 0} icon={Users} />
-          <Stat label="Completed" value={isLoading ? null : data?.completed ?? 0} icon={Check} />
-          <Stat label="Points earned" value={isLoading ? null : data?.pointsEarned ?? 0} icon={Gift} />
-        </div>
+        {generated ? (
+          <>
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-2">
+              <Stat label="Invited" value={isLoading ? null : data?.invited ?? 0} icon={Users} />
+              <Stat label="Completed" value={isLoading ? null : data?.completed ?? 0} icon={Check} />
+              <Stat label="Points earned" value={isLoading ? null : data?.pointsEarned ?? 0} icon={Gift} />
+            </div>
 
-        {/* Referral link */}
-        <div className="space-y-2">
-          <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-            Your referral link
-          </label>
-          {isLoading ? (
-            <Skeleton className="h-9 w-full" />
-          ) : (
-            <div className="flex gap-2">
-              <input
-                readOnly
-                value={link}
-                className="flex-1 h-9 rounded-md border border-border bg-background px-2 text-xs truncate"
-                onClick={(e) => (e.target as HTMLInputElement).select()}
-              />
-              <Button size="sm" variant="outline" className="h-9 gap-1" onClick={() => copy(link, "link")}>
-                {copied === "link" ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                Copy
-              </Button>
-              <Button size="sm" className="h-9 gap-1" onClick={share}>
-                <Share2 className="h-3.5 w-3.5" /> Share
-              </Button>
+            {/* Referral link */}
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                Your referral link
+              </label>
+              {isLoading ? (
+                <Skeleton className="h-9 w-full" />
+              ) : isError || !data?.link ? (
+                <p className="text-xs text-destructive">
+                  Could not load your referral link. {""}
+                  <button className="underline" onClick={() => setGenerated(false)}>
+                    Try again
+                  </button>
+                </p>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    readOnly
+                    value={link}
+                    className="flex-1 h-9 rounded-md border border-border bg-background px-2 text-xs truncate"
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                  <Button size="sm" variant="outline" className="h-9 gap-1" onClick={() => copy(link, "link")}>
+                    {copied === "link" ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    Copy
+                  </Button>
+                  <Button size="sm" className="h-9 gap-1" onClick={share}>
+                    <Share2 className="h-3.5 w-3.5" /> Share
+                  </Button>
+                </div>
+              )}
+              {data?.code && (
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                  <span>Code: <code className="font-mono text-foreground">{data.code}</code></span>
+                  <button className="text-emerald-600 hover:underline" onClick={() => copy(data.code, "code")}>
+                    {copied === "code" ? "Copied" : "Copy code"}
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-          {data?.code && (
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>Code: <code className="font-mono text-foreground">{data.code}</code></span>
-              <button className="text-emerald-600 hover:underline" onClick={() => copy(data.code, "code")}>
-                {copied === "code" ? "Copied" : "Copy code"}
-              </button>
-            </div>
-          )}
-        </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center gap-3 py-2">
+            <Button className="w-full gap-2" onClick={generate}>
+              <Sparkles className="h-4 w-4" />
+              Generate referral link
+            </Button>
+            <p className="text-center text-[10px] text-muted-foreground">
+              Tap to generate your unique referral code and shareable link.
+            </p>
+          </div>
+        )}
 
         {/* How it works */}
         <div className="rounded-md border border-border bg-muted/20 p-3 space-y-1.5">

@@ -35,13 +35,15 @@ export function getDashboardType(profile: {
   email?: string;
   isAdmin?: boolean;
   is_admin?: boolean;
+  isSuperAdmin?: boolean;
   isOrgAdmin?: boolean;
   is_org_admin?: boolean;
   organizationId?: number | null;
 } | null | undefined): "admin" | "org" | "user" {
   if (!profile) return "user";
-  // Super admin is email-only — DB isAdmin flag does NOT grant admin dashboard
-  if (isSuperAdminEmail(profile.email)) return "admin";
+  // Super admin — prefer the server-verified flag (Clerk verified emails),
+  // fall back to email match. DB isAdmin flag does NOT grant admin dashboard.
+  if (profile.isSuperAdmin === true || isSuperAdminEmail(profile.email)) return "admin";
   if (profile.isOrgAdmin || profile.is_org_admin || profile.organizationId) return "org";
   return "user";
 }
