@@ -664,10 +664,25 @@ export async function getReferralStats(userHash: string): Promise<ReferralStats>
   const sql = getDb();
   const rows = (await sql`SELECT status, points_awarded FROM referrals WHERE referrer_hash = ${userHash}`) as unknown as
     { status: string; points_awarded: number }[];
-  // Canonical referral domain is always 9jatruth.com (never the vercel.app preview domain).
-  // An override is allowed only via NEXT_PUBLIC_REFERRAL_DOMAIN for custom domains.
+  // Referral base URL resolution (most-specific wins):
+  //   1. Live site_config.referral_base_url  — super-admin editable, reflects instantly
+  //   2. NEXT_PUBLIC_REFERRAL_BASE_URL env var
+  //   3. NEXT_PUBLIC_REFERRAL_DOMAIN env var (legacy, host only)
+  //   4. "9jatruth.com"  (canonical default — never the vercel.app preview domain)
+  let base = "9jatruth.com";
+  try {
+    const { getSiteConfig } = await import("@/lib/config");
+    const siteCfg = await getSiteConfig();
+    if (siteCfg?.referral_base_url) {
+      base = siteCfg.referral_base_url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    }
+  } catch {
+    // fall through to env defaults
+  }
+  const envBase = process.env.NEXT_PUBLIC_REFERRAL_BASE_URL?.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  if (envBase) base = envBase;
   const override = process.env.NEXT_PUBLIC_REFERRAL_DOMAIN?.replace(/^https?:\/\//, "").replace(/\/$/, "");
-  const base = override || "9jatruth.com";
+  if (override) base = override;
   // Clean, shareable short-link: https://9jatruth.com/r/<code>
   // The code is the referrer's stable userHash (a mix of letters & numbers)
   // which resolves directly when the /r/[code] route redirects to ?ref=<code>.

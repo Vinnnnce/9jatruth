@@ -57,6 +57,7 @@ import { AdminAnalytics } from "@/components/admin-analytics";
 import { VerifiedBadge } from "@/components/verified-badge";
 import { AdminSecurity } from "@/components/admin-security";
 import { AdminPolitics } from "@/components/admin-politics";
+import { AdminConfig } from "@/components/admin-config";
 
 import {
   BarChart,
@@ -926,6 +927,9 @@ export default function AdminDashboard() {
           </TabsTrigger>
           <TabsTrigger value="politics" data-testid="tab-politics">
             Politics
+          </TabsTrigger>
+          <TabsTrigger value="config" data-testid="tab-config">
+            Configuration
           </TabsTrigger>
         </TabsList>
 
@@ -2445,6 +2449,9 @@ export default function AdminDashboard() {
         {/* ----------------------------------------------------------------- */}
         <TabsContent value="politics" className="space-y-4">
           <AdminPolitics />
+        </TabsContent>
+        <TabsContent value="config" className="space-y-4">
+          <AdminConfig />
         </TabsContent>
       </Tabs>
     </div>

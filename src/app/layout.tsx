@@ -5,6 +5,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { SiteConfigBridge } from "@/components/site-config-bridge";
 import { Toaster } from "@/components/ui/toaster";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -43,6 +44,7 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} ${jetBrainsMono.variable} font-sans antialiased`}>
         <Providers>
+          <SiteConfigBridge />
           {children}
           <Toaster />
         </Providers>
