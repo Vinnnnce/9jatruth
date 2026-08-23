@@ -664,12 +664,17 @@ export async function getReferralStats(userHash: string): Promise<ReferralStats>
   const sql = getDb();
   const rows = (await sql`SELECT status, points_awarded FROM referrals WHERE referrer_hash = ${userHash}`) as unknown as
     { status: string; points_awarded: number }[];
-  // Referral base URL resolution (most-specific wins):
-  //   1. Live site_config.referral_base_url  — super-admin editable, reflects instantly
-  //   2. NEXT_PUBLIC_REFERRAL_BASE_URL env var
-  //   3. NEXT_PUBLIC_REFERRAL_DOMAIN env var (legacy, host only)
-  //   4. "9jatruth.com"  (canonical default — never the vercel.app preview domain)
+  // Referral base URL resolution — LATER writes WIN, so live site_config (admin
+  // editable, reflects instantly) takes precedence over env vars:
+  //   1. "9jatruth.com"  (canonical default — never the vercel.app preview domain)
+  //   2. NEXT_PUBLIC_REFERRAL_DOMAIN env var (legacy, host only)
+  //   3. NEXT_PUBLIC_REFERRAL_BASE_URL env var
+  //   4. Live site_config.referral_base_url  — super-admin editable, wins
   let base = "9jatruth.com";
+  const override = process.env.NEXT_PUBLIC_REFERRAL_DOMAIN?.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  if (override) base = override;
+  const envBase = process.env.NEXT_PUBLIC_REFERRAL_BASE_URL?.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  if (envBase) base = envBase;
   try {
     const { getSiteConfig } = await import("@/lib/config");
     const siteCfg = await getSiteConfig();
@@ -679,10 +684,6 @@ export async function getReferralStats(userHash: string): Promise<ReferralStats>
   } catch {
     // fall through to env defaults
   }
-  const envBase = process.env.NEXT_PUBLIC_REFERRAL_BASE_URL?.replace(/^https?:\/\//, "").replace(/\/$/, "");
-  if (envBase) base = envBase;
-  const override = process.env.NEXT_PUBLIC_REFERRAL_DOMAIN?.replace(/^https?:\/\//, "").replace(/\/$/, "");
-  if (override) base = override;
   // Clean, shareable short-link: https://9jatruth.com/r/<code>
   // The code is the referrer's stable userHash (a mix of letters & numbers)
   // which resolves directly when the /r/[code] route redirects to ?ref=<code>.

@@ -132,7 +132,35 @@ function useNavSections() {
     },
   ];
 
-  return sections;
+  // Live feature flags — hide nav items for disabled features. Reads the
+  // public /api/config endpoint (cache-busted on every feature.config.updated
+  // event), so toggling a flag in the super-admin dashboard hides/shows the
+  // nav item within ~30s without a redeploy.
+  const { data: featureCfg } = useQuery({
+    queryKey: ["/api/config"],
+    staleTime: 30_000,
+  });
+  const flags = (featureCfg as any)?.features as
+    | { news_enabled?: boolean; rewards_enabled?: boolean; politics_enabled?: boolean; questionnaire_enabled?: boolean; ai_compare_enabled?: boolean }
+    | undefined;
+  type FeatureKey = "news_enabled" | "rewards_enabled" | "politics_enabled" | "questionnaire_enabled" | "ai_compare_enabled";
+  const flagForPath: Record<string, FeatureKey> = {
+    "/news": "news_enabled",
+    "/rewards": "rewards_enabled",
+    "/politics": "politics_enabled",
+    "/compare": "ai_compare_enabled",
+  };
+  const filtered = sections
+    .map((s) => ({
+      ...s,
+      items: s.items.filter((item) => {
+        const flag = flagForPath[item.path];
+        return !flag || flags?.[flag] !== false;
+      }),
+    }))
+    .filter((s) => s.items.length > 0);
+
+  return filtered;
 }
 
 function AppSidebar() {

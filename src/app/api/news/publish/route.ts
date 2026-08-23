@@ -87,7 +87,7 @@ export async function POST(request: Request) {
   // Resolve the agency + verify it belongs to the caller and is verified.
   const orgRows = (await sql`
     SELECT o.id, o.name, o.verification_badge,
-           u.is_verified, u.display_name, u.is_admin
+           u.id AS user_id, u.is_verified, u.display_name, u.is_admin
     FROM organizations o
     JOIN platform_users u ON u.organization_id = o.id
     WHERE o.id = ${p.agency_id} AND u.clerk_user_id = ${clerkUserId}
@@ -120,6 +120,8 @@ export async function POST(request: Request) {
 
   const mediaUrls = Array.isArray(p.media_urls) ? p.media_urls : [];
   const cover = p.cover_image_url || (mediaUrls.length > 0 ? mediaUrls[0] : null);
+  // author_id is INTEGER (platform_users.id); media_urls is TEXT (JSON-encoded).
+  const authorId = agency.user_id ?? null;
 
   const inserted = (await sql`
     INSERT INTO news_articles
@@ -127,8 +129,8 @@ export async function POST(request: Request) {
        author_id, author_name, author_type, organization_id, state, lga,
        status, is_verified, verification_badge)
     VALUES (${sanitizeText(p.title)}, ${slug}, ${p.excerpt || null}, ${sanitizeText(p.content)},
-            ${cover || null}, ${JSON.stringify(mediaUrls)}::jsonb, ${p.category},
-            ${clerkUserId}, ${agency.display_name || agency.name}, 'agency',
+            ${cover || null}, ${JSON.stringify(mediaUrls)}, ${p.category},
+            ${authorId}, ${agency.display_name || agency.name}, 'agency',
             ${p.agency_id}, ${p.state || null}, ${p.lga || null},
             ${status}, TRUE, ${agency.verification_badge || 'verified'})
     RETURNING id, slug, status`) as any;

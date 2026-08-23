@@ -32,14 +32,33 @@ export function RewardsReferralCard() {
   const [copied, setCopied] = useState<"link" | "code" | null>(null);
   const [generated, setGenerated] = useState(false);
 
-  // Live reward rules from the super-admin dashboard (site_settings.reward_rules).
+  // Live reward rules from the super-admin dashboard. Reads the public
+  // /api/rewards/config endpoint (the active RewardsConfig), which is
+  // cache-busted on every `rewards.config.updated` event — so values the
+  // super admin saves reflect here within seconds. Falls back to the legacy
+  // admin settings if the new config isn't present.
   const { data: rules } = useQuery<RewardRules>({
-    queryKey: ["/api/admin/settings"],
+    queryKey: ["/api/rewards/config"],
     queryFn: async () => {
-      const res = await fetch("/api/admin/settings");
-      if (!res.ok) return {};
-      const json = await res.json();
-      return json.rewardRules ?? {};
+      try {
+        const res = await fetch("/api/rewards/config");
+        if (res.ok) {
+          const json = await res.json();
+          return (json.config?.config ?? {}) as RewardRules;
+        }
+      } catch {
+        // fall through
+      }
+      try {
+        const res = await fetch("/api/admin/settings");
+        if (res.ok) {
+          const json = await res.json();
+          return json.rewardRules ?? {};
+        }
+      } catch {
+        // ignore
+      }
+      return {};
     },
   });
   const signupBonus = rules?.referralSignup ?? 50;

@@ -36,13 +36,15 @@ export async function GET(request: Request) {
            coalesce(t.report_lat, n.lat) AS lat,
            coalesce(t.report_lng, n.lng) AS lng,
            (6371 * acos(
-              cos(radians(${lat})) * cos(radians(coalesce(t.report_lat, n.lat)))
-              * cos(radians(coalesce(t.report_lng, n.lng)) - radians(${lng}))
-              + sin(radians(${lat})) * sin(radians(coalesce(t.report_lat, n.lat)))
+              LEAST(1, GREATEST(-1,
+                cos(radians(${lat})) * cos(radians(coalesce(t.report_lat, n.lat)))
+                * cos(radians(coalesce(t.report_lng, n.lng)) - radians(${lng}))
+                + sin(radians(${lat})) * sin(radians(coalesce(t.report_lat, n.lat)))
+              ))
            )) AS distance_km
     FROM micro_truths t
     JOIN neighborhoods n ON n.id = t.neighborhood_id
-    WHERE t.status = 'verified'
+    WHERE t.status <> 'rejected'
       AND coalesce(t.report_lat, n.lat) IS NOT NULL
       AND (${ward ?? null}::text IS NULL OR n.community ILIKE ${"%" + (ward ?? "") + "%"})
       AND (${lga ?? null}::text IS NULL OR n.lga ILIKE ${"%" + (lga ?? "") + "%"})

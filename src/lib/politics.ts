@@ -63,7 +63,7 @@ export async function queryPoliticians(opts: {
       AND (${opts.search ?? null}::text IS NULL OR c.name ILIKE ${"%" + (opts.search ?? "") + "%"})
       AND (
         ${offices === null}::boolean OR
-        c.office ILIKE ANY(${offices ? offices.map((o) => "%" + o + "%") : []}::text[])
+        c.office = ANY(${offices ? offices : []}::text[])
       )
     ORDER BY
       CASE c.office WHEN 'presidential' THEN 0 WHEN 'governor' THEN 1 WHEN 'senate' THEN 2
