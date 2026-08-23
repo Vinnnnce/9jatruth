@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>9jatruth — UI Wireframes</title>
+<style>
+  :root { --primary:#0f766e; --secondary:#f59e0b; --ink:#0f172a; --muted:#64748b; --line:#cbd5e1; --bg:#f8fafc; }
+  * { box-sizing:border-box; }
+  body { font-family:Inter,system-ui,sans-serif; margin:0; background:var(--bg); color:var(--ink); }
+  header { background:var(--primary); color:#fff; padding:18px 24px; }
+  header h1 { margin:0; font-size:18px; font-weight:700; }
+  header p { margin:4px 0 0; opacity:.9; font-size:13px; }
+  .wrap { max-width:1100px; margin:0 auto; padding:24px 16px 80px; }
+  .screen { margin-bottom:40px; }
+  .screen h2 { font-size:15px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 4px; }
+  .screen .desc { color:var(--muted); font-size:13px; margin:0 0 14px; }
+  .frame { border:1.5px solid var(--line); border-radius:14px; background:#fff; overflow:hidden; }
+  .bar { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line); background:#fff; }
+  .bar .dot { width:10px; height:10px; border-radius:50%; background:var(--line); }
+  .bar .title { font-weight:600; font-size:13px; }
+  .pill { border:1px solid var(--line); border-radius:999px; padding:3px 10px; font-size:11px; color:var(--muted); }
+  .body { padding:14px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:640px){ .grid2{ grid-template-columns:1fr; } .map{ height:160px !important; } }
+  .box { border:1.4px dashed var(--line); border-radius:10px; padding:12px; background:#fff; }
+  .box h3 { margin:0 0 6px; font-size:13px; font-weight:600; }
+  .box .row, .card .row { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:12px; color:var(--muted); margin:3px 0; }
+  .row .km { color:var(--ink); font-weight:600; }
+  .row .trust { background:#f1f5f9; padding:1px 7px; border-radius:6px; color:var(--ink); }
+  .map { height:220px; background:repeating-linear-gradient(45deg,#eef2f7,#eef2f7 10px,#e7ecf3 10px,#e7ecf3 20px); border-radius:10px; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:12px; }
+  .pin { width:14px; height:14px; background:var(--primary); border-radius:50% 50% 50% 0; transform:rotate(-45deg); display:inline-block; margin-right:6px; vertical-align:middle; }
+  .card { border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .avatar { width:42px; height:42px; border-radius:50%; background:var(--secondary); display:inline-block; vertical-align:middle; margin-right:8px; }
+  .badge { background:var(--primary); color:#fff; font-size:10px; padding:2px 8px; border-radius:6px; }
+  .btn { background:var(--primary); color:#fff; border:none; padding:6px 12px; border-radius:8px; font-size:12px; }
+  .ai { background:#f0fdfa; border:1px solid #99f6e4; border-radius:10px; padding:12px; }
+  .ai .label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--primary); font-weight:700; }
+  .tags { display:flex; flex-wrap:wrap; gap:6px; }
+  .tag { background:#eef2f7; color:var(--muted); font-size:11px; padding:2px 8px; border-radius:6px; }
+  .foot { text-align:center; color:var(--muted); font-size:12px; margin-top:30px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>9jatruth — UI Wireframes</h1>
+  <p>Location-based feeds · Politics 2027 · Compare · Super-admin config. Live data from the Neon DB; responsive mobile → tablet → desktop.</p>
+</header>
+<div class="wrap">
+
+  <!-- 1. Location-based feeds -->
+  <section class="screen">
+    <h2>1 · Location-based feeds</h2>
+    <p class="desc">GET /api/feeds/nearby?lat=&lng=&radius_km=&ward=&lga=&state= — posts nearest to the user, geo-indexed.</p>
+    <div class="frame">
+      <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="title">Feeds — near me</span><span class="pill">📍 Ikeja, Lagos</span><span class="pill">5 km</span></div>
+      <div class="body">
+        <div class="tags" style="margin-bottom:12px">
+          <span class="tag">Ward: Ikeja GRA</span><span class="tag">LGA: Ikeja</span><span class="tag">State: Lagos</span><span class="tag">Category: Power</span>
+        </div>
+        <div class="grid2">
+          <div class="map"><span><span class="pin"></span>Live geo map (posts as pins)</span></div>
+          <div>
+            <div class="card" style="margin-bottom:8px"><span class="avatar"></span><b>Power outage — Allen Ave</b> <span class="badge">verified</span><div class="row"><span class="km">0.4 km away</span><span class="trust">trust 82</span></div></div>
+            <div class="card" style="margin-bottom:8px"><span class="avatar"></span><b>Fuel scarcity — Oba Akran</b> <span class="badge">verified</span><div class="row"><span class="km">1.2 km away</span><span class="trust">trust 76</span></div></div>
+            <div class="card"><span class="avatar"></span><b>Traffic gridlock — Oshodi</b><div class="row"><span class="km">3.8 km away</span><span class="trust">trust 64</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Politics: candidate profile -->
+  <section class="screen">
+    <h2>2 · Politics — candidate profile (2027)</h2>
+    <p class="desc">GET /api/candidates/2027?state_id=&position= + AI profiler (neutral summary) + manifesto analyzer.</p>
+    <div class="frame">
+      <div class="bar"><span class="title">Candidate profile</span><span class="pill">Governor · Lagos · 2027</span><span class="pill">APC</span></div>
+      <div class="body">
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
+          <span class="avatar" style="width:56px;height:56px"></span>
+          <div><b style="font-size:15px">Hon. Candidate Name</b><div style="color:var(--muted);font-size:12px">Governorship candidate · Lagos State · Party: APC</div></div>
+          <button class="btn" style="margin-left:auto">Compare</button>
+        </div>
+        <div class="grid2">
+          <div class="box"><h3>Background</h3><div class="row"><span>Education</span><span>BSc, MBA</span></div><div class="row"><span>Previous offices</span><span>2 listed</span></div><div class="row"><span>Businesses</span><span>1</span></div><div class="row"><span>Health (high-level)</span><span>Disclosed</span></div></div>
+          <div class="ai"><div class="label">⚡ AI neutral profile</div><p style="font-size:12px;margin:6px 0">Neutral 3–5 sentence summary generated from stored metadata. Key strengths, concerns, and stance themes appear here.</p><div class="tags"><span class="tag">Economy</span><span class="tag">Security</span><span class="tag">Education</span></div></div>
+        </div>
+        <div class="box" style="margin-top:12px"><h3>Manifesto analysis (AI)</h3><div class="row"><span>Key promises</span><span>7 extracted</span></div><div class="row"><span>Themes</span><span>Jobs · Infrastructure · Health</span></div><div class="row"><span>Feasibility notes</span><span>Specificity: medium</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Compare -->
+  <section class="screen">
+    <h2>3 · Compare (AI summaries)</h2>
+    <p class="desc">GET /api/compare?type=candidate|neighborhood|agency&ids=1,2 — side-by-side cards + AI structured summary.</p>
+    <div class="frame">
+      <div class="bar"><span class="title">Compare</span><span class="pill">2 candidates</span></div>
+      <div class="body">
+        <div class="grid2">
+          <div class="card"><span class="avatar"></span><b>Candidate A</b><div class="row"><span>Party</span><span>APC</span></div><div class="row"><span>Offices held</span><span>3</span></div></div>
+          <div class="card"><span class="avatar"></span><b>Candidate B</b><div class="row"><span>Party</span><span>PDP</span></div><div class="row"><span>Offices held</span><span>1</span></div></div>
+        </div>
+        <div class="ai" style="margin-top:12px">
+          <div class="label">⚡ AI comparison summary</div>
+          <p style="font-size:12px;margin:6px 0"><b>Key differences:</b> experience, party tenure, manifesto specificity.</p>
+          <div class="grid2" style="margin-top:8px">
+            <div><b style="font-size:12px">Strengths</b><div class="row"><span>A</span><span>Strong economic record</span></div><div class="row"><span>B</span><span>Youth appeal</span></div></div>
+            <div><b style="font-size:12px">Weaknesses</b><div class="row"><span>A</span><span>Few health details</span></div><div class="row"><span>B</span><span>Limited executive experience</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Super admin config -->
+  <section class="screen">
+    <h2>4 · Super-admin — site & feature config</h2>
+    <p class="desc">POST /api/admin/site-config/update · /feature-config/update · /rewards/config/update — changes reflect instantly via SiteConfigBridge.</p>
+    <div class="frame">
+      <div class="bar"><span class="title">Configuration</span><span class="pill">live</span></div>
+      <div class="body">
+        <div class="grid2">
+          <div class="box"><h3>Site config</h3><div class="row"><span>Primary color</span><span style="background:var(--primary);width:18px;height:18px;border-radius:4px;display:inline-block"></span></div><div class="row"><span>Secondary</span><span style="background:var(--secondary);width:18px;height:18px;border-radius:4px;display:inline-block"></span></div><div class="row"><span>Announcement bar</span><span>active</span></div><div class="row"><span>Referral base URL</span><span>9jatruth.com</span></div></div>
+          <div class="box"><h3>Feature flags</h3><div class="row"><span>News</span><span>on</span></div><div class="row"><span>Rewards</span><span>on</span></div><div class="row"><span>Politics</span><span>on</span></div><div class="row"><span>AI Compare</span><span>on</span></div></div>
+        </div>
+        <div class="box" style="margin-top:12px"><h3>Rewards config (live)</h3><div class="row"><span>Truth submission</span><span>+20 pts</span></div><div class="row"><span>Referral completion</span><span>+100 pts</span></div><button class="btn" style="margin-top:6px">Save & activate</button></div>
+      </div>
+    </div>
+  </section>
+
+  <p class="foot">9jatruth wireframes — low-fidelity layouts. All screens pull real-time data from the Neon PostgreSQL database via the documented APIs.</p>
+</div>
+</body>
+</html>

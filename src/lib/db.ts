@@ -26,7 +26,7 @@ export function getDb(): NeonQueryFunction<true, true> {
  */
 let initialized = false;
 
-export const SCHEMA_VERSION = "2026-08-22-v3";
+export const SCHEMA_VERSION = "2026-08-23-v4";
 
 export async function ensureDbInitialized() {
   if (initialized) return;
@@ -1344,6 +1344,104 @@ export async function ensureDbInitialized() {
   )`);
   _q.push(sql`CREATE INDEX IF NOT EXISTS idx_abuse_signals_severity ON political_abuse_signals(severity, resolved, created_at DESC)`);
 
+  // ─── Site / Feature / Rewards configuration (super-admin controlled, live) ───
+  _q.push(sql`CREATE TABLE IF NOT EXISTS site_config (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    primary_color TEXT NOT NULL DEFAULT '#0f766e',
+    secondary_color TEXT NOT NULL DEFAULT '#f59e0b',
+    logo_url TEXT,
+    homepage_banner_text TEXT,
+    announcement_bar JSONB NOT NULL DEFAULT '{"active":false,"text":"","type":"info"}'::jsonb,
+    referral_base_url TEXT NOT NULL DEFAULT 'https://9jatruth.com',
+    default_rewards_config_id INTEGER,
+    updated_by TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT site_config_singleton CHECK (id = 1)
+  )`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS feature_config (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    news_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    rewards_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    politics_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    questionnaire_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    ai_compare_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    updated_by TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT feature_config_singleton CHECK (id = 1)
+  )`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS rewards_config (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT FALSE,
+    config JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_by TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_rewards_config_active ON rewards_config(is_active)`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS config_events (
+    id SERIAL PRIMARY KEY,
+    event_name TEXT NOT NULL,
+    payload JSONB,
+    emitted_by TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_config_events_name ON config_events(event_name, created_at DESC)`);
+
+  // ─── News publication error log (failed publish attempts) ───
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS rejection_reason TEXT`);
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS reviewed_by TEXT`);
+  _q.push(sql`ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS news_publish_errors (
+    id SERIAL PRIMARY KEY,
+    article_id INTEGER,
+    agency_id INTEGER,
+    title TEXT,
+    category TEXT,
+    error_code TEXT NOT NULL,
+    error_message TEXT NOT NULL,
+    payload JSONB,
+    attempted_by TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_news_publish_errors_agency ON news_publish_errors(agency_id, created_at DESC)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_news_publish_errors_code ON news_publish_errors(error_code, created_at DESC)`);
+
+  // ─── AI candidate profiles & manifesto analyses (versioned) ───
+  _q.push(sql`CREATE TABLE IF NOT EXISTS candidate_ai_profiles (
+    id SERIAL PRIMARY KEY,
+    candidate_id INTEGER NOT NULL,
+    summary TEXT,
+    key_strengths JSONB,
+    key_concerns JSONB,
+    stance_themes JSONB,
+    confidence INTEGER DEFAULT 0,
+    model_name TEXT,
+    generated_by TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_candidate_ai_profiles_candidate ON candidate_ai_profiles(candidate_id, created_at DESC)`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS manifesto_analyses (
+    id SERIAL PRIMARY KEY,
+    candidate_id INTEGER NOT NULL,
+    key_promises JSONB,
+    themes JSONB,
+    feasibility_notes TEXT,
+    summary TEXT,
+    confidence INTEGER DEFAULT 0,
+    model_name TEXT,
+    generated_by TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_manifesto_analyses_candidate ON manifesto_analyses(candidate_id, created_at DESC)`);
+
+  // ─── User location storage (lat, lng, ward, LGA, state) for location-based feeds ───
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS ward TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS user_lga TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS user_state TEXT`);
+  _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS location_updated_at TIMESTAMPTZ`);
+
   await sql.transaction(_q as any);
 
   // Seed geo hierarchy reference data (Nigeria regions/states only — no demo posts)
@@ -1464,6 +1562,24 @@ export async function ensureDbInitialized() {
       ON CONFLICT (key) DO NOTHING`;
   } catch (settingsErr) {
     console.error("[DB Init] Site settings seed error (non-fatal):", settingsErr);
+  }
+
+  // Seed default SiteConfig / FeatureConfig / active RewardsConfig singletons.
+  try {
+    await sql`INSERT INTO site_config (id, primary_color, secondary_color, referral_base_url)
+      VALUES (1, '#0f766e', '#f59e0b', ${process.env.NEXT_PUBLIC_REFERRAL_BASE_URL || 'https://9jatruth.com'})
+      ON CONFLICT (id) DO NOTHING`;
+    await sql`INSERT INTO feature_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING`;
+    const activeCfg = (await sql`SELECT id FROM rewards_config WHERE is_active = TRUE LIMIT 1`) as any;
+    if (!activeCfg || activeCfg.length === 0) {
+      await sql`INSERT INTO rewards_config (name, is_active, config) VALUES ('Default rewards', TRUE, ${JSON.stringify({ truthSubmission: 20, corroboration: 10, aiVerified: 15, dailyStreak: 5, disputedPenalty: -10, referralSignup: 50, referralCompletion: 100 })}::jsonb)`;
+      const inserted = (await sql`SELECT id FROM rewards_config WHERE is_active = TRUE ORDER BY id DESC LIMIT 1`) as any;
+      if (inserted && inserted.length > 0) {
+        await sql`UPDATE site_config SET default_rewards_config_id = ${inserted[0].id} WHERE id = 1`;
+      }
+    }
+  } catch (cfgErr) {
+    console.error("[DB Init] Site/Feature/Rewards config seed error (non-fatal):", cfgErr);
   }
 
 
