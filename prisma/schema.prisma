@@ -55,12 +55,76 @@ model Community {
   id        Int      @id @default(autoincrement())
   name      String
   villageId Int?     @map("village_id")
+  wardId    Int?     @map("ward_id")
   geoHash   String   @map("geo_hash")
   lat       Float
   lng       Float
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("communities")
+}
+
+// Wards sit between an LGA and its communities/villages (Nigerian admin level 3).
+model Ward {
+  id        Int      @id @default(autoincrement())
+  name      String
+  code      String?
+  stateId   Int?     @map("state_id")
+  lgaId     Int?     @map("lga_id")
+  lat       Float?
+  lng       Float?
+  source    String   @default("manual")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@unique([lgaId, name], name: "idx_wards_lga_name")
+  @@index([lgaId])
+  @@index([stateId])
+  @@map("wards")
+}
+
+// Community feeds: geo-tagged posts scoped to state → LGA → ward → community.
+model Feed {
+  id                   Int       @id @default(autoincrement())
+  userHash             String    @map("user_hash")
+  clerkUserId          String?   @map("clerk_user_id")
+  content              String
+  category             String    @default("general")
+  tags                 Json      @default("[]")
+  mediaUrls            Json      @default("[]") @map("media_urls")
+  stateId              Int?      @map("state_id")
+  lgaId                Int?      @map("lga_id")
+  wardId               Int?      @map("ward_id")
+  communityId          Int?      @map("community_id")
+  stateName            String?   @map("state_name")
+  lgaName              String?   @map("lga_name")
+  wardName             String?   @map("ward_name")
+  communityName        String?   @map("community_name")
+  regionName           String?   @map("region_name")
+  lat                  Float?
+  lng                  Float?
+  locationSource       String?   @map("location_source")
+  assignmentConfidence Int       @default(0) @map("assignment_confidence")
+  aiCommunityPrediction Json?    @map("ai_community_prediction")
+  aiRelevanceScore     Int       @default(50) @map("ai_relevance_score")
+  spamScore            Int       @default(0) @map("spam_score")
+  spamVerdict          String    @default("clean") @map("spam_verdict")
+  duplicateOfId        Int?      @map("duplicate_of_id")
+  trustScore           Int       @default(50) @map("trust_score")
+  likeCount            Int       @default(0) @map("like_count")
+  commentCount         Int       @default(0) @map("comment_count")
+  viewCount            Int       @default(0) @map("view_count")
+  status               String    @default("published")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @default(now()) @map("updated_at")
+
+  @@index([status])
+  @@index([stateId])
+  @@index([lgaId])
+  @@index([wardId])
+  @@index([communityId])
+  @@index([userHash])
+  @@map("feeds")
 }
 
 // ─── Core Tables ───

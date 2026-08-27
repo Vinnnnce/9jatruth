@@ -26,7 +26,7 @@ export function getDb(): NeonQueryFunction<true, true> {
  */
 let initialized = false;
 
-export const SCHEMA_VERSION = "2026-08-23-v4";
+export const SCHEMA_VERSION = "2026-08-27-community-feeds-v1";
 
 export async function ensureDbInitialized() {
   if (initialized) return;
@@ -1442,7 +1442,86 @@ export async function ensureDbInitialized() {
   _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS user_state TEXT`);
   _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS location_updated_at TIMESTAMPTZ`);
 
+  // ─── Community Feeds System: Wards table (between LGA and Community) ───
+  _q.push(sql`CREATE TABLE IF NOT EXISTS wards (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    code TEXT,
+    state_id INTEGER REFERENCES states(id) ON DELETE SET NULL,
+    lga_id INTEGER REFERENCES lgas(id) ON DELETE CASCADE,
+    lat DOUBLE PRECISION,
+    lng DOUBLE PRECISION,
+    source TEXT NOT NULL DEFAULT 'manual',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (lga_id, name)
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_wards_lga ON wards(lga_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_wards_state ON wards(state_id)`);
+  // Link communities to wards (optional — communities may sit under a village or directly under an LGA)
+  _q.push(sql`ALTER TABLE communities ADD COLUMN IF NOT EXISTS ward_id INTEGER REFERENCES wards(id) ON DELETE SET NULL`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_communities_ward ON communities(ward_id)`);
+
+  // ─── Community Feeds table (geo-tagged community posts with AI metadata) ───
+  _q.push(sql`CREATE TABLE IF NOT EXISTS feeds (
+    id SERIAL PRIMARY KEY,
+    user_hash TEXT NOT NULL,
+    clerk_user_id TEXT,
+    content TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'general',
+    tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+    media_urls JSONB NOT NULL DEFAULT '[]'::jsonb,
+    state_id INTEGER REFERENCES states(id) ON DELETE SET NULL,
+    lga_id INTEGER REFERENCES lgas(id) ON DELETE SET NULL,
+    ward_id INTEGER REFERENCES wards(id) ON DELETE SET NULL,
+    community_id INTEGER REFERENCES communities(id) ON DELETE SET NULL,
+    state_name TEXT,
+    lga_name TEXT,
+    ward_name TEXT,
+    community_name TEXT,
+    region_name TEXT,
+    lat DOUBLE PRECISION,
+    lng DOUBLE PRECISION,
+    location_source TEXT,
+    assignment_confidence INTEGER NOT NULL DEFAULT 0,
+    ai_community_prediction JSONB,
+    ai_relevance_score INTEGER NOT NULL DEFAULT 50,
+    spam_score INTEGER NOT NULL DEFAULT 0,
+    spam_verdict TEXT NOT NULL DEFAULT 'clean',
+    duplicate_of_id INTEGER REFERENCES feeds(id) ON DELETE SET NULL,
+    trust_score INTEGER NOT NULL DEFAULT 50,
+    like_count INTEGER NOT NULL DEFAULT 0,
+    comment_count INTEGER NOT NULL DEFAULT 0,
+    view_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'published',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feeds_status_created ON feeds(status, created_at DESC)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feeds_state ON feeds(state_id) WHERE state_id IS NOT NULL`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feeds_lga ON feeds(lga_id) WHERE lga_id IS NOT NULL`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feeds_ward ON feeds(ward_id) WHERE ward_id IS NOT NULL`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feeds_community ON feeds(community_id) WHERE community_id IS NOT NULL`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feeds_user ON feeds(user_hash)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feeds_tags ON feeds USING GIN (tags)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feeds_spam ON feeds(spam_verdict) WHERE spam_verdict <> 'clean'`);
+
   await sql.transaction(_q as any);
+
+  // ─── Optional PostGIS indexing ───────────────────────────────────────
+  // Neon supports the PostGIS extension on most compute-enabled branches.
+  // We add a geography column + GiST index ONLY when the extension is
+  // available, so the app still boots on environments where it is not
+  // enabled. Nearby queries try PostGIS first and fall back to Haversine.
+  try {
+    await sql`CREATE EXTENSION IF NOT EXISTS postgis`;
+    await sql`ALTER TABLE feeds ADD COLUMN IF NOT EXISTS geog geography(Point, 4326)`;
+    await sql`UPDATE feeds SET geog = ST_MakePoint(COALESCE(lng, 0), COALESCE(lat, 0))::geography WHERE geog IS NULL AND lat IS NOT NULL AND lng IS NOT NULL`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_feeds_geog ON feeds USING GIST (geog) WHERE geog IS NOT NULL`;
+  } catch (postgisErr) {
+    // PostGIS not available on this branch — nearby queries use Haversine fallback.
+    console.warn("[db] PostGIS unavailable, using Haversine fallback for feed geo-queries:", (postgisErr as Error)?.message);
+  }
 
   // Seed geo hierarchy reference data (Nigeria regions/states only — no demo posts)
   const existingRegions = await sql`SELECT COUNT(*) as count FROM regions`;
@@ -1508,6 +1587,44 @@ export async function ensureDbInitialized() {
       }
     }
     console.log("[9jatruth] LGA reference data initialized");
+  }
+
+  // Seed a small set of sample wards so the cascading Ward dropdown works
+  // out of the box. Wards are also auto-created on-demand when a post is
+  // submitted with a ward name that does not yet exist. For full INEC ward
+  // coverage, run: node scripts/import-wards.mjs data/nigeria-wards.csv
+  const existingWards = await sql`SELECT COUNT(*) as count FROM wards`;
+  if ((existingWards as any)[0].count === 0) {
+    const sampleWards: Array<{ state: string; lga: string; ward: string; lat?: number; lng?: number }> = [
+      { state: "Lagos", lga: "Ikeja", ward: "Oke-Ira", lat: 6.6018, lng: 3.3515 },
+      { state: "Lagos", lga: "Ikeja", ward: "Alausa", lat: 6.6030, lng: 3.3540 },
+      { state: "Lagos", lga: "Surulere", ward: "Itire", lat: 6.5244, lng: 3.3503 },
+      { state: "Lagos", lga: "Surulere", ward: "Iponri", lat: 6.5100, lng: 3.3600 },
+      { state: "Lagos", lga: "Ikorodu", ward: "Ijede", lat: 6.6167, lng: 3.6833 },
+      { state: "Lagos", lga: "Eti-Osa", ward: "Ikoyi-Obalende", lat: 6.4500, lng: 3.4350 },
+      { state: "Rivers", lga: "Port Harcourt", ward: "D-Line", lat: 4.8156, lng: 7.0498 },
+      { state: "Rivers", lga: "Port Harcourt", ward: "Town", lat: 4.7684, lng: 7.0147 },
+      { state: "Rivers", lga: "Obio-Akpor", ward: "Rumuolumeni", lat: 4.8300, lng: 6.9800 },
+      { state: "Enugu", lga: "Enugu East", ward: "Abakpa", lat: 6.4700, lng: 7.5100 },
+      { state: "Enugu", lga: "Enugu North", ward: "Ogui", lat: 6.4600, lng: 7.4900 },
+      { state: "Kano", lga: "Kano Municipal", ward: "Fagge", lat: 12.0200, lng: 8.5400 },
+      { state: "Kano", lga: "Nasarawa", ward: "Kofar Wambai", lat: 12.0100, lng: 8.5200 },
+      { state: "Kaduna", lga: "Kaduna North", ward: "Kawo", lat: 10.6300, lng: 7.4500 },
+      { state: "Kaduna", lga: "Zaria", ward: "Tudun Wada", lat: 11.0800, lng: 7.6900 },
+      { state: "FCT", lga: "Municipal Area Council", ward: "Wuse", lat: 9.0800, lng: 7.4700 },
+      { state: "FCT", lga: "Municipal Area Council", ward: "Garki", lat: 9.0200, lng: 7.4900 },
+      { state: "Oyo", lga: "Ibadan North", ward: "Bodija", lat: 7.4300, lng: 3.9100 },
+      { state: "Oyo", lga: "Ibadan North", ward: "Agodi", lat: 7.4200, lng: 3.9000 },
+      { state: "Ogun", lga: "Abeokuta South", ward: "Ijemo", lat: 7.1500, lng: 3.3700 },
+    ];
+    for (const w of sampleWards) {
+      const stateRow = (await sql`SELECT id FROM states WHERE name = ${w.state}`) as any;
+      const lgaRow = (await sql`SELECT id FROM lgas WHERE name = ${w.lga} AND state_id = ${stateRow[0]?.id ?? null} LIMIT 1`) as any;
+      if (stateRow[0]?.id && lgaRow[0]?.id) {
+        await sql`INSERT INTO wards (name, code, state_id, lga_id, lat, lng, source) VALUES (${w.ward}, ${w.state.slice(0, 2).toUpperCase() + "/" + w.lga.slice(0, 2).toUpperCase() + "/" + w.ward.slice(0, 2).toUpperCase()}, ${stateRow[0].id}, ${lgaRow[0].id}, ${w.lat ?? null}, ${w.lng ?? null}, 'sample') ON CONFLICT (lga_id, name) DO NOTHING`;
+      }
+    }
+    console.log("[9jatruth] Sample ward reference data initialized");
   }
 
   // Seed neighborhoods with geo hierarchy (reference data only — no demo posts)
