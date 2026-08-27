@@ -17,25 +17,48 @@ datasource db {
 model Region {
   id        Int      @id @default(autoincrement())
   name      String   @unique
+  code      String?
+  slug      String?
   createdAt DateTime @default(now()) @map("created_at")
+
+  states    State[]
 
   @@map("regions")
 }
 
 model State {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  regionId  Int?     @map("region_id")
-  createdAt DateTime @default(now()) @map("created_at")
+  id              Int      @id @default(autoincrement())
+  name            String   @unique
+  regionId        Int?     @map("region_id")
+  code            String?
+  portalId        Int?     @map("portal_id")
+  lat             Float?
+  lng             Float?
+  source          String?
+  sourceUpdatedAt DateTime? @map("source_updated_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  region          Region?  @relation(fields: [regionId], references: [id])
+  lgas            Lga[]
+  wards           Ward[]
 
   @@map("states")
 }
 
 model Lga {
-  id        Int      @id @default(autoincrement())
-  name      String
-  stateId   Int?     @map("state_id")
-  createdAt DateTime @default(now()) @map("created_at")
+  id              Int      @id @default(autoincrement())
+  name            String
+  stateId         Int?     @map("state_id")
+  code            String?
+  portalId        Int?     @map("portal_id")
+  lat             Float?
+  lng             Float?
+  source          String?
+  sourceUpdatedAt DateTime? @map("source_updated_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  state           State?   @relation(fields: [stateId], references: [id])
+  wards           Ward[]
 
   @@map("lgas")
 }
@@ -105,6 +128,10 @@ model MicroTruth {
   communityName      String?  @map("community_name")
   villageName        String?  @map("village_name")
   regionName         String?  @map("region_name")
+  // Soft delete (removed from website, retained in database)
+  deletedAt          DateTime? @map("deleted_at")
+  deletedBy          String?  @map("deleted_by")
+  deleteReason       String?  @map("delete_reason")
 
   @@map("micro_truths")
 }
@@ -695,4 +722,175 @@ model NewsIncentive {
   @@index([articleId])
   @@index([userHash])
   @@map("news_incentives")
+}
+
+// ─── Nigeria Electoral Geography (INEC) ───
+
+model Ward {
+  id              Int      @id @default(autoincrement())
+  code            String
+  name            String
+  lgaId           Int      @map("lga_id")
+  stateId         Int      @map("state_id")
+  portalId        Int?     @map("portal_id")
+  lat             Float?
+  lng             Float?
+  source          String?
+  sourceUpdatedAt DateTime? @map("source_updated_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  lga             Lga      @relation(fields: [lgaId], references: [id])
+  state           State    @relation(fields: [stateId], references: [id])
+
+  @@unique([lgaId, code, name], name: "idx_wards_unique_lga_code_name")
+  @@index([lgaId])
+  @@index([stateId])
+  @@index([code])
+  @@map("wards")
+}
+
+// ─── Politics: normalized canonical model ───
+
+model PoliticalPosition {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  level     String   @default("federal")
+  sortOrder Int      @default(99) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  officeHolders     OfficeHolder[]
+  electionCandidates ElectionCandidate[]
+
+  @@index([level])
+  @@map("political_positions")
+}
+
+model PoliticalPerson {
+  id                       Int       @id @default(autoincrement())
+  slug                     String    @unique
+  fullName                 String    @map("full_name")
+  photoUrl                 String?   @map("photo_url")
+  gender                   String?
+  dateOfBirth              String?   @map("date_of_birth")
+  placeOfBirth             String?   @map("place_of_birth")
+  hometown                 String?
+  nationality              String    @default("Nigerian")
+  stateOfOrigin            String?   @map("state_of_origin")
+  localGovtOfOrigin        String?   @map("local_govt_of_origin")
+  autobiography            String?
+  educationBackground      String?   @map("education_background")
+  previousPoliticalPositions String? @map("previous_political_positions")
+  politicalBackground      String?   @map("political_background")
+  businesses               String?
+  businessInterests        String?   @map("business_interests")
+  netWorth                 String?   @map("net_worth")
+  assetsDeclared           String?   @map("assets_declared")
+  healthStatus             String?   @map("health_status")
+  healthDisclosureUrl      String?   @map("health_disclosure_url")
+  phone                    String?
+  email                    String?
+  website                  String?
+  facebook                 String?
+  twitter                  String?
+  instagram                String?
+  linkedin                 String?
+  sourceUrls               String?   @map("source_urls")
+  verificationStatus       String    @default("unverified") @map("verification_status")
+  dataConfidence           Int       @default(0) @map("data_confidence")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @default(now()) @map("updated_at")
+
+  officeHolders      OfficeHolder[]
+  electionCandidates ElectionCandidate[]
+
+  @@index([stateOfOrigin])
+  @@index([verificationStatus])
+  @@map("political_persons")
+}
+
+model PoliticalElection {
+  id          Int       @id @default(autoincrement())
+  year        Int
+  name        String
+  type        String    @default("general")
+  geoScope    String    @default("national") @map("geo_scope")
+  electionDate DateTime? @map("election_date")
+  status      String    @default("upcoming")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  officeHolders      OfficeHolder[]
+  electionCandidates ElectionCandidate[]
+
+  @@unique([year, type, geoScope], name: "idx_elections_unique")
+  @@index([year])
+  @@map("political_elections")
+}
+
+model OfficeHolder {
+  id                  Int      @id @default(autoincrement())
+  personId            Int      @map("person_id")
+  positionId          Int      @map("position_id")
+  partyAcronym        String?  @map("party_acronym")
+  electionId          Int?     @map("election_id")
+  stateId             Int?     @map("state_id")
+  lgaId               Int?     @map("lga_id")
+  wardId              Int?     @map("ward_id")
+  senatorialDistrict  String?  @map("senatorial_district")
+  federalConstituency String?  @map("federal_constituency")
+  stateConstituency   String?  @map("state_constituency")
+  termStart           String?  @map("term_start")
+  termEnd             String?  @map("term_end")
+  incumbentSince      String?  @map("incumbent_since")
+  status              String   @default("active")
+  sourceUrls          String?  @map("source_urls")
+  verificationStatus  String   @default("unverified") @map("verification_status")
+  dataConfidence      Int      @default(0) @map("data_confidence")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @default(now()) @map("updated_at")
+
+  person     PoliticalPerson     @relation(fields: [personId], references: [id])
+  position   PoliticalPosition   @relation(fields: [positionId], references: [id])
+  election   PoliticalElection? @relation(fields: [electionId], references: [id])
+
+  @@index([positionId])
+  @@index([stateId, lgaId, wardId])
+  @@index([partyAcronym])
+  @@map("office_holders")
+}
+
+model ElectionCandidate {
+  id                  Int      @id @default(autoincrement())
+  personId            Int      @map("person_id")
+  positionId          Int      @map("position_id")
+  electionId          Int      @map("election_id")
+  partyAcronym        String?  @map("party_acronym")
+  stateId             Int?     @map("state_id")
+  lgaId               Int?     @map("lga_id")
+  wardId              Int?     @map("ward_id")
+  senatorialDistrict  String?  @map("senatorial_district")
+  federalConstituency String?  @map("federal_constituency")
+  stateConstituency   String?  @map("state_constituency")
+  manifesto           String?
+  manifestoSummary    String?  @map("manifesto_summary")
+  campaignSlogan      String?  @map("campaign_slogan")
+  keyPolicies         String?  @map("key_policies")
+  runningMate         String?  @map("running_mate")
+  recordType          String   @default("candidate") @map("record_type")
+  status              String   @default("pending")
+  sourceUrls          String?  @map("source_urls")
+  verificationStatus  String   @default("unverified") @map("verification_status")
+  dataConfidence      Int      @default(0) @map("data_confidence")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @default(now()) @map("updated_at")
+
+  person    PoliticalPerson   @relation(fields: [personId], references: [id])
+  position  PoliticalPosition @relation(fields: [positionId], references: [id])
+  election PoliticalElection @relation(fields: [electionId], references: [id])
+
+  @@index([partyAcronym])
+  @@index([positionId])
+  @@index([electionId])
+  @@index([stateId, lgaId, wardId])
+  @@map("election_candidates")
 }

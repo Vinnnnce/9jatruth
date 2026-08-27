@@ -27,6 +27,7 @@ const EVENT_TYPES = [
 
 export default function PoliticsPage() {
   const qc = useQueryClient();
+  const [selectedParty, setSelectedParty] = useState<string | null>(null);
   const { toast } = useToast();
   const [year, setYear] = useState("2023");
   const [selectedState, setSelectedState] = useState("");
@@ -102,19 +103,29 @@ export default function PoliticsPage() {
             <CardHeader className="pb-2"><CardTitle className="text-sm font-display flex items-center gap-2"><Vote className="h-4 w-4" /> Political Parties</CardTitle></CardHeader>
             <CardContent>
               {parties.isLoading && <Skeleton className="h-16 w-full" />}
+              <p className="text-[10px] text-muted-foreground mb-2">Tap a party to view all its registered candidates.</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                {partiesData.map((p: any) => (
-                  <div key={p.acronym} className="rounded-md border border-border p-2 text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color || "hsl(var(--primary))" }} />
-                      <span className="text-xs font-bold">{p.acronym}</span>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">{p.name}</p>
-                  </div>
-                ))}
+                {partiesData.map((p: any) => {
+                  const active = selectedParty === p.acronym;
+                  return (
+                    <button
+                      key={p.acronym}
+                      type="button"
+                      onClick={() => setSelectedParty(active ? null : p.acronym)}
+                      className={`rounded-md border p-2 text-center transition-colors ${active ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"}`}
+                    >
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color || "hsl(var(--primary))" }} />
+                        <span className="text-xs font-bold">{p.acronym}</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">{p.name}</p>
+                    </button>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
+          {selectedParty && <PartyCandidatesSection acronym={selectedParty} />}
           <CandidatesSection />
         </TabsContent>
 
@@ -207,6 +218,47 @@ export default function PoliticsPage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+/** All registered candidates for a single political party (click-through). */
+function PartyCandidatesSection({ acronym }: { acronym: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: [`/api/politics/parties/${acronym}`],
+    queryFn: () => apiRequest("GET", `/api/politics/parties/${encodeURIComponent(acronym)}`).then((r) => r.json()),
+  });
+  const party = data?.party;
+  const candidates = data?.candidates ?? [];
+  const offices = Array.from(new Set(candidates.map((c: any) => c.office).filter(Boolean)));
+  return (
+    <Card className="border-primary/30">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-display flex items-center gap-2">
+          <span className="h-3 w-3 rounded-full" style={{ background: party?.color || "hsl(var(--primary))" }} />
+          {party?.name || acronym} candidates
+          <Badge variant="secondary" className="text-[9px]">{candidates.length} registered</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading && <Skeleton className="h-16 w-full" />}
+        {!isLoading && candidates.length === 0 && (
+          <p className="text-xs text-muted-foreground">No registered candidates on file yet for {acronym}. Candidate data is added by super admins as official lists are published.</p>
+        )}
+        {offices.map((office: any) => (
+          <div key={office} className="mb-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">{office}</p>
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-2">
+              {candidates.filter((c: any) => c.office === office).map((c: any) => (
+                <div key={c.id} className="rounded-md border border-border p-2">
+                  <p className="text-xs font-medium">{c.name}</p>
+                  {c.state && <p className="text-[10px] text-muted-foreground">{c.state}{c.lga ? ` · ${c.lga}` : ""}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 

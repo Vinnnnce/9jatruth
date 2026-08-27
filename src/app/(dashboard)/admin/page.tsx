@@ -82,6 +82,7 @@ import {
   TrendingUp,
   AlertCircle,
   CheckCircle2,
+  XCircle,
   Search,
   ShieldAlert,
   MapPin,
@@ -539,6 +540,25 @@ export default function AdminDashboard() {
   });
 
   const redemptions = rewardsData?.redemptions ?? [];
+
+  // Organization verification (approve / reject pending orgs)
+  const verifyOrgMutation = useMutation({
+    mutationFn: async ({ id, action }: { id: number; action: "approve" | "reject" }) => {
+      const res = await apiRequest("POST", `/api/admin/organizations/${id}/verify`, { action });
+      return res.json();
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
+      toast({
+        title: vars.action === "approve" ? "Organization approved" : "Organization rejected",
+        description: `Organization #${vars.id} has been ${vars.action}ed.`,
+      });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Verification failed", description: err.message, variant: "destructive" });
+    },
+  });
 
   // Reward redemption status mutation (approve/deny/fulfill/revert to pending)
   const updateRedemptionMutation = useMutation({
@@ -1589,6 +1609,7 @@ export default function AdminDashboard() {
                         <TableHead>Contact</TableHead>
                         <TableHead>Verification</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1625,6 +1646,29 @@ export default function AdminDashboard() {
                               <Badge variant={active ? "secondary" : "outline"} className="text-[9px]">
                                 {active ? "Active" : "Inactive"}
                               </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                {!verified && (
+                                  <Button
+                                    size="sm"
+                                    className="h-6 px-2 text-[10px]"
+                                    disabled={verifyOrgMutation.isPending}
+                                    onClick={() => verifyOrgMutation.mutate({ id: Number(org.id), action: "approve" })}
+                                  >
+                                    <CheckCircle2 className="h-3 w-3" /> Approve
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 px-2 text-[10px]"
+                                  disabled={verifyOrgMutation.isPending}
+                                  onClick={() => verifyOrgMutation.mutate({ id: Number(org.id), action: "reject" })}
+                                >
+                                  <XCircle className="h-3 w-3" /> {verified ? "Revoke" : "Reject"}
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         );

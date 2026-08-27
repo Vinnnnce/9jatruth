@@ -26,7 +26,7 @@ export function getDb(): NeonQueryFunction<true, true> {
  */
 let initialized = false;
 
-export const SCHEMA_VERSION = "2026-08-23-v4";
+export const SCHEMA_VERSION = "2026-08-27-v5";
 
 export async function ensureDbInitialized() {
   if (initialized) return;
@@ -1343,6 +1343,179 @@ export async function ensureDbInitialized() {
     created_at TIMESTAMPTZ DEFAULT NOW()
   )`);
   _q.push(sql`CREATE INDEX IF NOT EXISTS idx_abuse_signals_severity ON political_abuse_signals(severity, resolved, created_at DESC)`);
+
+  // ─── Nigeria electoral geography (INEC) — extend existing geo tables ───
+  // regions = geopolitical zones (6 + FCT grouping); add official code + slug
+  _q.push(sql`ALTER TABLE regions ADD COLUMN IF NOT EXISTS code TEXT`);
+  _q.push(sql`ALTER TABLE regions ADD COLUMN IF NOT EXISTS slug TEXT`);
+  // states: official INEC code, coordinates, provenance
+  _q.push(sql`ALTER TABLE states ADD COLUMN IF NOT EXISTS code TEXT`);
+  _q.push(sql`ALTER TABLE states ADD COLUMN IF NOT EXISTS portal_id INTEGER`);
+  _q.push(sql`ALTER TABLE states ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION`);
+  _q.push(sql`ALTER TABLE states ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION`);
+  _q.push(sql`ALTER TABLE states ADD COLUMN IF NOT EXISTS source TEXT`);
+  _q.push(sql`ALTER TABLE states ADD COLUMN IF NOT EXISTS source_updated_at TIMESTAMPTZ`);
+  _q.push(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_states_code ON states(code) WHERE code IS NOT NULL`);
+  // lgas: official INEC code, coordinates, provenance
+  _q.push(sql`ALTER TABLE lgas ADD COLUMN IF NOT EXISTS code TEXT`);
+  _q.push(sql`ALTER TABLE lgas ADD COLUMN IF NOT EXISTS portal_id INTEGER`);
+  _q.push(sql`ALTER TABLE lgas ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION`);
+  _q.push(sql`ALTER TABLE lgas ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION`);
+  _q.push(sql`ALTER TABLE lgas ADD COLUMN IF NOT EXISTS source TEXT`);
+  _q.push(sql`ALTER TABLE lgas ADD COLUMN IF NOT EXISTS source_updated_at TIMESTAMPTZ`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_lgas_code ON lgas(code)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_lgas_state ON lgas(state_id)`);
+  // wards: official INEC ward level (between LGA and polling unit)
+  _q.push(sql`CREATE TABLE IF NOT EXISTS wards (
+    id SERIAL PRIMARY KEY,
+    code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    lga_id INTEGER NOT NULL REFERENCES lgas(id) ON DELETE CASCADE,
+    state_id INTEGER NOT NULL REFERENCES states(id) ON DELETE CASCADE,
+    portal_id INTEGER,
+    lat DOUBLE PRECISION,
+    lng DOUBLE PRECISION,
+    source TEXT,
+    source_updated_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (lga_id, code, name)
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_wards_lga ON wards(lga_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_wards_state ON wards(state_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_wards_code ON wards(code)`);
+
+  // ─── Normalized politics: positions, persons, elections, office holders, candidates ───
+  _q.push(sql`CREATE TABLE IF NOT EXISTS political_positions (
+    id SERIAL PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    level TEXT NOT NULL DEFAULT 'federal',
+    sort_order INTEGER NOT NULL DEFAULT 99,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_positions_level ON political_positions(level)`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS political_persons (
+    id SERIAL PRIMARY KEY,
+    slug TEXT NOT NULL UNIQUE,
+    full_name TEXT NOT NULL,
+    photo_url TEXT,
+    gender TEXT,
+    date_of_birth TEXT,
+    place_of_birth TEXT,
+    hometown TEXT,
+    nationality TEXT DEFAULT 'Nigerian',
+    state_of_origin TEXT,
+    local_govt_of_origin TEXT,
+    autobiography TEXT,
+    education_background TEXT,
+    previous_political_positions TEXT,
+    political_background TEXT,
+    businesses TEXT,
+    business_interests TEXT,
+    net_worth TEXT,
+    assets_declared TEXT,
+    health_status TEXT,
+    health_disclosure_url TEXT,
+    phone TEXT,
+    email TEXT,
+    website TEXT,
+    facebook TEXT,
+    twitter TEXT,
+    instagram TEXT,
+    linkedin TEXT,
+    source_urls TEXT,
+    verification_status TEXT NOT NULL DEFAULT 'unverified',
+    data_confidence INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_persons_state_origin ON political_persons(state_of_origin)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_persons_verification ON political_persons(verification_status)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_persons_search ON political_persons USING gin (to_tsvector('simple', coalesce(full_name,'') || ' ' || coalesce(autobiography,'')))`);
+  _q.push(sql`CREATE TABLE IF NOT EXISTS political_elections (
+    id SERIAL PRIMARY KEY,
+    year INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'general',
+    geo_scope TEXT NOT NULL DEFAULT 'national',
+    election_date DATE,
+    status TEXT NOT NULL DEFAULT 'upcoming',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (year, type, geo_scope)
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_elections_year ON political_elections(year)`);
+  // Current office holders (incumbents)
+  _q.push(sql`CREATE TABLE IF NOT EXISTS office_holders (
+    id SERIAL PRIMARY KEY,
+    person_id INTEGER NOT NULL REFERENCES political_persons(id) ON DELETE CASCADE,
+    position_id INTEGER NOT NULL REFERENCES political_positions(id) ON DELETE RESTRICT,
+    party_acronym TEXT,
+    election_id INTEGER REFERENCES political_elections(id) ON DELETE SET NULL,
+    state_id INTEGER REFERENCES states(id) ON DELETE SET NULL,
+    lga_id INTEGER REFERENCES lgas(id) ON DELETE SET NULL,
+    ward_id INTEGER REFERENCES wards(id) ON DELETE SET NULL,
+    senatorial_district TEXT,
+    federal_constituency TEXT,
+    state_constituency TEXT,
+    term_start TEXT,
+    term_end TEXT,
+    incumbent_since TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    source_urls TEXT,
+    verification_status TEXT NOT NULL DEFAULT 'unverified',
+    data_confidence INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_office_holders_position ON office_holders(position_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_office_holders_geo ON office_holders(state_id, lga_id, ward_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_office_holders_party ON office_holders(party_acronym)`);
+  _q.push(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_office_holders_unique ON office_holders(position_id, state_id, lga_id, ward_id, party_acronym) WHERE status = 'active'`);
+  // Election candidates (2027 + future)
+  _q.push(sql`CREATE TABLE IF NOT EXISTS election_candidates (
+    id SERIAL PRIMARY KEY,
+    person_id INTEGER NOT NULL REFERENCES political_persons(id) ON DELETE CASCADE,
+    position_id INTEGER NOT NULL REFERENCES political_positions(id) ON DELETE RESTRICT,
+    election_id INTEGER NOT NULL REFERENCES political_elections(id) ON DELETE CASCADE,
+    party_acronym TEXT,
+    state_id INTEGER REFERENCES states(id) ON DELETE SET NULL,
+    lga_id INTEGER REFERENCES lgas(id) ON DELETE SET NULL,
+    ward_id INTEGER REFERENCES wards(id) ON DELETE SET NULL,
+    senatorial_district TEXT,
+    federal_constituency TEXT,
+    state_constituency TEXT,
+    manifesto TEXT,
+    manifesto_summary TEXT,
+    campaign_slogan TEXT,
+    key_policies TEXT,
+    running_mate TEXT,
+    record_type TEXT NOT NULL DEFAULT 'candidate',
+    status TEXT NOT NULL DEFAULT 'pending',
+    source_urls TEXT,
+    verification_status TEXT NOT NULL DEFAULT 'unverified',
+    data_confidence INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_election_candidates_party ON election_candidates(party_acronym)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_election_candidates_position ON election_candidates(position_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_election_candidates_election ON election_candidates(election_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_election_candidates_geo ON election_candidates(state_id, lga_id, ward_id)`);
+  // Bridge existing flat political_candidates table to the normalized model (nullable FKs)
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS person_id INTEGER`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS position_id INTEGER`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS election_id INTEGER`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS state_id INTEGER`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS lga_id INTEGER`);
+  _q.push(sql`ALTER TABLE political_candidates ADD COLUMN IF NOT EXISTS ward_id INTEGER`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_candidates_person ON political_candidates(person_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_candidates_position_fk ON political_candidates(position_id)`);
+
+  // ─── Soft delete for posts/feeds (delete from website, keep in database) ───
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS deleted_by TEXT`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS delete_reason TEXT`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_micro_truths_deleted ON micro_truths(deleted_at)`);
 
   // ─── Site / Feature / Rewards configuration (super-admin controlled, live) ───
   _q.push(sql`CREATE TABLE IF NOT EXISTS site_config (

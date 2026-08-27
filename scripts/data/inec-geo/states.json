@@ -1,0 +1,224 @@
+[
+  {
+    "portal_id": "1",
+    "code": "01",
+    "name": "ABIA",
+    "raw": "01 - ABIA"
+  },
+  {
+    "portal_id": "2",
+    "code": "02",
+    "name": "ADAMAWA",
+    "raw": "02 - ADAMAWA"
+  },
+  {
+    "portal_id": "3",
+    "code": "03",
+    "name": "AKWA IBOM",
+    "raw": "03 - AKWA IBOM"
+  },
+  {
+    "portal_id": "4",
+    "code": "04",
+    "name": "ANAMBRA",
+    "raw": "04 - ANAMBRA"
+  },
+  {
+    "portal_id": "5",
+    "code": "05",
+    "name": "BAUCHI",
+    "raw": "05 - BAUCHI"
+  },
+  {
+    "portal_id": "6",
+    "code": "06",
+    "name": "BAYELSA",
+    "raw": "06 - BAYELSA"
+  },
+  {
+    "portal_id": "7",
+    "code": "07",
+    "name": "BENUE",
+    "raw": "07 - BENUE"
+  },
+  {
+    "portal_id": "8",
+    "code": "08",
+    "name": "BORNO",
+    "raw": "08 - BORNO"
+  },
+  {
+    "portal_id": "9",
+    "code": "09",
+    "name": "CROSS RIVER",
+    "raw": "09 - CROSS RIVER"
+  },
+  {
+    "portal_id": "10",
+    "code": "10",
+    "name": "DELTA",
+    "raw": "10 - DELTA"
+  },
+  {
+    "portal_id": "11",
+    "code": "11",
+    "name": "EBONYI",
+    "raw": "11 - EBONYI"
+  },
+  {
+    "portal_id": "12",
+    "code": "12",
+    "name": "EDO",
+    "raw": "12 - EDO"
+  },
+  {
+    "portal_id": "13",
+    "code": "13",
+    "name": "EKITI",
+    "raw": "13 - EKITI"
+  },
+  {
+    "portal_id": "14",
+    "code": "14",
+    "name": "ENUGU",
+    "raw": "14 - ENUGU"
+  },
+  {
+    "portal_id": "15",
+    "code": "37",
+    "name": "FCT",
+    "raw": "37 - FCT"
+  },
+  {
+    "portal_id": "16",
+    "code": "15",
+    "name": "GOMBE",
+    "raw": "15 - GOMBE"
+  },
+  {
+    "portal_id": "17",
+    "code": "16",
+    "name": "IMO",
+    "raw": "16 - IMO"
+  },
+  {
+    "portal_id": "18",
+    "code": "17",
+    "name": "JIGAWA",
+    "raw": "17 - JIGAWA"
+  },
+  {
+    "portal_id": "19",
+    "code": "18",
+    "name": "KADUNA",
+    "raw": "18 - KADUNA"
+  },
+  {
+    "portal_id": "20",
+    "code": "19",
+    "name": "KANO",
+    "raw": "19 - KANO"
+  },
+  {
+    "portal_id": "21",
+    "code": "20",
+    "name": "KATSINA",
+    "raw": "20 - KATSINA"
+  },
+  {
+    "portal_id": "22",
+    "code": "21",
+    "name": "KEBBI",
+    "raw": "21 - KEBBI"
+  },
+  {
+    "portal_id": "23",
+    "code": "22",
+    "name": "KOGI",
+    "raw": "22 - KOGI"
+  },
+  {
+    "portal_id": "24",
+    "code": "23",
+    "name": "KWARA",
+    "raw": "23 - KWARA"
+  },
+  {
+    "portal_id": "25",
+    "code": "24",
+    "name": "LAGOS",
+    "raw": "24 - LAGOS"
+  },
+  {
+    "portal_id": "26",
+    "code": "25",
+    "name": "NASARAWA",
+    "raw": "25 - NASARAWA"
+  },
+  {
+    "portal_id": "27",
+    "code": "26",
+    "name": "NIGER",
+    "raw": "26 - NIGER"
+  },
+  {
+    "portal_id": "28",
+    "code": "27",
+    "name": "OGUN",
+    "raw": "27 - OGUN"
+  },
+  {
+    "portal_id": "29",
+    "code": "28",
+    "name": "ONDO",
+    "raw": "28 - ONDO"
+  },
+  {
+    "portal_id": "30",
+    "code": "29",
+    "name": "OSUN",
+    "raw": "29 - OSUN"
+  },
+  {
+    "portal_id": "31",
+    "code": "30",
+    "name": "OYO",
+    "raw": "30 - OYO"
+  },
+  {
+    "portal_id": "32",
+    "code": "31",
+    "name": "PLATEAU",
+    "raw": "31 - PLATEAU"
+  },
+  {
+    "portal_id": "33",
+    "code": "32",
+    "name": "RIVERS",
+    "raw": "32 - RIVERS"
+  },
+  {
+    "portal_id": "34",
+    "code": "33",
+    "name": "SOKOTO",
+    "raw": "33 - SOKOTO"
+  },
+  {
+    "portal_id": "35",
+    "code": "34",
+    "name": "TARABA",
+    "raw": "34 - TARABA"
+  },
+  {
+    "portal_id": "36",
+    "code": "35",
+    "name": "YOBE",
+    "raw": "35 - YOBE"
+  },
+  {
+    "portal_id": "37",
+    "code": "36",
+    "name": "ZAMFARA",
+    "raw": "36 - ZAMFARA"
+  }
+]

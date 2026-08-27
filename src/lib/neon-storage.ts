@@ -253,21 +253,21 @@ export async function getTruths(limit = 50, neighborhoodId?: number, category?: 
   let rows: SqlRow[];
   const hasStateLga = state || lga;
   if (hasStateLga && neighborhoodId && category) {
-    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, n.state, n.lga, u.display_name, u.username FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id LEFT JOIN platform_users u ON t.user_hash = u.user_hash WHERE t.neighborhood_id = ${neighborhoodId} AND t.category = ${category} AND (${state ?? null}::text IS NULL OR n.state = ${state ?? null}) AND (${lga ?? null}::text IS NULL OR n.lga = ${lga ?? null}) ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, n.state, n.lga, u.display_name, u.username FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id LEFT JOIN platform_users u ON t.user_hash = u.user_hash WHERE t.neighborhood_id = ${neighborhoodId} AND t.category = ${category} AND (${state ?? null}::text IS NULL OR n.state = ${state ?? null}) AND (${lga ?? null}::text IS NULL OR n.lga = ${lga ?? null}) AND t.deleted_at IS NULL ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
   } else if (hasStateLga && neighborhoodId) {
-    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, n.state, n.lga, u.display_name, u.username FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id LEFT JOIN platform_users u ON t.user_hash = u.user_hash WHERE t.neighborhood_id = ${neighborhoodId} AND (${state ?? null}::text IS NULL OR n.state = ${state ?? null}) AND (${lga ?? null}::text IS NULL OR n.lga = ${lga ?? null}) ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, n.state, n.lga, u.display_name, u.username FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id LEFT JOIN platform_users u ON t.user_hash = u.user_hash WHERE t.neighborhood_id = ${neighborhoodId} AND (${state ?? null}::text IS NULL OR n.state = ${state ?? null}) AND (${lga ?? null}::text IS NULL OR n.lga = ${lga ?? null}) AND t.deleted_at IS NULL ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
   } else if (hasStateLga && category) {
-    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, n.state, n.lga, u.display_name, u.username FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id LEFT JOIN platform_users u ON t.user_hash = u.user_hash WHERE t.category = ${category} AND (${state ?? null}::text IS NULL OR n.state = ${state ?? null}) AND (${lga ?? null}::text IS NULL OR n.lga = ${lga ?? null}) ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, n.state, n.lga, u.display_name, u.username FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id LEFT JOIN platform_users u ON t.user_hash = u.user_hash WHERE t.category = ${category} AND (${state ?? null}::text IS NULL OR n.state = ${state ?? null}) AND (${lga ?? null}::text IS NULL OR n.lga = ${lga ?? null}) AND t.deleted_at IS NULL ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
   } else if (hasStateLga) {
-    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, n.state, n.lga, u.display_name, u.username FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id LEFT JOIN platform_users u ON t.user_hash = u.user_hash WHERE (${state ?? null}::text IS NULL OR n.state = ${state ?? null}) AND (${lga ?? null}::text IS NULL OR n.lga = ${lga ?? null}) ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, n.state, n.lga, u.display_name, u.username FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id LEFT JOIN platform_users u ON t.user_hash = u.user_hash WHERE (${state ?? null}::text IS NULL OR n.state = ${state ?? null}) AND (${lga ?? null}::text IS NULL OR n.lga = ${lga ?? null}) AND t.deleted_at IS NULL ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
   } else if (neighborhoodId && category) {
-    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, u.display_name, u.username FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id LEFT JOIN platform_users u ON t.user_hash = u.user_hash WHERE t.neighborhood_id = ${neighborhoodId} AND t.category = ${category} ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, u.display_name, u.username FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id LEFT JOIN platform_users u ON t.user_hash = u.user_hash WHERE t.neighborhood_id = ${neighborhoodId} AND t.category = ${category} AND t.deleted_at IS NULL ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
   } else if (neighborhoodId) {
-    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, u.display_name, u.username FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id LEFT JOIN platform_users u ON t.user_hash = u.user_hash WHERE t.neighborhood_id = ${neighborhoodId} ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, u.display_name, u.username FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id LEFT JOIN platform_users u ON t.user_hash = u.user_hash WHERE t.neighborhood_id = ${neighborhoodId} AND t.deleted_at IS NULL ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
   } else if (category) {
-    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, u.display_name, u.username FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id LEFT JOIN platform_users u ON t.user_hash = u.user_hash WHERE t.category = ${category} ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, u.display_name, u.username FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id LEFT JOIN platform_users u ON t.user_hash = u.user_hash WHERE t.category = ${category} AND t.deleted_at IS NULL ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
   } else {
-    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, u.display_name, u.username FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id LEFT JOIN platform_users u ON t.user_hash = u.user_hash ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, o.name as org_name, o.verified as org_verified, n.name as neighborhood_name, u.display_name, u.username FROM micro_truths t LEFT JOIN organizations o ON t.organization_id = o.id LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id LEFT JOIN platform_users u ON t.user_hash = u.user_hash AND t.deleted_at IS NULL ORDER BY t.created_at DESC LIMIT ${limit}`) as unknown as SqlRow[];
   }
   return rows.map((r) => ({
     ...mapTruth(r),
@@ -286,13 +286,13 @@ export async function getTruthsNearby(
   const sql = getDb();
   let rows: SqlRow[];
   if (filters?.category && filters?.status) {
-    rows = (await sql`SELECT * FROM micro_truths WHERE category = ${filters.category} AND status = ${filters.status} ORDER BY created_at DESC LIMIT 500`) as unknown as SqlRow[];
+    rows = (await sql`SELECT * FROM micro_truths WHERE category = ${filters.category} AND status = ${filters.status} AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 500`) as unknown as SqlRow[];
   } else if (filters?.category) {
-    rows = (await sql`SELECT * FROM micro_truths WHERE category = ${filters.category} ORDER BY created_at DESC LIMIT 500`) as unknown as SqlRow[];
+    rows = (await sql`SELECT * FROM micro_truths WHERE category = ${filters.category} AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 500`) as unknown as SqlRow[];
   } else if (filters?.status) {
-    rows = (await sql`SELECT * FROM micro_truths WHERE status = ${filters.status} ORDER BY created_at DESC LIMIT 500`) as unknown as SqlRow[];
+    rows = (await sql`SELECT * FROM micro_truths WHERE status = ${filters.status} AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 500`) as unknown as SqlRow[];
   } else {
-    rows = (await sql`SELECT * FROM micro_truths ORDER BY created_at DESC LIMIT 500`) as unknown as SqlRow[];
+    rows = (await sql`SELECT * FROM micro_truths WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 500`) as unknown as SqlRow[];
   }
 
   const nRows = (await sql`SELECT * FROM neighborhoods`) as unknown as SqlRow[];
@@ -333,7 +333,7 @@ export async function getTruthsNearby(
 
 export async function getTruth(id: number): Promise<MicroTruth | undefined> {
   const sql = getDb();
-  const rows = (await sql`SELECT * FROM micro_truths WHERE id = ${id}`) as unknown as SqlRow[];
+  const rows = (await sql`SELECT * FROM micro_truths WHERE id = ${id} AND deleted_at IS NULL`) as unknown as SqlRow[];
   return rows[0] ? mapTruth(rows[0]) : undefined;
 }
 
@@ -704,7 +704,7 @@ export async function getReferralStats(userHash: string): Promise<ReferralStats>
 
 export async function getTrends() {
   const sql = getDb();
-  const allTruths = (await sql`SELECT * FROM micro_truths`) as unknown as SqlRow[];
+  const allTruths = (await sql`SELECT * FROM micro_truths WHERE deleted_at IS NULL`) as unknown as SqlRow[];
   const allSnapshots = (await sql`SELECT * FROM snapshots`) as unknown as SqlRow[];
   const allNeighborhoods = (await sql`SELECT * FROM neighborhoods`) as unknown as SqlRow[];
   const allPredictions = (await sql`SELECT * FROM predictions`) as unknown as SqlRow[];
@@ -847,7 +847,7 @@ export async function getAlerts() {
 export async function getLeaderboard() {
   const sql = getDb();
   const allLedger = (await sql`SELECT * FROM reward_ledger`) as unknown as SqlRow[];
-  const allTruths = (await sql`SELECT * FROM micro_truths`) as unknown as SqlRow[];
+  const allTruths = (await sql`SELECT * FROM micro_truths WHERE deleted_at IS NULL`) as unknown as SqlRow[];
   const allDevices = (await sql`SELECT * FROM device_profiles`) as unknown as SqlRow[];
   // Fetch platform_users to resolve display names from user_hash
   const allPlatformUsers = (await sql`SELECT display_name, clerk_user_id FROM platform_users`) as unknown as SqlRow[];
@@ -901,7 +901,7 @@ export async function search(query: string, category?: string, region?: string) 
   const q = query.toLowerCase().trim();
   if (!q) return [];
   const results: any[] = [];
-  const allTruths = (await sql`SELECT * FROM micro_truths`) as unknown as SqlRow[];
+  const allTruths = (await sql`SELECT * FROM micro_truths WHERE deleted_at IS NULL`) as unknown as SqlRow[];
   const allNeighborhoods = (await sql`SELECT * FROM neighborhoods`) as unknown as SqlRow[];
   const allPredictions = (await sql`SELECT * FROM predictions`) as unknown as SqlRow[];
 
@@ -943,8 +943,8 @@ export async function getActivity(limit = 50, userHash?: string) {
   const sql = getDb();
   // If userHash is provided, only return activities for that user
   const truthQuery = userHash
-    ? sql`SELECT * FROM micro_truths WHERE user_hash = ${userHash} ORDER BY created_at DESC LIMIT ${limit}`
-    : sql`SELECT * FROM micro_truths ORDER BY created_at DESC LIMIT ${limit}`;
+    ? sql`SELECT * FROM micro_truths WHERE user_hash = ${userHash} AND deleted_at IS NULL ORDER BY created_at DESC LIMIT ${limit}`
+    : sql`SELECT * FROM micro_truths WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT ${limit}`;
   const allTruths = (await truthQuery) as unknown as SqlRow[];
   const allRewards = userHash
     ? ((await sql`SELECT * FROM reward_ledger WHERE user_hash = ${userHash} ORDER BY created_at DESC LIMIT ${limit}`) as unknown as SqlRow[])
@@ -980,7 +980,7 @@ export async function getHealth() {
   const sql = getDb();
 
   // Real database statistics — no hardcoded/simulated values
-  const truthCount = (await sql`SELECT COUNT(*) as count FROM micro_truths`) as unknown as SqlRow[];
+  const truthCount = (await sql`SELECT COUNT(*) as count FROM micro_truths WHERE deleted_at IS NULL`) as unknown as SqlRow[];
   const neighborhoodCount = (await sql`SELECT COUNT(*) as count FROM neighborhoods`) as unknown as SqlRow[];
   const userCount = (await sql`SELECT COUNT(*) as count FROM platform_users`) as unknown as SqlRow[];
   const orgCount = (await sql`SELECT COUNT(*) as count FROM organizations WHERE active = 1`) as unknown as SqlRow[];
@@ -993,7 +993,7 @@ export async function getHealth() {
   const dbLatency = `${Date.now() - startMs}ms`;
 
   // Recent activity (last 24 hours)
-  const recentTruths = (await sql`SELECT COUNT(*) as count FROM micro_truths WHERE created_at > ${new Date(Date.now() - 86400000).toISOString()}`) as unknown as SqlRow[];
+  const recentTruths = (await sql`SELECT COUNT(*) as count FROM micro_truths WHERE deleted_at IS NULL AND created_at > ${new Date(Date.now() - 86400000).toISOString()}`) as unknown as SqlRow[];
 
   const dbHealthy = Number(truthCount[0]?.count ?? 0) >= 0;
   const status = dbHealthy ? "operational" : "degraded";
@@ -1730,7 +1730,7 @@ export function runTimeDecayModel(params: { truth: MicroTruth; verifications?: V
 
 export async function batchDecayTruths() {
   const sql = getDb();
-  const allTruths = ((await sql`SELECT * FROM micro_truths`) as unknown as SqlRow[]).map(mapTruth);
+  const allTruths = ((await sql`SELECT * FROM micro_truths WHERE deleted_at IS NULL`) as unknown as SqlRow[]).map(mapTruth);
   const updates: Array<{ truthId: number; result: ReturnType<typeof runTimeDecayModel> }> = [];
 
   for (const truth of allTruths) {
@@ -1958,7 +1958,7 @@ export async function runAllPredictions() {
 
   const allNeighborhoods = ((await sql`SELECT * FROM neighborhoods`) as unknown as SqlRow[]).map(mapNeighborhood);
   const allSnapshots = ((await sql`SELECT * FROM snapshots`) as unknown as SqlRow[]).map(mapSnapshot);
-  const allTruths = ((await sql`SELECT * FROM micro_truths`) as unknown as SqlRow[]).map(mapTruth);
+  const allTruths = ((await sql`SELECT * FROM micro_truths WHERE deleted_at IS NULL`) as unknown as SqlRow[]).map(mapTruth);
 
   let outagePredictions = 0;
   let patternPredictions = 0;
@@ -2130,7 +2130,7 @@ export async function getAdminStats() {
   const sql = getDb();
   const users = (await sql`SELECT COUNT(*) as count FROM platform_users`) as unknown as SqlRow[];
   const orgs = (await sql`SELECT COUNT(*) as count FROM organizations WHERE active = 1`) as unknown as SqlRow[];
-  const truths = (await sql`SELECT COUNT(*) as count FROM micro_truths`) as unknown as SqlRow[];
+  const truths = (await sql`SELECT COUNT(*) as count FROM micro_truths WHERE deleted_at IS NULL`) as unknown as SqlRow[];
   const rewards = (await sql`SELECT COALESCE(SUM(amount), 0) as total FROM reward_ledger WHERE amount > 0`) as unknown as SqlRow[];
   const pendingOrgs = (await sql`SELECT COUNT(*) as count FROM organizations WHERE verified = 0 AND active = 1`) as unknown as SqlRow[];
   const members = (await sql`SELECT COUNT(*) as count FROM org_members WHERE active = 1`) as unknown as SqlRow[];
@@ -2387,18 +2387,18 @@ export async function getAdminTruths(limit = 100, offset = 0, filters?: {
   let rows: SqlRow[];
 
   if (filters?.village) {
-    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.village_name, 'Unknown') = ${filters.village} ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.village_name, 'Unknown') = ${filters.village} AND t.deleted_at IS NULL ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
   } else if (filters?.community) {
-    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.community_name, 'Unknown') = ${filters.community} ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.community_name, 'Unknown') = ${filters.community} AND t.deleted_at IS NULL ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
   } else if (filters?.lga) {
-    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.lga_name, 'Unknown') = ${filters.lga} ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.lga_name, 'Unknown') = ${filters.lga} AND t.deleted_at IS NULL ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
   } else if (filters?.state) {
-    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.state_name, t.ip_region, 'Unknown') = ${filters.state} ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.state_name, t.ip_region, 'Unknown') = ${filters.state} AND t.deleted_at IS NULL ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
   } else if (filters?.region) {
-    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.region_name, 'Unknown') = ${filters.region} ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id WHERE COALESCE(t.region_name, 'Unknown') = ${filters.region} AND t.deleted_at IS NULL ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
   } else {
     // No filters — fetch all
-    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
+    rows = (await sql`SELECT t.*, n.name as neighborhood_name FROM micro_truths t LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id AND t.deleted_at IS NULL ORDER BY t.created_at DESC LIMIT ${limit} OFFSET ${offset}`) as unknown as SqlRow[];
   }
 
   return rows.map((r) => ({
@@ -2478,22 +2478,31 @@ export async function getGeoHierarchy() {
   };
 }
 
-export async function deleteTruth(id: number, userHash?: string): Promise<boolean> {
+export async function deleteTruth(id: number, userHash?: string, reason?: string): Promise<boolean> {
   const sql = getDb();
-  // If userHash is provided, only allow deletion if the truth belongs to that user
+  // Soft delete: mark the post as removed from the website (feeds/lists) but
+  // keep the row in the database for audit. This also avoids FK-constraint
+  // failures (feed_likes / feed_comments / feed_shares / truth_reports)
+  // that broke the previous hard DELETE.
   if (userHash) {
-    const rows = (await sql`DELETE FROM micro_truths WHERE id = ${id} AND user_hash = ${userHash} RETURNING id`) as unknown as SqlRow[];
+    const rows = (await sql`UPDATE micro_truths SET deleted_at = NOW(), delete_reason = ${reason ?? "user_deleted"} WHERE id = ${id} AND user_hash = ${userHash} AND deleted_at IS NULL RETURNING id`) as unknown as SqlRow[];
     return rows.length > 0;
   }
-  // Fallback: allow deletion without user check (admin/legacy only)
-  const rows = (await sql`DELETE FROM micro_truths WHERE id = ${id} RETURNING id`) as unknown as SqlRow[];
+  // Fallback: admin / legacy (no user check)
+  const rows = (await sql`UPDATE micro_truths SET deleted_at = NOW(), delete_reason = ${reason ?? "admin_deleted"} WHERE id = ${id} AND deleted_at IS NULL RETURNING id`) as unknown as SqlRow[];
+  return rows.length > 0;
+}
+
+export async function restoreTruth(id: number): Promise<boolean> {
+  const sql = getDb();
+  const rows = (await sql`UPDATE micro_truths SET deleted_at = NULL, delete_reason = NULL WHERE id = ${id} RETURNING id`) as unknown as SqlRow[];
   return rows.length > 0;
 }
 
 export async function deleteAllTruths() {
   const sql = getDb();
-  await sql`DELETE FROM micro_truths`;
-  await sql`DELETE FROM verifications`;
+  // Soft-delete all posts (retained in DB). Verifications are left intact.
+  await sql`UPDATE micro_truths SET deleted_at = NOW(), delete_reason = 'bulk_admin_delete' WHERE deleted_at IS NULL`;
   return { success: true };
 }
 
@@ -3313,7 +3322,7 @@ export async function generateLocationBasedPredictions(userLocation: {
 
     // Get recent truths
     const recentTruths = (await sql`
-      SELECT * FROM micro_truths WHERE neighborhood_id = ${neighborhoodId} AND status != 'rejected'
+      SELECT * FROM micro_truths WHERE neighborhood_id = ${neighborhoodId} AND status != 'rejected' AND deleted_at IS NULL
       ORDER BY created_at DESC LIMIT 20
     `) as unknown as SqlRow[];
 

@@ -114,8 +114,8 @@ function useNavSections() {
         { path: "/organizations", label: "Business", icon: Building2 },
         { path: "/agency-auth", label: "Agency Login", icon: Shield },
         { path: "/account", label: "Account Settings", icon: Settings },
-        // User Portfolio (merged profile + portfolio)
-        { path: "/user", label: "Portfolio", icon: User },
+        // User Portfolio (merged profile + portfolio) — trends, leaderboard & rewards
+        { path: "/portfolio", label: "Portfolio", icon: User },
         { path: "/advanced-settings", label: "Advanced Settings", icon: SlidersHorizontal },
       ],
     },
