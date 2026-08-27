@@ -56,6 +56,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/hooks/use-toast";
+import { PortfolioTrends } from "@/components/portfolio-trends";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -221,6 +222,7 @@ export default function PortfolioPage() {
           <TabsTrigger value="profile" data-testid="tab-profile">Profile</TabsTrigger>
           <TabsTrigger value="truths" data-testid="tab-my-truths">My Truths</TabsTrigger>
           <TabsTrigger value="rewards" data-testid="tab-rewards">Rewards</TabsTrigger>
+          <TabsTrigger value="trends" data-testid="tab-trends">Trends</TabsTrigger>
           <TabsTrigger value="achievements" data-testid="tab-achievements">Achievements</TabsTrigger>
         </TabsList>
 
@@ -322,6 +324,13 @@ export default function PortfolioPage() {
               <LedgerList ledger={ledger} loading={ledgerLoading} />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ------------------------------------------------------------- */}
+        {/* Trends (community topics + leaderboard + rewards) */}
+        {/* ------------------------------------------------------------- */}
+        <TabsContent value="trends" className="space-y-4">
+          <PortfolioTrends />
         </TabsContent>
 
         {/* ------------------------------------------------------------- */}

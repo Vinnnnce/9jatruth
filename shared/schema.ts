@@ -242,7 +242,7 @@ export const insertMicroTruthSchema = createInsertSchema(microTruths).omit({
   ipCity: true,
 }).extend({
   content: z.string().min(10, "Content must be at least 10 characters").max(500, "Content must not exceed 500 characters"),
-  category: z.enum(["power", "fuel", "traffic", "prices", "safety", "security", "real-estate", "housing", "patrol-gas-station", "restaurant", "hotel", "school", "pharmacy", "hospital", "supermarket"]),
+  category: z.enum(["power", "fuel", "traffic", "prices", "safety", "security", "real-estate", "housing", "patrol-gas-station", "restaurant", "hotel", "school", "pharmacy", "hospital", "supermarket", "politics"]),
   neighborhoodId: z.number().int().positive().max(1000000),
   userHash: z.string().optional(),
   reportLat: z.number().optional(),
@@ -468,3 +468,80 @@ export type ActivityEntry = {
   timestamp: string;
   metadata?: Record<string, any>;
 };
+
+// ─── Community Feeds System ──────────────────────────────────────────────
+// Geo-tagged community posts scoped to State → LGA → Ward → Community/Village.
+// Mirrors the `feeds` + `wards` PostgreSQL tables managed in src/lib/db.ts.
+
+export const FEED_CATEGORIES = [
+  "power-outage",
+  "fuel-update",
+  "security-alert",
+  "market-prices",
+  "traffic",
+  "civic",
+  "politics",
+  "general",
+] as const;
+export type FeedCategory = (typeof FEED_CATEGORIES)[number];
+
+export const FEED_CATEGORY_META: Record<string, { label: string; icon: string }> = {
+  "power-outage":    { label: "Power outage", icon: "zap" },
+  "fuel-update":     { label: "Fuel update",  icon: "fuel" },
+  "security-alert":  { label: "Security alert", icon: "shield" },
+  "market-prices":    { label: "Market prices", icon: "tag" },
+  traffic:           { label: "Traffic",       icon: "car" },
+  civic:             { label: "Civic",         icon: "landmark" },
+  politics:          { label: "Politics",       icon: "landmark" },
+  general:           { label: "General",       icon: "message" },
+};
+
+export const FEED_SCOPES = [
+  "near",
+  "community",
+  "ward",
+  "lga",
+  "state",
+  "all",
+] as const;
+export type FeedScope = (typeof FEED_SCOPES)[number];
+
+export const FEED_TAB_LABELS: Record<FeedScope, string> = {
+  near: "Near You",
+  community: "Your Community",
+  ward: "Your Ward",
+  lga: "Your LGA",
+  state: "Your State",
+  all: "All Nigeria",
+};
+
+export const createFeedSchema = z.object({
+  content: z.string().trim().min(3).max(2000),
+  category: z.enum(FEED_CATEGORIES).default("general"),
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lng: z.coerce.number().min(-180).max(180).optional(),
+  // Manual override (takes precedence over reverse-geocode auto-assignment)
+  stateName: z.string().trim().min(2).max(60).optional(),
+  lgaName: z.string().trim().min(2).max(80).optional(),
+  wardName: z.string().trim().min(2).max(80).optional(),
+  communityName: z.string().trim().min(2).max(80).optional(),
+  mediaUrls: z.array(z.string().url().max(2048)).max(8).default([]),
+  locationSource: z.string().trim().max(40).optional(),
+});
+export type CreateFeedInput = z.infer<typeof createFeedSchema>;
+
+export const listFeedsQuerySchema = z.object({
+  scope: z.enum(FEED_SCOPES).default("all"),
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lng: z.coerce.number().min(-180).max(180).optional(),
+  radiusKm: z.coerce.number().min(0.5).max(200).default(5),
+  state: z.string().trim().max(60).optional(),
+  lga: z.string().trim().max(80).optional(),
+  ward: z.string().trim().max(80).optional(),
+  community: z.string().trim().max(80).optional(),
+  category: z.enum(FEED_CATEGORIES).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(40),
+  offset: z.coerce.number().int().min(0).max(10000).default(0),
+  sort: z.enum(["recent", "trending", "nearest", "trust"]).default("recent"),
+});
+export type ListFeedsQuery = z.infer<typeof listFeedsQuerySchema>;

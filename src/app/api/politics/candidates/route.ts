@@ -25,6 +25,7 @@ export async function GET(request: Request) {
   const year = searchParams.get("year");
   const type = searchParams.get("type"); // incumbent | candidate | aspirant | nominee
   const verified = searchParams.get("verified"); // unverified|pending|verified|disputed
+  const zone = searchParams.get("zone")?.toUpperCase(); // geopolitical zone code
   const search = searchParams.get("search");
   const limit = Math.min(parseInt(searchParams.get("limit") || "100", 10) || 100, 500);
   const offset = Math.max(parseInt(searchParams.get("offset") || "0", 10) || 0, 0);
@@ -34,6 +35,7 @@ export async function GET(request: Request) {
     SELECT c.*, p.name AS party_name, p.color AS party_color, p.logo_url AS party_logo
     FROM political_candidates c
     LEFT JOIN political_parties p ON c.party_acronym = p.acronym
+    LEFT JOIN geopolitical_zones gz ON gz.id = c.geopolitical_zone_id
     WHERE (${party ?? null}::text IS NULL OR c.party_acronym = ${party ?? null})
       AND (${office ?? null}::text IS NULL OR c.office = ${office ?? null})
       AND (${level ?? null}::text IS NULL OR c.office_level = ${level ?? null})
@@ -44,6 +46,7 @@ export async function GET(request: Request) {
       AND (${year ?? null}::int IS NULL OR c.election_year = ${year ?? null})
       AND (${type ?? null}::text IS NULL OR c.record_type = ${type ?? null})
       AND (${verified ?? null}::text IS NULL OR c.verification_status = ${verified ?? null})
+      AND (${zone ?? null}::text IS NULL OR gz.short_code = ${zone ?? null} OR gz.code = ${zone ?? null})
       AND (${search ?? null}::text IS NULL OR c.name ILIKE ${"%" + (search ?? "") + "%"})
     ORDER BY
       CASE c.office WHEN 'presidential' THEN 0 WHEN 'governor' THEN 1 WHEN 'senate' THEN 2 WHEN 'house' THEN 3 WHEN 'lga_chairman' THEN 4 WHEN 'councillor' THEN 5 ELSE 9 END,
