@@ -127,6 +127,7 @@ async function ensureGeoTables(sql) {
     `ALTER TABLE lgas ADD COLUMN IF NOT EXISTS source_updated_at TIMESTAMPTZ`,
     `CREATE INDEX IF NOT EXISTS idx_lgas_code ON lgas(code)`,
     `CREATE INDEX IF NOT EXISTS idx_lgas_state ON lgas(state_id)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_lgas_portal_state ON lgas(portal_id, state_id) WHERE portal_id IS NOT NULL AND state_id IS NOT NULL`,
     `CREATE INDEX IF NOT EXISTS idx_wards_lga ON wards(lga_id)`,
     `CREATE INDEX IF NOT EXISTS idx_wards_state ON wards(state_id)`,
     `CREATE INDEX IF NOT EXISTS idx_wards_code ON wards(code)`,

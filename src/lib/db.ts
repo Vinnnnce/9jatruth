@@ -1365,6 +1365,7 @@ export async function ensureDbInitialized() {
   _q.push(sql`ALTER TABLE lgas ADD COLUMN IF NOT EXISTS source_updated_at TIMESTAMPTZ`);
   _q.push(sql`CREATE INDEX IF NOT EXISTS idx_lgas_code ON lgas(code)`);
   _q.push(sql`CREATE INDEX IF NOT EXISTS idx_lgas_state ON lgas(state_id)`);
+  _q.push(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_lgas_portal_state ON lgas(portal_id, state_id) WHERE portal_id IS NOT NULL AND state_id IS NOT NULL`);
   // wards: official INEC ward level (between LGA and polling unit)
   _q.push(sql`CREATE TABLE IF NOT EXISTS wards (
     id SERIAL PRIMARY KEY,
