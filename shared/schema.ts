@@ -242,7 +242,7 @@ export const insertMicroTruthSchema = createInsertSchema(microTruths).omit({
   ipCity: true,
 }).extend({
   content: z.string().min(10, "Content must be at least 10 characters").max(500, "Content must not exceed 500 characters"),
-  category: z.enum(["power", "fuel", "traffic", "prices", "safety", "security", "real-estate", "housing", "patrol-gas-station", "restaurant", "hotel", "school", "pharmacy", "hospital", "supermarket"]),
+  category: z.enum(["power", "fuel", "traffic", "prices", "safety", "security", "real-estate", "housing", "patrol-gas-station", "restaurant", "hotel", "school", "pharmacy", "hospital", "supermarket", "politics"]),
   neighborhoodId: z.number().int().positive().max(1000000),
   userHash: z.string().optional(),
   reportLat: z.number().optional(),
@@ -480,6 +480,7 @@ export const FEED_CATEGORIES = [
   "market-prices",
   "traffic",
   "civic",
+  "politics",
   "general",
 ] as const;
 export type FeedCategory = (typeof FEED_CATEGORIES)[number];
@@ -491,6 +492,7 @@ export const FEED_CATEGORY_META: Record<string, { label: string; icon: string }>
   "market-prices":    { label: "Market prices", icon: "tag" },
   traffic:           { label: "Traffic",       icon: "car" },
   civic:             { label: "Civic",         icon: "landmark" },
+  politics:          { label: "Politics",       icon: "landmark" },
   general:           { label: "General",       icon: "message" },
 };
 

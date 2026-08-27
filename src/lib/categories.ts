@@ -6,6 +6,7 @@
 import {
   Zap, Fuel, Car, Tag, Shield, ShieldCheck, Building2, Home,
   UtensilsCrossed, BedDouble, GraduationCap, Pill, Cross, ShoppingCart,
+  Landmark,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -32,6 +33,7 @@ export const CATEGORY_CONFIG: Record<string, CategoryConfig> = {
   pharmacy: { icon: Pill, color: "text-emerald-500", label: "Pharmacy", bg: "bg-emerald-500/10" },
   hospital: { icon: Cross, color: "text-rose-500", label: "Hospital", bg: "bg-rose-500/10" },
   supermarket: { icon: ShoppingCart, color: "text-lime-500", label: "Supermarket", bg: "bg-lime-500/10" },
+  politics: { icon: Landmark, color: "text-emerald-600", label: "Politics", bg: "bg-emerald-600/10" },
 };
 
 export const CATEGORY_LIST = Object.entries(CATEGORY_CONFIG).map(([value, cfg]) => ({

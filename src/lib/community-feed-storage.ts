@@ -211,7 +211,7 @@ export async function listFeeds(
   // Build WHERE clauses with $N placeholders + a parallel params array.
   // lat/lng/limit/offset are validated numbers and interpolated directly;
   // string filters are bound as parameters to prevent SQL injection.
-  const conditions: string[] = ["f.status = 'published'", "f.spam_verdict <> 'blocked'"];
+  const conditions: string[] = ["f.status = 'published'", "f.spam_verdict <> 'blocked'", "f.deleted_at IS NULL"];
   const params: any[] = [];
   const add = (frag: string, ...vals: any[]) => {
     const indexed = frag.replace(/\?/g, () => {
@@ -274,7 +274,7 @@ export async function listFeeds(
     mapped = mapped.map((r) => ({ ...r, isAuthor: r.userHash === viewerUserHash }));
   }
 
-  const countQuery = `SELECT COUNT(*)::int AS total FROM feeds f WHERE ${finalWhere}`;
+    const countQuery = `SELECT COUNT(*)::int AS total FROM feeds f WHERE ${finalWhere}`;
   const countRows = (await sql.query(countQuery, params)) as unknown as any[];
   const total = countRows?.[0]?.total ?? mapped.length;
 
@@ -313,6 +313,30 @@ export async function likeFeed(id: number, userHash: string): Promise<{ liked: b
   const row = (await sql`SELECT like_count FROM feeds WHERE id = ${id}`) as unknown as any[];
   return { liked: true, likeCount: row?.[0]?.like_count ?? 0 };
 }
+
+// ─── Soft delete / restore ────────────────────────────────────────────────
+// Posts are removed from the site but kept in the database (deleted_at +
+// deleted_by + status='deleted'). List queries exclude deleted_at IS NOT NULL.
+
+export async function deleteFeed(
+  id: number,
+  deletedBy: string,
+  isAdmin: boolean,
+): Promise<{ deleted: boolean }> {
+  const sql = getDb();
+  const q = isAdmin
+    ? sql`UPDATE feeds SET deleted_at = NOW(), deleted_by = ${deletedBy}, status = 'deleted' WHERE id = ${id} AND deleted_at IS NULL`
+    : sql`UPDATE feeds SET deleted_at = NOW(), deleted_by = ${deletedBy}, status = 'deleted' WHERE id = ${id} AND user_hash = ${deletedBy} AND deleted_at IS NULL`;
+  const rows = (await q) as unknown as any[];
+  return { deleted: (rows as any)?.length > 0 };
+}
+
+export async function restoreFeed(id: number): Promise<{ restored: boolean }> {
+  const sql = getDb();
+  const rows = (await sql`UPDATE feeds SET deleted_at = NULL, deleted_by = NULL, status = 'published' WHERE id = ${id} AND deleted_at IS NOT NULL RETURNING id`) as unknown as any[];
+  return { restored: (rows as any)?.length > 0 };
+}
+
 
 // ─── Trending ──────────────────────────────────────────────────────────────
 

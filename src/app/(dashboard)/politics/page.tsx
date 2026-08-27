@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { PartyCandidatesView, type Party } from "@/components/politics/PartyCandidates";
 import { Landmark, Users, Vote, ShieldCheck, AlertTriangle, CheckCircle2, Send, ExternalLink } from "lucide-react";
 
 const EVENT_TYPES = [
@@ -31,6 +32,7 @@ export default function PoliticsPage() {
   const [year, setYear] = useState("2023");
   const [selectedState, setSelectedState] = useState("");
   const [factClaim, setFactClaim] = useState("");
+  const [selectedParty, setSelectedParty] = useState<Party | null>(null);
 
   const parties = useQuery({
     queryKey: ["/api/politics/parties"],
@@ -98,24 +100,41 @@ export default function PoliticsPage() {
 
         {/* Parties & Candidates */}
         <TabsContent value="overview" className="space-y-4">
-          <Card className="border-border">
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-display flex items-center gap-2"><Vote className="h-4 w-4" /> Political Parties</CardTitle></CardHeader>
-            <CardContent>
-              {parties.isLoading && <Skeleton className="h-16 w-full" />}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                {partiesData.map((p: any) => (
-                  <div key={p.acronym} className="rounded-md border border-border p-2 text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color || "hsl(var(--primary))" }} />
-                      <span className="text-xs font-bold">{p.acronym}</span>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">{p.name}</p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-          <CandidatesSection />
+          {selectedParty ? (
+            <PartyCandidatesView party={selectedParty} onBack={() => setSelectedParty(null)} />
+          ) : (
+            <Card className="border-border">
+              <CardHeader className="pb-2"><CardTitle className="text-sm font-display flex items-center gap-2"><Vote className="h-4 w-4" /> Political Parties</CardTitle></CardHeader>
+              <CardContent>
+                {parties.isLoading && <Skeleton className="h-16 w-full" />}
+                <p className="text-[10px] text-muted-foreground mb-2">Click a party to view all of its registered & aspiring candidates.</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  {partiesData.map((p: any) => {
+                    const party: Party = { acronym: p.acronym, name: p.name, color: p.color, logo_url: p.logo_url };
+                    return (
+                      <button
+                        key={p.acronym}
+                        type="button"
+                        onClick={() => setSelectedParty(party)}
+                        className="rounded-md border border-border p-2 text-center hover:border-primary/50 hover:bg-muted/40 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <div className="flex items-center justify-center gap-1.5">
+                          {p.logo_url ? (
+                            <img src={p.logo_url} alt={p.acronym} className="h-3.5 w-3.5 rounded-sm object-contain" />
+                          ) : (
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color || "hsl(var(--primary))" }} />
+                          )}
+                          <span className="text-xs font-bold">{p.acronym}</span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">{p.name}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {selectedParty ? null : <CandidatesSection />}
         </TabsContent>
 
         {/* Election Data (Nigeria2) */}

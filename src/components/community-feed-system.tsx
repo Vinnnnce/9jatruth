@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   MapPin, Locate, Send, Loader2, Sparkles, ShieldCheck, TrendingUp,
-  Navigation, Tag, X, Bot, AlertTriangle,
+  Navigation, Tag, X, Bot, AlertTriangle, Trash2,
 } from "lucide-react";
 import {
   FEED_TAB_LABELS,
@@ -563,6 +563,8 @@ function FeedComposer({
 // ─── Feed Card ──────────────────────────────────────────────────────────────
 
 function FeedCard({ feed }: { feed: FeedItem }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
   const meta = categoryIcon(feed.category);
   const locationParts = [
     feed.communityName,
@@ -571,6 +573,16 @@ function FeedCard({ feed }: { feed: FeedItem }) {
     feed.stateName,
   ].filter(Boolean);
   const spammy = feed.spamVerdict === "suspicious";
+
+  const deleteMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", `/api/feeds/${feed.id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/feeds"] });
+      qc.invalidateQueries({ queryKey: ["/api/feeds/trending"] });
+      toast({ title: "Post deleted", description: "Removed from the feed. It is kept in the database." });
+    },
+    onError: (err: any) => toast({ title: "Delete failed", description: parseApiError(err), variant: "destructive" }),
+  });
 
   return (
     <Card className={`border-border hover:border-primary/30 transition-colors ${spammy ? "border-amber-500/40 bg-amber-500/5" : ""}`}>
@@ -590,6 +602,17 @@ function FeedCard({ feed }: { feed: FeedItem }) {
             )}
           </div>
           <span className="text-[9px] text-muted-foreground">{timeAgo(feed.createdAt)}</span>
+          {feed.isAuthor && (
+            <button
+              type="button"
+              aria-label="Delete post"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate()}
+              className="text-muted-foreground hover:text-destructive disabled:opacity-50 transition-colors"
+            >
+              {deleteMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+            </button>
+          )}
         </div>
         <p className="text-xs text-foreground line-clamp-3">{feed.content}</p>
         <div className="flex items-center gap-2 pt-1 text-[9px] text-muted-foreground">

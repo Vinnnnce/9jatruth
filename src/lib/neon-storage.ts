@@ -286,13 +286,13 @@ export async function getTruthsNearby(
   const sql = getDb();
   let rows: SqlRow[];
   if (filters?.category && filters?.status) {
-    rows = (await sql`SELECT * FROM micro_truths WHERE category = ${filters.category} AND status = ${filters.status} ORDER BY created_at DESC LIMIT 500`) as unknown as SqlRow[];
+    rows = (await sql`SELECT * FROM micro_truths WHERE category = ${filters.category} AND status = ${filters.status} AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 500`) as unknown as SqlRow[];
   } else if (filters?.category) {
-    rows = (await sql`SELECT * FROM micro_truths WHERE category = ${filters.category} ORDER BY created_at DESC LIMIT 500`) as unknown as SqlRow[];
+    rows = (await sql`SELECT * FROM micro_truths WHERE category = ${filters.category} AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 500`) as unknown as SqlRow[];
   } else if (filters?.status) {
-    rows = (await sql`SELECT * FROM micro_truths WHERE status = ${filters.status} ORDER BY created_at DESC LIMIT 500`) as unknown as SqlRow[];
+    rows = (await sql`SELECT * FROM micro_truths WHERE status = ${filters.status} AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 500`) as unknown as SqlRow[];
   } else {
-    rows = (await sql`SELECT * FROM micro_truths ORDER BY created_at DESC LIMIT 500`) as unknown as SqlRow[];
+    rows = (await sql`SELECT * FROM micro_truths WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 500`) as unknown as SqlRow[];
   }
 
   const nRows = (await sql`SELECT * FROM neighborhoods`) as unknown as SqlRow[];
@@ -943,8 +943,8 @@ export async function getActivity(limit = 50, userHash?: string) {
   const sql = getDb();
   // If userHash is provided, only return activities for that user
   const truthQuery = userHash
-    ? sql`SELECT * FROM micro_truths WHERE user_hash = ${userHash} ORDER BY created_at DESC LIMIT ${limit}`
-    : sql`SELECT * FROM micro_truths ORDER BY created_at DESC LIMIT ${limit}`;
+    ? sql`SELECT * FROM micro_truths WHERE user_hash = ${userHash} AND deleted_at IS NULL ORDER BY created_at DESC LIMIT ${limit}`
+    : sql`SELECT * FROM micro_truths WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT ${limit}`;
   const allTruths = (await truthQuery) as unknown as SqlRow[];
   const allRewards = userHash
     ? ((await sql`SELECT * FROM reward_ledger WHERE user_hash = ${userHash} ORDER BY created_at DESC LIMIT ${limit}`) as unknown as SqlRow[])
@@ -1040,6 +1040,13 @@ export async function getOrganizations(type?: string, verifiedOnly?: boolean): P
 export async function getOrganization(id: number): Promise<Organization | undefined> {
   const sql = getDb();
   const rows = (await sql`SELECT * FROM organizations WHERE id = ${id}`) as unknown as SqlRow[];
+  return rows[0] ? mapOrganization(rows[0]) : undefined;
+}
+
+/** Super-admin verify/accept or reject a pending organization. */
+export async function verifyOrganization(id: number, verified: boolean, reviewerHash?: string) {
+  const sql = getDb();
+  const rows = (await sql`UPDATE organizations SET verified = ${verified ? 1 : 0} WHERE id = ${id} RETURNING *`) as unknown as SqlRow[];
   return rows[0] ? mapOrganization(rows[0]) : undefined;
 }
 
@@ -2482,11 +2489,11 @@ export async function deleteTruth(id: number, userHash?: string): Promise<boolea
   const sql = getDb();
   // If userHash is provided, only allow deletion if the truth belongs to that user
   if (userHash) {
-    const rows = (await sql`DELETE FROM micro_truths WHERE id = ${id} AND user_hash = ${userHash} RETURNING id`) as unknown as SqlRow[];
+    const rows = (await sql`UPDATE micro_truths SET deleted_at = NOW(), deleted_by = ${userHash} WHERE id = ${id} AND user_hash = ${userHash} AND deleted_at IS NULL RETURNING id`) as unknown as SqlRow[];
     return rows.length > 0;
   }
   // Fallback: allow deletion without user check (admin/legacy only)
-  const rows = (await sql`DELETE FROM micro_truths WHERE id = ${id} RETURNING id`) as unknown as SqlRow[];
+  const rows = (await sql`UPDATE micro_truths SET deleted_at = NOW() WHERE id = ${id} AND deleted_at IS NULL RETURNING id`) as unknown as SqlRow[];
   return rows.length > 0;
 }
 

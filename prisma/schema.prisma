@@ -23,11 +23,18 @@ model Region {
 }
 
 model State {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  regionId  Int?     @map("region_id")
-  createdAt DateTime @default(now()) @map("created_at")
+  id                  Int      @id @default(autoincrement())
+  name                String   @unique
+  regionId            Int?     @map("region_id")
+  inecCode            String?  @map("inec_code")
+  portalId            String?  @map("portal_id")
+  geopoliticalZoneId Int?     @map("geopolitical_zone_id")
+  lat                 Float?
+  lng                 Float?
+  capital             String?
+  createdAt           DateTime @default(now()) @map("created_at")
 
+  @@index([geopoliticalZoneId])
   @@map("states")
 }
 
@@ -35,8 +42,11 @@ model Lga {
   id        Int      @id @default(autoincrement())
   name      String
   stateId   Int?     @map("state_id")
+  inecCode  String?  @map("inec_code")
+  portalId  String?  @map("portal_id")
   createdAt DateTime @default(now()) @map("created_at")
 
+  @@index([stateId])
   @@map("lgas")
 }
 
@@ -74,6 +84,8 @@ model Ward {
   lat       Float?
   lng       Float?
   source    String   @default("manual")
+  inecCode  String?  @map("inec_code")
+  portalId  String?  @map("portal_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @map("updated_at")
 
@@ -115,6 +127,8 @@ model Feed {
   commentCount         Int       @default(0) @map("comment_count")
   viewCount            Int       @default(0) @map("view_count")
   status               String    @default("published")
+  deletedAt            DateTime? @map("deleted_at")
+  deletedBy            String?  @map("deleted_by")
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @default(now()) @map("updated_at")
 
@@ -759,4 +773,158 @@ model NewsIncentive {
   @@index([articleId])
   @@index([userHash])
   @@map("news_incentives")
+}
+
+// ─── Political Database ───
+
+model GeopoliticalZone {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  code      String   @unique
+  shortCode String?  @map("short_code")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("geopolitical_zones")
+}
+
+model PoliticalParty {
+  id        Int      @id @default(autoincrement())
+  acronym   String   @unique
+  name      String
+  color     String?
+  logoUrl   String?  @map("logo_url")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("political_parties")
+}
+
+model PoliticalPosition {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  slug        String   @unique
+  officeLevel String   @default("federal") @map("office_level")
+  geoScope    String   @default("national") @map("geo_scope")
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("political_positions")
+}
+
+model Person {
+  id                       Int       @id @default(autoincrement())
+  fullName                 String    @map("full_name")
+  slug                     String    @unique
+  photoUrl                 String?   @map("photo_url")
+  gender                   String?
+  dateOfBirth              String?   @map("date_of_birth")
+  placeOfBirth             String?  @map("place_of_birth")
+  hometown                 String?
+  nationality              String    @default("Nigerian")
+  stateOfOrigin            String?  @map("state_of_origin")
+  localGovtOfOrigin        String?  @map("local_govt_of_origin")
+  autobiography             String?
+  educationBackground      Json      @default("[]") @map("education_background")
+  previousPoliticalPositions Json    @default("[]") @map("previous_political_positions")
+  politicalBackground      String?   @map("political_background")
+  businesses               Json      @default("[]")
+  healthStatus             String?  @map("health_status")
+  healthDisclosureUrl      String?  @map("health_disclosure_url")
+  netWorth                 String?  @map("net_worth")
+  assetsDeclared           Json?     @map("assets_declared")
+  phone                    String?
+  email                     String?
+  website                  String?
+  facebook                 String?
+  twitter                  String?
+  instagram                String?
+  linkedin                 String?
+  source                   String?
+  sourceUrl                String?  @map("source_url")
+  isVerified               Boolean   @default(false) @map("is_verified")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @default(now()) @map("updated_at")
+
+  @@index([stateOfOrigin])
+  @@map("people")
+}
+
+model OfficeHolder {
+  id                   Int      @id @default(autoincrement())
+  personId             Int      @map("person_id")
+  positionId           Int?     @map("position_id")
+  partyId              Int?     @map("party_id")
+  stateId              Int?     @map("state_id")
+  lgaId                Int?     @map("lga_id")
+  wardId               Int?     @map("ward_id")
+  geopoliticalZoneId  Int?     @map("geopolitical_zone_id")
+  senatorialDistrict   String?  @map("senatorial_district")
+  federalConstituency  String?  @map("federal_constituency")
+  stateConstituency   String?  @map("state_constituency")
+  officeLevel          String?  @map("office_level")
+  termStart            String?  @map("term_start")
+  termEnd              String?  @map("term_end")
+  incumbentSince       String?  @map("incumbent_since")
+  status               String   @default("active")
+  source               String?
+  sourceUrl            String?  @map("source_url")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @default(now()) @map("updated_at")
+
+  @@index([positionId])
+  @@index([stateId])
+  @@index([lgaId])
+  @@index([wardId])
+  @@index([partyId])
+  @@map("office_holders")
+}
+
+model Election {
+  id          Int      @id @default(autoincrement())
+  name        String
+  year        Int
+  type        String   @default("general")
+  electionDate String? @map("election_date")
+  status      String   @default("upcoming")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([year, type])
+  @@map("elections")
+}
+
+// Flat candidate table (existing) extended with normalized FKs to Person,
+// PoliticalParty, PoliticalPosition, Election and geo units.
+model PoliticalCandidate {
+  id                     Int      @id @default(autoincrement())
+  name                   String
+  partyAcronym           String?  @map("party_acronym")
+  office                 String
+  geoId                  String?  @map("geo_id")
+  state                  String?
+  electionYear           Int?     @map("election_year")
+  bio                    String?
+  photoUrl               String?  @map("photo_url")
+  // Normalized links
+  personId               Int?     @map("person_id")
+  positionId             Int?     @map("position_id")
+  partyId                Int?     @map("party_id")
+  electionId             Int?     @map("election_id")
+  geopoliticalZoneId     Int?     @map("geopolitical_zone_id")
+  stateId                Int?     @map("state_id")
+  lgaId                  Int?     @map("lga_id")
+  wardId                 Int?     @map("ward_id")
+  recordType             String   @default("candidate") @map("record_type")
+  recordStatus           String   @default("aspiring") @map("record_status")
+  source                 String?
+  sourceUrl              String?  @map("source_url")
+  isVerified             Boolean  @default(false) @map("is_verified")
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  @@index([partyId])
+  @@index([positionId])
+  @@index([electionId])
+  @@index([stateId, lgaId, wardId])
+  @@map("political_candidates")
 }
