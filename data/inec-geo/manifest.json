@@ -1,0 +1,26 @@
+{
+  "source": "https://cvr.inecnigeria.org/pu",
+  "scraped_at": "2026-08-10T05:40:24.108Z",
+  "counts": {
+    "states": 37,
+    "lgas": 774,
+    "wards": 8809,
+    "polling_units": 176846
+  },
+  "inec_published": {
+    "states": 37,
+    "lgas": 774,
+    "wards": 8809,
+    "polling_units": 176846
+  },
+  "removed_duplicates": [
+    {
+      "key": "07/07/09",
+      "name": "MBAIKYAAN",
+      "state": "BENUE",
+      "lga": "GWER EAST",
+      "kept_portal_id": "1462",
+      "removed_portal_id": "8810"
+    }
+  ]
+}
