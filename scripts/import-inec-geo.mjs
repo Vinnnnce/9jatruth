@@ -9,6 +9,7 @@
  *   DATABASE_URL=... node scripts/import-inec-geo.mjs --reference     # positions/parties/elections only
  *
  * Safe to re-run — uses ON CONFLICT upserts. Creates the geo tables if missing.
+ * Uses batched multi-value INSERTs (sql.query) so 8809 wards import in ~25 HTTP calls.
  */
 import { neon } from "@neondatabase/serverless";
 import { readFileSync, existsSync } from "node:fs";
@@ -74,6 +75,29 @@ const ELECTIONS = [
   { year: 2027, name: "2027 Nigerian General Election", type: "general", geo_scope: "national", election_date: "2027-02-18", status: "upcoming" },
 ];
 
+// Split an array into chunks of size n.
+function chunkArr(arr, n) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+}
+
+// Build a parameterized multi-value INSERT. `rows` is an array of arrays (each = column values in `columns` order).
+// `suffix` is e.g. " ON CONFLICT DO NOTHING". Returns { sql, params } for sql.query(sql, params).
+// Source ('INEC') and source_updated_at (NOW()) are appended as literals to every row.
+function multiInsert(table, columns, rows, suffix) {
+  const cols = columns.join(", ");
+  const tuples = [];
+  const params = [];
+  let i = 1;
+  for (const row of rows) {
+    const ph = row.map(() => `$${i++}`).join(", ");
+    tuples.push(`(${ph}, 'INEC', NOW())`);
+    params.push(...row);
+  }
+  return { sql: `INSERT INTO ${table} (${cols}, source, source_updated_at) VALUES ${tuples.join(", ")}${suffix}`, params };
+}
+
 async function ensureGeoTables(sql) {
   const ddls = [
     `CREATE TABLE IF NOT EXISTS regions (id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE, code TEXT, slug TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`,
@@ -83,10 +107,34 @@ async function ensureGeoTables(sql) {
     `CREATE TABLE IF NOT EXISTS political_positions (id SERIAL PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, level TEXT NOT NULL DEFAULT 'federal', sort_order INTEGER NOT NULL DEFAULT 99, created_at TIMESTAMPTZ DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS political_parties (id SERIAL PRIMARY KEY, acronym TEXT NOT NULL UNIQUE, name TEXT NOT NULL, color TEXT, logo_url TEXT, active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS political_elections (id SERIAL PRIMARY KEY, year INTEGER NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'general', geo_scope TEXT NOT NULL DEFAULT 'national', election_date DATE, status TEXT NOT NULL DEFAULT 'upcoming', created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE (year, type, geo_scope))`,
+    // Backfill columns on pre-existing tables (idempotent)
+    `ALTER TABLE regions ADD COLUMN IF NOT EXISTS code TEXT`,
+    `ALTER TABLE regions ADD COLUMN IF NOT EXISTS slug TEXT`,
+    `ALTER TABLE states ADD COLUMN IF NOT EXISTS code TEXT`,
+    `ALTER TABLE states ADD COLUMN IF NOT EXISTS portal_id INTEGER`,
+    `ALTER TABLE states ADD COLUMN IF NOT EXISTS region_id INTEGER`,
+    `ALTER TABLE states ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION`,
+    `ALTER TABLE states ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION`,
+    `ALTER TABLE states ADD COLUMN IF NOT EXISTS source TEXT`,
+    `ALTER TABLE states ADD COLUMN IF NOT EXISTS source_updated_at TIMESTAMPTZ`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_states_code ON states(code) WHERE code IS NOT NULL`,
+    `ALTER TABLE lgas ADD COLUMN IF NOT EXISTS code TEXT`,
+    `ALTER TABLE lgas ADD COLUMN IF NOT EXISTS portal_id INTEGER`,
+    `ALTER TABLE lgas ADD COLUMN IF NOT EXISTS state_id INTEGER`,
+    `ALTER TABLE lgas ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION`,
+    `ALTER TABLE lgas ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION`,
+    `ALTER TABLE lgas ADD COLUMN IF NOT EXISTS source TEXT`,
+    `ALTER TABLE lgas ADD COLUMN IF NOT EXISTS source_updated_at TIMESTAMPTZ`,
+    `CREATE INDEX IF NOT EXISTS idx_lgas_code ON lgas(code)`,
+    `CREATE INDEX IF NOT EXISTS idx_lgas_state ON lgas(state_id)`,
     `CREATE INDEX IF NOT EXISTS idx_wards_lga ON wards(lga_id)`,
     `CREATE INDEX IF NOT EXISTS idx_wards_state ON wards(state_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_wards_code ON wards(code)`,
+    // Ensure unique constraints exist for ON CONFLICT upserts (pre-existing tables may lack them)
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_regions_name ON regions(name)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_states_name ON states(name)`,
   ];
-  for (const ddl of ddls) await sql`${sql.raw(ddl)}`;
+  for (const ddl of ddls) await sql.query(ddl);
 }
 
 async function importGeo(sql, stateFilter) {
@@ -98,6 +146,7 @@ async function importGeo(sql, stateFilter) {
     await sql`INSERT INTO regions (name, code, slug) VALUES (${z.name}, ${z.code}, ${z.slug}) ON CONFLICT (name) DO UPDATE SET code = EXCLUDED.code, slug = EXCLUDED.slug`;
   }
 
+  // states: upsert each (37, small) and capture id -> portal_id map
   const stateIdByPortal = new Map();
   let sc = 0;
   for (const s of states) {
@@ -109,32 +158,39 @@ async function importGeo(sql, stateFilter) {
       VALUES (${s.name}, ${s.code}, ${parseInt(s.portal_id, 10)}, ${reg?.id ?? null}, 'INEC', NOW())
       ON CONFLICT (name) DO UPDATE SET code = EXCLUDED.code, portal_id = EXCLUDED.portal_id, region_id = COALESCE(states.region_id, EXCLUDED.region_id), source = EXCLUDED.source, source_updated_at = EXCLUDED.source_updated_at
       RETURNING id`)[0];
-    if (ins?.id) { stateIdByPortal.set(s.portal_id, ins.id); sc++; }
+    if (ins?.id) { stateIdByPortal.set(String(s.portal_id), ins.id); sc++; }
   }
 
+  // lgas: batch multi-value upsert, then read back id -> portal_id
+  const lgaRows = [];
+  for (const l of lgas) {
+    const sid = stateIdByPortal.get(String(l.state_portal_id));
+    if (!sid) continue;
+    lgaRows.push([l.name, l.code, parseInt(l.portal_id, 10), sid]);
+  }
+  for (const chunk of chunkArr(lgaRows, 500)) {
+    const mi = multiInsert("lgas", ["name", "code", "portal_id", "state_id"], chunk, " ON CONFLICT (portal_id, state_id) DO NOTHING");
+    await sql.query(mi.sql, mi.params);
+  }
+  const lgaBack = await sql`SELECT id, portal_id FROM lgas WHERE portal_id IS NOT NULL`;
   const lgaIdByPortal = new Map();
   let lc = 0;
-  for (const l of lgas) {
-    const sid = stateIdByPortal.get(l.state_portal_id);
-    if (!sid) continue;
-    let ins = (await sql`
-      INSERT INTO lgas (name, code, portal_id, state_id, source, source_updated_at)
-      VALUES (${l.name}, ${l.code}, ${parseInt(l.portal_id, 10)}, ${sid}, 'INEC', NOW())
-      ON CONFLICT DO NOTHING RETURNING id`)[0];
-    if (!ins) ins = (await sql`SELECT id FROM lgas WHERE portal_id = ${parseInt(l.portal_id, 10)} AND state_id = ${sid} LIMIT 1`)[0];
-    if (ins?.id) { lgaIdByPortal.set(l.portal_id, ins.id); lc++; }
-  }
+  for (const row of lgaBack) { lgaIdByPortal.set(String(row.portal_id), row.id); lc++; }
 
-  let wc = 0;
+  // wards: batch multi-value upsert (8809 rows -> ~18 calls)
+  const wardRows = [];
   for (const w of wards) {
-    const lid = lgaIdByPortal.get(w.lga_portal_id);
-    const sid = stateIdByPortal.get(w.state_portal_id);
+    const lid = lgaIdByPortal.get(String(w.lga_portal_id));
+    const sid = stateIdByPortal.get(String(w.state_portal_id));
     if (!lid || !sid) continue;
-    await sql`
-      INSERT INTO wards (code, name, lga_id, state_id, portal_id, source, source_updated_at)
-      VALUES (${w.code}, ${w.name}, ${lid}, ${sid}, ${parseInt(w.portal_id, 10)}, 'INEC', NOW())
-      ON CONFLICT (lga_id, code, name) DO UPDATE SET portal_id = EXCLUDED.portal_id, source = EXCLUDED.source, source_updated_at = EXCLUDED.source_updated_at`;
-    wc++;
+    wardRows.push([w.code, w.name, lid, sid, parseInt(w.portal_id, 10)]);
+  }
+  let wc = 0;
+  for (const chunk of chunkArr(wardRows, 500)) {
+    const mi = multiInsert("wards", ["code", "name", "lga_id", "state_id", "portal_id"], chunk,
+      " ON CONFLICT (lga_id, code, name) DO UPDATE SET portal_id = EXCLUDED.portal_id, source = EXCLUDED.source, source_updated_at = EXCLUDED.source_updated_at");
+    await sql.query(mi.sql, mi.params);
+    wc += chunk.length;
   }
   return { states: sc, lgas: lc, wards: wc, zones: ZONES.length };
 }
