@@ -5,7 +5,7 @@ import { NewsAdmin } from "@/components/news-admin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Newspaper, FilePlus } from "lucide-react";
+import { Newspaper, FilePlus, Globe } from "lucide-react";
 
 export default function NewsPage() {
   return (
@@ -28,6 +28,21 @@ export default function NewsPage() {
           </Link>
         </Button>
       </div>
+
+      {/* ─── External News Link ─── */}
+      <Card>
+        <CardContent className="py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Globe className="h-4 w-4 text-primary" />
+              <span className="text-sm font-medium">External News from NewsAPI</span>
+            </div>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/news/external">View External News</Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* ─── News Feed ─── */}
       <NewsFeed />

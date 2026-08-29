@@ -89,6 +89,7 @@ function useNavSections() {
       items: [
         { path: "/feeds", label: "Feeds", icon: Newspaper },
         { path: "/news", label: "News", icon: Newspaper },
+        { path: "/news/external", label: "External News", icon: Globe },
         { path: "/search", label: "Search", icon: Search },
         { path: "/submit", label: "Submit Truth", icon: Send },
         { path: "/activity", label: "Activity", icon: ActivityIcon },
@@ -146,6 +147,7 @@ function useNavSections() {
   type FeatureKey = "news_enabled" | "rewards_enabled" | "politics_enabled" | "questionnaire_enabled" | "ai_compare_enabled";
   const flagForPath: Record<string, FeatureKey> = {
     "/news": "news_enabled",
+    "/news/external": "news_enabled",
     "/rewards": "rewards_enabled",
     "/politics": "politics_enabled",
     "/compare": "ai_compare_enabled",

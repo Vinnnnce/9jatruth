@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Landmark, Users, Vote, ShieldCheck, AlertTriangle, CheckCircle2, Send, ExternalLink } from "lucide-react";
+import Link from "next/link";
 
 const EVENT_TYPES = [
   { value: "campaign_rally", label: "Campaign Rally" },
@@ -237,6 +238,11 @@ function PartyCandidatesSection({ acronym }: { acronym: string }) {
           <span className="h-3 w-3 rounded-full" style={{ background: party?.color || "hsl(var(--primary))" }} />
           {party?.name || acronym} candidates
           <Badge variant="secondary" className="text-[9px]">{candidates.length} registered</Badge>
+          {party?.id && (
+            <Link href={`/politics/party/${party.id}`} className="ml-auto text-[10px] text-primary hover:underline">
+              View Full Party Page →
+            </Link>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -250,7 +256,9 @@ function PartyCandidatesSection({ acronym }: { acronym: string }) {
             <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-2">
               {candidates.filter((c: any) => c.office === office).map((c: any) => (
                 <div key={c.id} className="rounded-md border border-border p-2">
-                  <p className="text-xs font-medium">{c.name}</p>
+                  <Link href={`/politics/politician/${encodeURIComponent(c.slug || c.name)}`} className="text-xs font-medium hover:text-primary">
+                    {c.name}
+                  </Link>
                   {c.state && <p className="text-[10px] text-muted-foreground">{c.state}{c.lga ? ` · ${c.lga}` : ""}</p>}
                 </div>
               ))}
@@ -324,7 +332,9 @@ function CandidateCard({ candidate: c }: { candidate: any }) {
         {c.photo_url ? <img src={c.photo_url} alt={c.name} className="h-12 w-12 rounded-full object-cover flex-shrink-0" /> : <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center text-[10px] text-muted-foreground flex-shrink-0">{c.name?.slice(0, 2).toUpperCase()}</div>}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1 flex-wrap">
-            <span className="font-medium truncate">{c.name}</span>
+            <Link href={`/politics/politician/${encodeURIComponent(c.slug || c.name)}`} className="font-medium truncate hover:text-primary">
+              {c.name}
+            </Link>
             {c.record_type && <Badge variant="outline" className={`text-[8px] capitalize ${c.record_type === "incumbent" ? "text-emerald-500" : "text-blue-500"}`}>{c.record_type}</Badge>}
           </div>
           <div className="flex items-center gap-1 flex-wrap mt-0.5">
