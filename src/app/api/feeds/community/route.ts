@@ -39,43 +39,48 @@ const communityFeedQuerySchema = z.object({
 });
 
 export async function GET(request: Request) {
-  await ensureDbInitialized();
-  const { searchParams } = new URL(request.url);
-  const queryObj = Object.fromEntries(searchParams.entries());
-  const parsed = validate(communityFeedQuerySchema, queryObj);
-  if (!parsed.success) return validationErrorResponse(parsed.error);
+  try {
+    await ensureDbInitialized();
+    const { searchParams } = new URL(request.url);
+    const queryObj = Object.fromEntries(searchParams.entries());
+    const parsed = validate(communityFeedQuerySchema, queryObj);
+    if (!parsed.success) return validationErrorResponse(parsed.error);
 
-  const q = parsed.data;
-  const userHash = await getUserId(request).catch(() => null);
+    const q = parsed.data;
+    const userHash = await getUserId(request).catch(() => null);
 
-  // If near_you and no lat/lng provided, try IP-based location
-  let lat = q.lat;
-  let lng = q.lng;
-  if (q.level === "near_you" && (lat == null || lng == null)) {
-    const ipLocation = await getIpLocation(request);
-    lat = ipLocation.ipLat ?? undefined;
-    lng = ipLocation.ipLng ?? undefined;
+    // If near_you and no lat/lng provided, try IP-based location
+    let lat = q.lat;
+    let lng = q.lng;
+    if (q.level === "near_you" && (lat == null || lng == null)) {
+      const ipLocation = await getIpLocation(request);
+      lat = ipLocation.ipLat ?? undefined;
+      lng = ipLocation.ipLng ?? undefined;
+    }
+
+    const result = await getCommunityFeeds({
+      level: q.level as GeoLevel,
+      stateId: q.stateId ?? null,
+      lgaId: q.lgaId ?? null,
+      wardId: q.wardId ?? null,
+      communityId: q.communityId ?? null,
+      stateName: q.stateName ?? null,
+      lgaName: q.lgaName ?? null,
+      lat: lat ?? null,
+      lng: lng ?? null,
+      radiusKm: q.radiusKm,
+      category: q.category,
+      limit: q.limit,
+      offset: q.offset,
+      sortBy: q.sortBy,
+      userHash,
+    });
+
+    return Response.json(result);
+  } catch (error: any) {
+    console.error("[feeds/community] GET error:", error);
+    return Response.json({ error: error?.message || "Internal server error", stack: error?.stack?.substring(0, 500) }, { status: 500 });
   }
-
-  const result = await getCommunityFeeds({
-    level: q.level as GeoLevel,
-    stateId: q.stateId ?? null,
-    lgaId: q.lgaId ?? null,
-    wardId: q.wardId ?? null,
-    communityId: q.communityId ?? null,
-    stateName: q.stateName ?? null,
-    lgaName: q.lgaName ?? null,
-    lat: lat ?? null,
-    lng: lng ?? null,
-    radiusKm: q.radiusKm,
-    category: q.category,
-    limit: q.limit,
-    offset: q.offset,
-    sortBy: q.sortBy,
-    userHash,
-  });
-
-  return Response.json(result);
 }
 
 /**
