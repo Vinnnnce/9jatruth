@@ -26,7 +26,7 @@ export function getDb(): NeonQueryFunction<true, true> {
  */
 let initialized = false;
 
-export const SCHEMA_VERSION = "2026-08-27-v5";
+export const SCHEMA_VERSION = "2026-08-29-v6";
 
 export async function ensureDbInitialized() {
   if (initialized) return;
@@ -1517,6 +1517,66 @@ export async function ensureDbInitialized() {
   _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS deleted_by TEXT`);
   _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS delete_reason TEXT`);
   _q.push(sql`CREATE INDEX IF NOT EXISTS idx_micro_truths_deleted ON micro_truths(deleted_at)`);
+
+  // ─── Community Feeds System: geo hierarchy FKs on micro_truths ───
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS state_id INTEGER REFERENCES states(id) ON DELETE SET NULL`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS lga_id INTEGER REFERENCES lgas(id) ON DELETE SET NULL`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS ward_id INTEGER REFERENCES wards(id) ON DELETE SET NULL`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS community_id INTEGER REFERENCES communities(id) ON DELETE SET NULL`);
+  // PostGIS geography column for spatial indexing (lat/lng → geography point)
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS geog geography(POINT, 4326)`);
+  // AI-driven columns
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS ai_tags TEXT NOT NULL DEFAULT '[]'`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS ai_category TEXT`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS ai_spam_score REAL NOT NULL DEFAULT 0.0`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS ai_spam_flags TEXT NOT NULL DEFAULT '[]'`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS trending_score REAL NOT NULL DEFAULT 0.0`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS trending_rank INTEGER`);
+  _q.push(sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS ai_analyzed_at TIMESTAMPTZ`);
+  // Indexes for community feeds queries
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_micro_truths_state ON micro_truths(state_id) WHERE deleted_at IS NULL`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_micro_truths_lga ON micro_truths(lga_id) WHERE deleted_at IS NULL`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_micro_truths_ward ON micro_truths(ward_id) WHERE deleted_at IS NULL`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_micro_truths_community ON micro_truths(community_id) WHERE deleted_at IS NULL`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_micro_truths_geog ON micro_truths USING GIST (geog) WHERE deleted_at IS NULL`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_micro_truths_trending ON micro_truths(trending_score DESC) WHERE deleted_at IS NULL`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_micro_truths_created_geo ON micro_truths(created_at DESC, state_id) WHERE deleted_at IS NULL`);
+
+  // ─── Community feeds trending cache table (periodic aggregation) ───
+  _q.push(sql`CREATE TABLE IF NOT EXISTS feed_trending (
+    id SERIAL PRIMARY KEY,
+    geo_level TEXT NOT NULL,
+    geo_id INTEGER,
+    geo_name TEXT,
+    category TEXT NOT NULL,
+    tag TEXT,
+    post_count INTEGER NOT NULL DEFAULT 0,
+    total_likes INTEGER NOT NULL DEFAULT 0,
+    total_comments INTEGER NOT NULL DEFAULT 0,
+    total_verifications INTEGER NOT NULL DEFAULT 0,
+    trending_score REAL NOT NULL DEFAULT 0.0,
+    period_start TIMESTAMPTZ NOT NULL,
+    period_end TIMESTAMPTZ NOT NULL,
+    computed_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feed_trending_level ON feed_trending(geo_level, geo_id, computed_at DESC)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feed_trending_name ON feed_trending(geo_level, geo_name, computed_at DESC)`);
+
+  // ─── Communities table: add ward_id + lat/lng if missing (for geo hierarchy completeness) ───
+  _q.push(sql`ALTER TABLE communities ADD COLUMN IF NOT EXISTS ward_id INTEGER REFERENCES wards(id) ON DELETE SET NULL`);
+  _q.push(sql`ALTER TABLE communities ADD COLUMN IF NOT EXISTS state_id INTEGER REFERENCES states(id) ON DELETE SET NULL`);
+  _q.push(sql`ALTER TABLE communities ADD COLUMN IF NOT EXISTS lga_id INTEGER REFERENCES lgas(id) ON DELETE SET NULL`);
+  _q.push(sql`ALTER TABLE communities ADD COLUMN IF NOT EXISTS region TEXT`);
+  _q.push(sql`ALTER TABLE communities ADD COLUMN IF NOT EXISTS slug TEXT`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_communities_ward ON communities(ward_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_communities_lga ON communities(lga_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_communities_state ON communities(state_id)`);
+  _q.push(sql`ALTER TABLE communities ADD COLUMN IF NOT EXISTS geog geography(POINT, 4326)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_communities_geog ON communities USING GIST (geog)`);
+
+  // ─── Ward lat/lng for reverse geocoding ───
+  _q.push(sql`ALTER TABLE wards ADD COLUMN IF NOT EXISTS region TEXT`);
+  _q.push(sql`ALTER TABLE wards ADD COLUMN IF NOT EXISTS slug TEXT`);
 
   // ─── Site / Feature / Rewards configuration (super-admin controlled, live) ───
   _q.push(sql`CREATE TABLE IF NOT EXISTS site_config (

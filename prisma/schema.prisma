@@ -41,6 +41,7 @@ model State {
   region          Region?  @relation(fields: [regionId], references: [id])
   lgas            Lga[]
   wards           Ward[]
+  microTruths     MicroTruth[]
 
   @@map("states")
 }
@@ -59,6 +60,7 @@ model Lga {
 
   state           State?   @relation(fields: [stateId], references: [id])
   wards           Ward[]
+  microTruths     MicroTruth[]
 
   @@map("lgas")
 }
@@ -81,7 +83,14 @@ model Community {
   geoHash   String   @map("geo_hash")
   lat       Float
   lng       Float
+  wardId    Int?     @map("ward_id")
+  stateId   Int?     @map("state_id")
+  lgaId     Int?     @map("lga_id")
+  region    String?
+  slug      String?
   createdAt DateTime @default(now()) @map("created_at")
+
+  microTruths MicroTruth[]
 
   @@map("communities")
 }
@@ -132,6 +141,27 @@ model MicroTruth {
   deletedAt          DateTime? @map("deleted_at")
   deletedBy          String?  @map("deleted_by")
   deleteReason       String?  @map("delete_reason")
+
+  // ─── Community Feeds System: geo hierarchy FKs ───
+  stateId            Int?     @map("state_id")
+  lgaId              Int?     @map("lga_id")
+  wardId             Int?     @map("ward_id")
+  communityId        Int?     @map("community_id")
+
+  // ─── AI-driven columns ───
+  aiTags             String   @default("[]") @map("ai_tags")
+  aiCategory         String?  @map("ai_category")
+  aiSpamScore        Float    @default(0.0) @map("ai_spam_score")
+  aiSpamFlags        String   @default("[]") @map("ai_spam_flags")
+  trendingScore      Float    @default(0.0) @map("trending_score")
+  trendingRank       Int?     @map("trending_rank")
+  aiAnalyzedAt       DateTime? @map("ai_analyzed_at")
+
+  // ─── Relations ───
+  state              State?   @relation(fields: [stateId], references: [id])
+  lga                Lga?     @relation(fields: [lgaId], references: [id])
+  ward               Ward?    @relation(fields: [wardId], references: [id])
+  community          Community? @relation(fields: [communityId], references: [id])
 
   @@map("micro_truths")
 }
@@ -741,6 +771,7 @@ model Ward {
 
   lga             Lga      @relation(fields: [lgaId], references: [id])
   state           State    @relation(fields: [stateId], references: [id])
+  microTruths     MicroTruth[]
 
   @@unique([lgaId, code, name], name: "idx_wards_unique_lga_code_name")
   @@index([lgaId])
@@ -893,4 +924,27 @@ model ElectionCandidate {
   @@index([electionId])
   @@index([stateId, lgaId, wardId])
   @@map("election_candidates")
+}
+
+// ─── Community Feeds Trending Cache ───
+
+model FeedTrending {
+  id              Int      @id @default(autoincrement())
+  geoLevel        String   @map("geo_level")
+  geoId           Int?     @map("geo_id")
+  geoName         String?  @map("geo_name")
+  category        String
+  tag             String?
+  postCount       Int      @default(0) @map("post_count")
+  totalLikes      Int      @default(0) @map("total_likes")
+  totalComments    Int      @default(0) @map("total_comments")
+  totalVerifications Int   @default(0) @map("total_verifications")
+  trendingScore   Float    @default(0.0) @map("trending_score")
+  periodStart     DateTime @map("period_start")
+  periodEnd       DateTime @map("period_end")
+  computedAt      DateTime @default(now()) @map("computed_at")
+
+  @@index([geoLevel, geoId, computedAt])
+  @@index([geoLevel, geoName, computedAt])
+  @@map("feed_trending")
 }

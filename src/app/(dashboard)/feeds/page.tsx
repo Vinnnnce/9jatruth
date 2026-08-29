@@ -30,6 +30,7 @@ import { PollCard } from "@/components/poll-card";
 import { motion } from "framer-motion";
 import { ClipboardList, Send as SendIcon } from "lucide-react";
 import { NIGERIA_STATES, getLgasForState } from "@/lib/nigeria-locations";
+import { CommunityFeeds } from "@/components/community-feeds";
 
 // ─── Types ───
 
@@ -338,6 +339,9 @@ export default function Feeds() {
           <SummaryCard icon={ShieldCheck} label="Avg Safety Index" value={summary?.avgSafetyIndex ?? 0} colorClass="text-neon-green" loading={!summary} />
           <SummaryCard icon={Gauge} label="Avg Price Index" value={summary?.avgPriceIndex ?? 0} colorClass="text-purple-glow" loading={!summary} />
         </div>
+
+        {/* ─── Community Feeds System (Tabs + Cascading Filters + Post Creation) ─── */}
+        <CommunityFeeds />
 
         {/* ─── Geo Filters + Sort ─── */}
         <div className="rounded-xl p-3 space-y-2 bg-card border border-border">
