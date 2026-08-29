@@ -15,7 +15,7 @@
   "crons": [
     {
       "path": "/api/news/cron",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/news/auto-summary",
