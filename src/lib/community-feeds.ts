@@ -96,8 +96,8 @@ const JOINS = `
   LEFT JOIN organizations o ON t.organization_id = o.id
   LEFT JOIN neighborhoods n ON t.neighborhood_id = n.id
   LEFT JOIN platform_users u ON t.user_hash = u.clerk_user_id
-  LEFT JOIN (SELECT truth_id, COUNT(*) AS cnt FROM feed_likes WHERE deleted_at IS NULL GROUP BY truth_id) like_counts ON like_counts.truth_id = t.id
-  LEFT JOIN (SELECT truth_id, COUNT(*) AS cnt FROM feed_comments WHERE deleted_at IS NULL GROUP BY truth_id) comment_counts ON comment_counts.truth_id = t.id
+  LEFT JOIN (SELECT truth_id, COUNT(*) AS cnt FROM feed_likes GROUP BY truth_id) like_counts ON like_counts.truth_id = t.id
+  LEFT JOIN (SELECT truth_id, COUNT(*) AS cnt FROM feed_comments GROUP BY truth_id) comment_counts ON comment_counts.truth_id = t.id
   LEFT JOIN (SELECT truth_id, COUNT(*) AS cnt FROM feed_shares GROUP BY truth_id) share_counts ON share_counts.truth_id = t.id
   LEFT JOIN (SELECT truth_id, COUNT(*) AS cnt FROM verifications GROUP BY truth_id) verification_counts ON verification_counts.truth_id = t.id
 `;
