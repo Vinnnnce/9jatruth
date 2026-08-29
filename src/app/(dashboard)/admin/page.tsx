@@ -58,6 +58,7 @@ import { VerifiedBadge } from "@/components/verified-badge";
 import { AdminSecurity } from "@/components/admin-security";
 import { AdminPolitics } from "@/components/admin-politics";
 import { AdminConfig } from "@/components/admin-config";
+import { SubAdminManager } from "@/components/admin/sub-admin-manager";
 
 import {
   BarChart,
@@ -947,6 +948,9 @@ export default function AdminDashboard() {
           </TabsTrigger>
           <TabsTrigger value="politics" data-testid="tab-politics">
             Politics
+          </TabsTrigger>
+          <TabsTrigger value="sub-admins" data-testid="tab-sub-admins">
+            Sub-Admins
           </TabsTrigger>
           <TabsTrigger value="config" data-testid="tab-config">
             Configuration
@@ -2493,6 +2497,9 @@ export default function AdminDashboard() {
         {/* ----------------------------------------------------------------- */}
         <TabsContent value="politics" className="space-y-4">
           <AdminPolitics />
+        </TabsContent>
+        <TabsContent value="sub-admins" className="space-y-4">
+          <SubAdminManager />
         </TabsContent>
         <TabsContent value="config" className="space-y-4">
           <AdminConfig />

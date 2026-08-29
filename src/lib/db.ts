@@ -26,7 +26,7 @@ export function getDb(): NeonQueryFunction<true, true> {
  */
 let initialized = false;
 
-export const SCHEMA_VERSION = "2026-08-29-v6";
+export const SCHEMA_VERSION = "2026-08-29-v7";
 
 export async function ensureDbInitialized() {
   if (initialized) return;
@@ -1675,6 +1675,83 @@ export async function ensureDbInitialized() {
   _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS user_lga TEXT`);
   _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS user_state TEXT`);
   _q.push(sql`ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS location_updated_at TIMESTAMPTZ`);
+
+  // ─── Super Admin Dashboard: Sub-Admin Management ───
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS admin_roles (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    permissions TEXT NOT NULL DEFAULT '[]',
+    is_system BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_admin_roles_name ON admin_roles(name)`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS admin_users (
+    id SERIAL PRIMARY KEY,
+    clerk_user_id TEXT UNIQUE,
+    email TEXT NOT NULL,
+    display_name TEXT,
+    avatar_url TEXT,
+    role_id INTEGER REFERENCES admin_roles(id) ON DELETE SET NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    invited_by TEXT,
+    last_login_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_admin_users_email ON admin_users(email)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_admin_users_clerk ON admin_users(clerk_user_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_admin_users_status ON admin_users(status)`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS admin_assignments (
+    id SERIAL PRIMARY KEY,
+    admin_user_id INTEGER NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+    role_id INTEGER NOT NULL REFERENCES admin_roles(id) ON DELETE CASCADE,
+    scope TEXT NOT NULL DEFAULT 'global',
+    scope_entity_type TEXT,
+    scope_entity_id INTEGER,
+    assigned_by TEXT,
+    assigned_at TIMESTAMPTZ DEFAULT NOW(),
+    revoked_at TIMESTAMPTZ,
+    status TEXT NOT NULL DEFAULT 'active',
+    UNIQUE(admin_user_id, role_id, scope, scope_entity_type, scope_entity_id)
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_admin_assignments_user ON admin_assignments(admin_user_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_admin_assignments_role ON admin_assignments(role_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_admin_assignments_status ON admin_assignments(status)`);
+
+  // ─── NewsAPI External News ───
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS news_external (
+    id SERIAL PRIMARY KEY,
+    source_name TEXT,
+    author TEXT,
+    title TEXT NOT NULL,
+    description TEXT,
+    content TEXT,
+    url TEXT NOT NULL UNIQUE,
+    image_url TEXT,
+    published_at TIMESTAMPTZ,
+    category TEXT NOT NULL DEFAULT 'general',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    is_audio_generated BOOLEAN NOT NULL DEFAULT FALSE,
+    audio_url TEXT
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_news_external_category ON news_external(category)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_news_external_published ON news_external(published_at DESC)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_news_external_source ON news_external(source_name)`);
+
+  // ─── Questionnaire 24h expiry ───
+  _q.push(sql`ALTER TABLE questionnaires ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_questionnaires_expires ON questionnaires(expires_at)`);
+
+  // ─── Organization verification strict fields ───
+  _q.push(sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS verification_notes TEXT`);
+  _q.push(sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ`);
+  _q.push(sql`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS verified_by TEXT`);
 
   await sql.transaction(_q as any);
 

@@ -38,6 +38,7 @@ const isPreLaunchRoute = createRouteMatcher([
   "/api/backup(.*)",
   "/api/security/alerts(.*)",
   "/api/news/auto-summary(.*)",
+  "/api/news/cron(.*)",
   "/api/schedule/process(.*)",
   "/_next(.*)",
   "/favicon(.*)",
@@ -70,6 +71,10 @@ const isPublicRoute = createRouteMatcher([
   "/api/ai/time-series(.*)", // Historical data is public
   "/api/feedback(.*)", // POST is public (anyone can submit feedback)
   "/api/questionnaire(.*)", // POST is public (anyone can submit questionnaire)
+  "/api/questionnaire/active(.*)", // GET active questionnaires is public
+  "/api/questionnaire/create(.*)", // POST create is admin-protected at route level
+  "/api/site/features(.*)", // GET site features is public
+  "/api/news/external(.*)", // GET external news is public
   "/api/backup(.*)", // Cron-triggered daily backup (protected by CRON_SECRET)
   "/api/waitlist(.*)",
   "/api/security/analyze(.*)", // Public content analysis (rate-limited)
