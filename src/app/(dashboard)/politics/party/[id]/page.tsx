@@ -97,7 +97,7 @@ export default function PartyDetailPage() {
 
       {/* Members grouped by office */}
       {Object.keys(byOffice).length > 0 ? (
-        Object.entries(byOffice).map(([office, officeMembers]: [string, any[]]) => (
+        Object.entries(byOffice).map(([office, officeMembers]: [string, any]) => (
           <div key={office}>
             <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <Briefcase className="h-5 w-5 text-primary" />
