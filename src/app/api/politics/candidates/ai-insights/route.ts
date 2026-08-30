@@ -73,14 +73,29 @@ export async function POST(request: Request) {
   const ids: number[] = [];
   if (Array.isArray(body.candidateIds)) ids.push(...body.candidateIds.filter((n: any) => Number.isFinite(+n)).map((n: any) => +n));
   if (body.candidateId) ids.push(+body.candidateId);
-  if (!ids.length) return Response.json({ message: "Provide candidateId or candidateIds" }, { status: 400 });
 
-  const candidates = (await sql`
-    SELECT c.*, p.name AS party_name, p.color AS party_color
-    FROM political_candidates c
-    LEFT JOIN political_parties p ON c.party_acronym = p.acronym
-    WHERE c.id = ANY(${ids}::int[])
-  `) as unknown as any[];
+  // "Find Data Gaps" is labelled "Across all candidates" in the admin UI — when
+  // no candidate ids are supplied for the gaps action, scan every candidate
+  // instead of returning a 400.
+  const scanningAll = action === "gaps" && ids.length === 0;
+  if (!ids.length && !scanningAll) {
+    return Response.json({ message: "Provide candidateId or candidateIds" }, { status: 400 });
+  }
+
+  const candidates = scanningAll
+    ? ((await sql`
+        SELECT c.*, p.name AS party_name, p.color AS party_color
+        FROM political_candidates c
+        LEFT JOIN political_parties p ON c.party_acronym = p.acronym
+        ORDER BY c.id
+        LIMIT 500
+      `) as unknown as any[])
+    : ((await sql`
+        SELECT c.*, p.name AS party_name, p.color AS party_color
+        FROM political_candidates c
+        LEFT JOIN political_parties p ON c.party_acronym = p.acronym
+        WHERE c.id = ANY(${ids}::int[])
+      `) as unknown as any[]);
 
   if (!candidates.length) return Response.json({ message: "No candidates found" }, { status: 404 });
 

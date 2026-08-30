@@ -2,6 +2,7 @@ import { ensureDbInitialized } from "@/lib/db";
 import { getTruth, deleteTruth } from "@/lib/neon-storage";
 import { validate, validationErrorResponse, getClerkUserId, getUserId } from "@/lib/api-helpers";
 import { csrfCheck } from "@/lib/security";
+import { isSuperAdmin } from "@/lib/admin-auth";
 import { z } from "zod";
 
 const idParamSchema = z.object({
@@ -46,8 +47,17 @@ export async function DELETE(
 
   const userHash = await getUserId(request);
 
-  // Only allow the post owner to delete their own post
-  const deleted = await deleteTruth(parsed.data.id, userHash);
-  if (!deleted) return Response.json({ message: "Truth not found or you don't have permission to delete it" }, { status: 404 });
-  return Response.json({ success: true });
+  // Super admins (e.g. deleting from the admin panel) bypass the owner check
+  // so they can remove any post, not just their own.
+  const admin = await isSuperAdmin();
+  const effectiveHash = admin ? undefined : userHash;
+
+  try {
+    const deleted = await deleteTruth(parsed.data.id, effectiveHash);
+    if (!deleted) return Response.json({ message: "Truth not found or you don't have permission to delete it" }, { status: 404 });
+    return Response.json({ success: true });
+  } catch (err: any) {
+    console.error("[api/truths/[id]] DELETE failed:", err);
+    return Response.json({ message: "Failed to delete post", detail: String(err?.message || err) }, { status: 500 });
+  }
 }

@@ -132,6 +132,6 @@ export async function POST(
     }
   } catch (err: any) {
     console.error("[admin/organizations/verify] POST failed:", err);
-    return Response.json({ message: "Failed to verify organization" }, { status: 500 });
+    return Response.json({ message: "Failed to verify organization", detail: String(err?.message || err) }, { status: 500 });
   }
 }

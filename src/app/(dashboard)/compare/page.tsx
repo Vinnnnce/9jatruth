@@ -56,25 +56,27 @@ export default function Compare() {
   const [idA, setIdA] = useState<string>("");
   const [idB, setIdB] = useState<string>("");
 
-  if (isError) {
-    return (
-      <div className="p-4 md:p-6 max-w-4xl space-y-6">
-        <Card>
-          <CardContent className="p-6 text-center">
-            <GitCompare className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Failed to load comparison data. Will retry...</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (isLoading || !data || data.length === 0) {
+  if (isLoading) {
     return (
       <div className="p-4 md:p-6 max-w-4xl space-y-6">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-32" />
         <Skeleton className="h-64" />
+      </div>
+    );
+  }
+
+  if (isError || !data || data.length === 0) {
+    return (
+      <div className="p-4 md:p-6 max-w-4xl space-y-6">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <GitCompare className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              {isError ? "Failed to load comparison data. Will retry..." : "No neighborhood data available right now. Try again in a moment."}
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -255,7 +257,7 @@ export default function Compare() {
           </Card>
 
           {/* AI Side-by-Side Comparison */}
-          <AICompareSection neighborhoodA={parseInt(idA)} neighborhoodB={parseInt(idB)} nameA={a.neighborhood.name} nameB={b.neighborhood.name} />
+          <AICompareSection key={`${idA}-${idB}`} neighborhoodA={parseInt(idA)} neighborhoodB={parseInt(idB)} nameA={a.neighborhood.name} nameB={b.neighborhood.name} />
         </>
       ) : (
         <Card className="border-border">

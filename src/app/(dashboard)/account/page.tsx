@@ -16,9 +16,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Building2, Save, LogOut, Lock, User, Mail, Globe, MapPin, Phone, Eye, EyeOff, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Building2, Save, LogOut, Lock, User, Mail, Globe, MapPin, Phone, Eye, EyeOff, ShieldCheck, ShieldAlert, SlidersHorizontal } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
 import { useRouter } from "next/navigation";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AdvancedSettingsForm } from "@/components/advanced-settings-form";
 
 export default function AccountSettings() {
   const { auth, loading, updateSettings, logout, checkSession } = useAgencyAuth();
@@ -134,6 +136,12 @@ export default function AccountSettings() {
         </Button>
       </div>
 
+      <Tabs defaultValue="profile">
+        <TabsList>
+          <TabsTrigger value="profile" className="gap-1"><User className="h-3.5 w-3.5" /> Profile</TabsTrigger>
+          <TabsTrigger value="advanced" className="gap-1"><SlidersHorizontal className="h-3.5 w-3.5" /> Advanced</TabsTrigger>
+        </TabsList>
+        <TabsContent value="profile" className="space-y-6 mt-4">
       <form onSubmit={handleSave} className="space-y-6">
         {/* Account Info */}
         <Card>
@@ -225,6 +233,11 @@ export default function AccountSettings() {
           </Button>
         </div>
       </form>
+        </TabsContent>
+        <TabsContent value="advanced" className="mt-4">
+          <AdvancedSettingsForm />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

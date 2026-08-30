@@ -31,19 +31,14 @@ import {
   Send,
   ListChecks,
   TrendingUp,
-  Coins,
-  Activity,
   Moon,
   Sun,
-  Globe,
   BarChart3,
   Map as MapIcon,
   GitCompare,
   Landmark,
   Bell,
-  Trophy,
   Search,
-  Activity as ActivityIcon,
   User,
   Building2,
   Settings,
@@ -55,7 +50,6 @@ import {
   Briefcase,
   ShieldCheck,
   Download,
-  SlidersHorizontal,
   MessageSquare,
   ClipboardList,
   CloudRain,
@@ -83,16 +77,18 @@ function useNavSections() {
   // Order: Main > Insights > Account > Dashboards
   // Legal section removed from sidebar items (Privacy/Terms/Cookies stay in footer only)
   // Operations removed from Legal section
+  // Consolidated navigation:
+  //  - External News lives inside the News page (linked from there)
+  //  - Activity, Leaderboard & Rewards live inside the Portfolio page (tabs)
+  //  - Advanced Settings lives inside Account Settings (tab)
   const sections = [
     {
       label: "Main",
       items: [
         { path: "/feeds", label: "Feeds", icon: Newspaper },
         { path: "/news", label: "News", icon: Newspaper },
-        { path: "/news/external", label: "External News", icon: Globe },
         { path: "/search", label: "Search", icon: Search },
         { path: "/submit", label: "Submit Truth", icon: Send },
-        { path: "/activity", label: "Activity", icon: ActivityIcon },
       ],
     },
     {
@@ -104,8 +100,6 @@ function useNavSections() {
         { path: "/politics", label: "Politics", icon: Landmark },
         { path: "/alerts", label: "Alerts", icon: Bell },
         { path: "/predictions", label: "Predictions", icon: TrendingUp },
-        { path: "/rewards", label: "Rewards", icon: Coins },
-        { path: "/leaderboard", label: "Leaderboard", icon: Trophy },
       ],
     },
     {
@@ -115,9 +109,8 @@ function useNavSections() {
         { path: "/organizations", label: "Business", icon: Building2 },
         { path: "/agency-auth", label: "Agency Login", icon: Shield },
         { path: "/account", label: "Account Settings", icon: Settings },
-        // User Portfolio (merged profile + portfolio) — trends, leaderboard & rewards
+        // User Portfolio (merged profile + portfolio) — activity, leaderboard & rewards
         { path: "/portfolio", label: "Portfolio", icon: User },
-        { path: "/advanced-settings", label: "Advanced Settings", icon: SlidersHorizontal },
       ],
     },
     {
