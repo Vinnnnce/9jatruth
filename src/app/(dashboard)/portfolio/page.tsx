@@ -3,15 +3,27 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TrendingUp, TrendingDown, Minus, Trophy, Gift, Wallet, BarChart3, Send, ShieldCheck, Coins, AlertCircle, Activity as ActivityIcon } from "lucide-react";
+import {
+  Activity as ActivityIcon,
+  Trophy,
+  Wallet,
+  BarChart3,
+  TrendingUp,
+  ChevronRight,
+} from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
+// Render the full, rich standalone feature pages inside the portfolio tabs so the
+// UI/UX is preserved (podiums, timelines, redemption flows, charts) instead of
+// the stripped-down inline versions that caused the UI to "disappear".
+import LeaderboardPage from "../leaderboard/page";
+import ActivityPage from "../activity/page";
+import RewardsPage from "../rewards/page";
 
 type TrendsData = {
   categoryTrends: Array<{ category: string; count: number; avgTrust: number; trendDirection: string }>;
@@ -19,70 +31,53 @@ type TrendsData = {
   topNeighborhoods: Array<{ name: string; region: string; truths: number; avgTrust: number }>;
 };
 
-type LeaderboardEntry = {
-  userHash?: string;
-  displayName?: string;
-  totalCredits?: number;
-  submissions?: number;
-  verifications?: number;
-  avgTrust?: number;
-  tier?: string;
-  rank?: number;
-};
-
-type ActivityEntry = {
-  id: string;
-  type: "truth_submitted" | "truth_verified" | "reward_earned" | "prediction_made" | "alert_triggered" | string;
-  description: string;
-  userHash?: string;
-  category?: string;
-  neighborhood?: string;
-  region?: string;
-  timestamp: string;
-  metadata?: Record<string, any>;
-};
-
-const ACTIVITY_CONFIG: Record<string, { icon: typeof Send; color: string; bg: string; label: string }> = {
-  truth_submitted: { icon: Send, color: "text-blue-500", bg: "bg-blue-500/10", label: "Truth Submitted" },
-  truth_verified: { icon: ShieldCheck, color: "text-green-500", bg: "bg-green-500/10", label: "Verification" },
-  reward_earned: { icon: Coins, color: "text-amber-500", bg: "bg-amber-500/10", label: "Reward Earned" },
-  prediction_made: { icon: TrendingUp, color: "text-purple-500", bg: "bg-purple-500/10", label: "AI Prediction" },
-  alert_triggered: { icon: AlertCircle, color: "text-red-500", bg: "bg-red-500/10", label: "Alert" },
-};
-
-function TrendIcon({ dir }: { dir: string }) {
-  if (dir === "up") return <TrendingUp className="h-4 w-4 text-emerald-500" />;
-  if (dir === "down") return <TrendingDown className="h-4 w-4 text-rose-500" />;
-  return <Minus className="h-4 w-4 text-muted-foreground" />;
-}
-
 function TrendsTab() {
-  const { data, isLoading } = useQuery<TrendsData>({
+  const { data, isLoading, isError } = useQuery<TrendsData>({
     queryKey: ["/api/trends"],
     queryFn: () => apiRequest("GET", "/api/trends").then((r) => r.json()),
+    retry: 1,
   });
-  if (isLoading) return <Skeleton className="h-64 w-full" />;
-  if (!data) return <p className="text-sm text-muted-foreground">No trends data yet.</p>;
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-48 w-full" />
+      </div>
+    );
+  }
+  if (isError || !data) {
+    return (
+      <Card>
+        <CardContent className="py-10 text-center text-sm text-muted-foreground">
+          Trends data is unavailable right now. Please try again later.
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2 text-base"><BarChart3 className="h-4 w-4" /> Category Trends</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          {data.categoryTrends?.map((c) => (
-            <div key={c.category} className="flex items-center justify-between gap-3">
-              <span className="text-sm capitalize">{c.category}</span>
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary">{c.count} reports</Badge>
-                <TrendIcon dir={c.trendDirection} />
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center gap-2 text-base font-semibold">
+            <BarChart3 className="h-4 w-4" /> Category Trends
+          </div>
+          <div className="space-y-2">
+            {data.categoryTrends?.map((c) => (
+              <div key={c.category} className="flex items-center justify-between gap-3">
+                <span className="text-sm capitalize">{c.category}</span>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">{c.count} reports</Badge>
+                  <TrendingUp className="h-4 w-4 text-emerald-500" />
+                </div>
               </div>
-            </div>
-          ))}
-          {data.categoryTrends?.length === 0 && <p className="text-sm text-muted-foreground">No reports yet.</p>}
+            ))}
+            {data.categoryTrends?.length === 0 && <p className="text-sm text-muted-foreground">No reports yet.</p>}
+          </div>
         </CardContent>
       </Card>
       <Card>
-        <CardHeader><CardTitle className="text-base">Reports over the last 6 hours</CardTitle></CardHeader>
-        <CardContent>
+        <CardContent className="p-4">
+          <div className="mb-3 text-base font-semibold">Reports over the last 6 hours</div>
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={data.timeSeriesData ?? []}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -101,136 +96,111 @@ function TrendsTab() {
   );
 }
 
-function LeaderboardTab() {
-  const { data, isLoading } = useQuery<{ leaderboard?: LeaderboardEntry[]; top?: LeaderboardEntry[] }>({
-    queryKey: ["/api/leaderboard"],
-    queryFn: () => apiRequest("GET", "/api/leaderboard").then((r) => r.json()),
-  });
-  const rows = data?.leaderboard ?? data?.top ?? [];
-  if (isLoading) return <Skeleton className="h-64 w-full" />;
+type QuickCardProps = {
+  icon: typeof Trophy;
+  label: string;
+  desc: string;
+  onClick: () => void;
+};
+function QuickCard({ icon: Icon, label, desc, onClick }: QuickCardProps) {
   return (
-    <Card>
-      <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Trophy className="h-4 w-4" /> Top Contributors</CardTitle></CardHeader>
-      <CardContent className="space-y-2">
-        {rows.slice(0, 25).map((r, i) => (
-          <div key={i} className="flex items-center justify-between gap-3 border-b pb-2 last:border-0">
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold">{i + 1}</span>
-              <span className="text-sm font-medium">{r.displayName || "Anonymous"}</span>
-              {r.tier && <Badge variant="outline" className="capitalize">{r.tier}</Badge>}
-            </div>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <span>{r.submissions ?? 0} posts</span>
-              <span>{r.verifications ?? 0} verifies</span>
-              <span className="font-semibold text-foreground">{r.totalCredits ?? 0} pts</span>
-            </div>
-          </div>
-        ))}
-        {rows.length === 0 && <p className="text-sm text-muted-foreground">Leaderboard is empty. Be the first to contribute.</p>}
-      </CardContent>
-    </Card>
+    <button onClick={onClick} className="text-left rounded-xl border border-border/60 bg-card p-4 transition-colors hover:border-primary/50 hover:bg-accent/40">
+      <div className="flex items-center justify-between">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+          <Icon className="h-4 w-4 text-primary" />
+        </div>
+        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+      </div>
+      <p className="mt-3 text-sm font-semibold">{label}</p>
+      <p className="text-xs text-muted-foreground">{desc}</p>
+    </button>
   );
 }
 
-function RewardsTab() {
+function OverviewTab({ onNavigate }: { onNavigate: (t: string) => void }) {
   const balanceQ = useQuery<{ balance?: number }>({
     queryKey: ["/api/rewards/balance"],
-    queryFn: () => apiRequest("GET", "/api/rewards/balance").then((r) => r.json()),
-  });
-  const ledgerQ = useQuery<any[]>({
-    queryKey: ["/api/rewards/ledger"],
-    queryFn: () => apiRequest("GET", "/api/rewards/ledger").then((r) => r.json()),
-  });
-  const balance = balanceQ.data?.balance ?? 0;
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Wallet className="h-4 w-4" /> Rewards Balance</CardTitle></CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold">{balance} <span className="text-sm font-normal text-muted-foreground">points</span></div>
-          <Progress className="mt-3" value={Math.min((balance / 1000) * 100, 100)} />
-          <p className="mt-2 text-xs text-muted-foreground">Earn points by posting truths, verifying reports, and referring others.</p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Gift className="h-4 w-4" /> Recent Activity</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          {(ledgerQ.data ?? []).slice(0, 12).map((e, i) => (
-            <div key={i} className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">{e?.description ?? e?.type ?? "Reward"}</span>
-              <span className="font-semibold">{e?.amount ?? 0} pts</span>
-            </div>
-          ))}
-          {(ledgerQ.data ?? []).length === 0 && <p className="text-sm text-muted-foreground">No reward activity yet.</p>}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function ActivityTab() {
-  const { data, isLoading } = useQuery<ActivityEntry[]>({
-    queryKey: ["/api/activity"],
-    queryFn: () => apiRequest("GET", "/api/activity?limit=50").then((r) => r.json()),
+    queryFn: () => apiRequest("GET", "/api/rewards/balance").then((r) => r.json()).catch(() => ({ balance: 0 })),
     retry: 1,
   });
-  const rows = data ?? [];
-  if (isLoading) return <Skeleton className="h-64 w-full" />;
+  const leaderboardQ = useQuery<any>({
+    queryKey: ["/api/leaderboard"],
+    queryFn: () => apiRequest("GET", "/api/leaderboard").then((r) => r.json()).catch(() => []),
+    retry: 1,
+  });
+  const rows: any[] = Array.isArray(leaderboardQ.data)
+    ? leaderboardQ.data
+    : leaderboardQ.data?.leaderboard ?? leaderboardQ.data?.top ?? [];
+  const balance = balanceQ.data?.balance ?? 0;
+  const topContributor = rows[0];
+
   return (
-    <Card>
-      <CardHeader><CardTitle className="flex items-center gap-2 text-base"><ActivityIcon className="h-4 w-4" /> Recent Activity</CardTitle></CardHeader>
-      <CardContent className="space-y-2">
-        {rows.slice(0, 40).map((e, i) => {
-          const cfg = ACTIVITY_CONFIG[e.type] ?? ACTIVITY_CONFIG.truth_submitted;
-          const Icon = cfg.icon;
-          return (
-            <div key={i} className="flex items-start gap-3 border-b pb-2 last:border-0">
-              <span className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-full ${cfg.bg}`}>
-                <Icon className={`h-3.5 w-3.5 ${cfg.color}`} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-[9px]">{cfg.label}</Badge>
-                  {e.category && <span className="text-[10px] text-muted-foreground capitalize">{e.category}</span>}
-                </div>
-                <p className="text-sm text-foreground/90 truncate">{e.description}</p>
-                {e.neighborhood && <p className="text-[10px] text-muted-foreground">{e.neighborhood}{e.region ? `, ${e.region}` : ""}</p>}
-              </div>
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Wallet className="h-4 w-4 text-primary" />
+              <span className="text-xs text-muted-foreground">Credit Balance</span>
             </div>
-          );
-        })}
-        {rows.length === 0 && <p className="text-sm text-muted-foreground">No activity yet. Start by submitting or verifying a truth.</p>}
-      </CardContent>
-    </Card>
+            {balanceQ.isLoading ? <Skeleton className="h-8 w-20" /> : <p className="text-2xl font-bold tabular-nums">{balance}</p>}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Trophy className="h-4 w-4 text-amber-500" />
+              <span className="text-xs text-muted-foreground">Top Contributor</span>
+            </div>
+            {leaderboardQ.isLoading ? <Skeleton className="h-8 w-24" /> : <p className="text-sm font-semibold truncate">{topContributor?.displayName || "—"}</p>}
+            {topContributor && <p className="text-xs text-muted-foreground">{topContributor.totalCredits ?? 0} credits</p>}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <ActivityIcon className="h-4 w-4 text-blue-500" />
+              <span className="text-xs text-muted-foreground">Contributors</span>
+            </div>
+            {leaderboardQ.isLoading ? <Skeleton className="h-8 w-16" /> : <p className="text-2xl font-bold tabular-nums">{rows.length}</p>}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <QuickCard icon={ActivityIcon} label="Activity Timeline" desc="Live submissions, verifications & alerts" onClick={() => onNavigate("activity")} />
+        <QuickCard icon={Trophy} label="Leaderboard" desc="Top contributors & rankings" onClick={() => onNavigate("leaderboard")} />
+        <QuickCard icon={Wallet} label="Rewards & Credits" desc="Balance, redemptions & history" onClick={() => onNavigate("rewards")} />
+      </div>
+
+      <TrendsTab />
+    </div>
   );
 }
 
 export default function PortfolioPage() {
   const [tab, setTab] = useState("overview");
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div>
+    <div className="space-y-6">
+      <div className="p-4 md:p-6 pb-0">
         <h1 className="text-2xl font-bold tracking-tight">Portfolio</h1>
         <p className="text-sm text-muted-foreground">Your contributions, activity, trends, leaderboard standing, and rewards.</p>
       </div>
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="activity">Activity</TabsTrigger>
-          <TabsTrigger value="trends">Trends</TabsTrigger>
-          <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
-          <TabsTrigger value="rewards">Rewards</TabsTrigger>
-        </TabsList>
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <RewardsTab />
-            <LeaderboardTab />
-          </div>
-        </TabsContent>
-        <TabsContent value="activity"><ActivityTab /></TabsContent>
-        <TabsContent value="trends"><TrendsTab /></TabsContent>
-        <TabsContent value="leaderboard"><LeaderboardTab /></TabsContent>
-        <TabsContent value="rewards"><RewardsTab /></TabsContent>
+      <Tabs value={tab} onValueChange={setTab} className="space-y-6">
+        <div className="px-4 md:px-6">
+          <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="activity">Activity</TabsTrigger>
+            <TabsTrigger value="trends">Trends</TabsTrigger>
+            <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
+            <TabsTrigger value="rewards">Rewards</TabsTrigger>
+          </TabsList>
+        </div>
+        <TabsContent value="overview" className="p-4 md:p-6 pt-0 mt-0"><OverviewTab onNavigate={setTab} /></TabsContent>
+        <TabsContent value="activity" className="mt-0"><ActivityPage /></TabsContent>
+        <TabsContent value="trends" className="p-4 md:p-6 pt-0 mt-0"><TrendsTab /></TabsContent>
+        <TabsContent value="leaderboard" className="mt-0"><LeaderboardPage /></TabsContent>
+        <TabsContent value="rewards" className="mt-0"><RewardsPage /></TabsContent>
       </Tabs>
     </div>
   );
