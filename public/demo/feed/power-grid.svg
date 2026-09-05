@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a2b4a"/>
+      <stop offset="0.6" stop-color="#2d4a7a"/>
+      <stop offset="1" stop-color="#0f3d63"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffb347" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#ff7b00" stop-opacity="0.6"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffd97a"/>
+      <stop offset="1" stop-color="#ffb347" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#sky)"/>
+  <circle cx="920" cy="240" r="260" fill="url(#sun)"/>
+  <!-- transmission towers -->
+  <g stroke="#0b1e33" stroke-width="10" fill="none" opacity="0.9">
+    <path d="M180 800 L220 380 M260 800 L220 380 M200 640 L240 640 M196 540 L244 540 M212 460 L228 460"/>
+    <path d="M150 400 L290 400 M165 460 L275 460 M175 520 L265 520"/>
+    <path d="M860 800 L900 380 M940 800 L900 380 M880 640 L920 640 M876 540 L924 540 M892 460 L908 460"/>
+    <path d="M830 400 L970 400 M845 460 L955 460 M855 520 L945 520"/>
+  </g>
+  <g stroke="#ffd97a" stroke-width="3" fill="none" opacity="0.85">
+    <path d="M240 410 Q 420 330 560 380 Q 700 430 880 410"/>
+    <path d="M244 470 Q 420 400 560 440 Q 700 480 896 470"/>
+    <path d="M248 530 Q 420 470 560 500 Q 700 530 892 530"/>
+  </g>
+  <!-- skyline -->
+  <g fill="#0a1a2e" opacity="0.85">
+    <rect x="0" y="560" width="140" height="240"/>
+    <rect x="330" y="600" width="110" height="200"/>
+    <rect x="470" y="520" width="150" height="280"/>
+    <rect x="660" y="620" width="120" height="180"/>
+    <rect x="1020" y="540" width="180" height="260"/>
+  </g>
+  <!-- lit windows -->
+  <g fill="#ffd97a" opacity="0.8">
+    <rect x="20" y="600" width="14" height="18"/><rect x="60" y="600" width="14" height="18"/><rect x="100" y="640" width="14" height="18"/>
+    <rect x="500" y="560" width="14" height="18"/><rect x="560" y="600" width="14" height="18"/><rect x="520" y="660" width="14" height="18"/>
+    <rect x="1060" y="580" width="14" height="18"/><rect x="1120" y="620" width="14" height="18"/><rect x="1080" y="700" width="14" height="18"/>
+  </g>
+  <!-- glow on horizon -->
+  <rect x="0" y="690" width="1200" height="110" fill="url(#glow)" opacity="0.25"/>
+</svg>

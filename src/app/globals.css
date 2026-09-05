@@ -46,6 +46,17 @@
     --njt-purple-glow: 280 100% 65%;
     --njt-warm-orange: 25 95% 55%;
     --njt-soft-grey: 220 10% 88%;
+    /* ─── Feed Post Redesign Tokens ─── */
+    --feed-surface: 220 20% 98%;
+    --feed-card: 0 0% 100%;
+    --feed-border: 0 0% 90%;
+    --feed-text: 0 0% 10%;
+    --feed-muted: 0 0% 44%;
+    --feed-accent: 211 100% 50%;
+    --feed-like: 4 100% 59%;
+    --feed-gift: 36 100% 55%;
+    --feed-repost: 142 71% 45%;
+    --feed-chip: 220 20% 95%;
     --font-sans: "Inter", system-ui, -apple-system, sans-serif;
     --font-mono: "JetBrains Mono", "SF Mono", monospace;
   }
@@ -92,6 +103,17 @@
     --njt-purple-glow: 280 100% 70%;
     --njt-warm-orange: 25 95% 58%;
     --njt-soft-grey: 220 10% 25%;
+    /* ─── Feed Post Redesign Tokens (Dark) ─── */
+    --feed-surface: 222 47% 7%;
+    --feed-card: 222 47% 10%;
+    --feed-border: 217 33% 22%;
+    --feed-text: 210 40% 96%;
+    --feed-muted: 215 20% 66%;
+    --feed-accent: 211 100% 62%;
+    --feed-like: 4 100% 66%;
+    --feed-gift: 36 100% 60%;
+    --feed-repost: 142 71% 50%;
+    --feed-chip: 217 33% 16%;
   }
 }
 

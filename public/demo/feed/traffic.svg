@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <defs>
+    <linearGradient id="dusk" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff9a3c"/>
+      <stop offset="0.45" stop-color="#ff5f6d"/>
+      <stop offset="1" stop-color="#4a2b6b"/>
+    </linearGradient>
+    <linearGradient id="road" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#2b2140"/>
+      <stop offset="1" stop-color="#150f26"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="900" fill="url(#dusk)"/>
+  <circle cx="600" cy="330" r="120" fill="#ffe3a3" opacity="0.85"/>
+  <!-- skyline -->
+  <g fill="#31184a" opacity="0.8">
+    <rect x="60" y="240" width="120" height="260"/><rect x="220" y="300" width="90" height="200"/>
+    <rect x="900" y="260" width="110" height="240"/><rect x="1040" y="310" width="120" height="190"/>
+  </g>
+  <!-- road in perspective -->
+  <path d="M340 500 L860 500 L1200 900 L0 900 Z" fill="url(#road)"/>
+  <!-- lane dashes -->
+  <g fill="#ffd166" opacity="0.8">
+    <rect x="588" y="560" width="24" height="60" rx="8"/>
+    <rect x="578" y="660" width="44" height="80" rx="10"/>
+    <rect x="564" y="780" width="72" height="100" rx="12"/>
+  </g>
+  <!-- bus (danfo style) -->
+  <g>
+    <rect x="430" y="430" width="340" height="160" rx="18" fill="#f7b32b"/>
+    <rect x="430" y="430" width="340" height="46" rx="18" fill="#1f6f54"/>
+    <g fill="#bfe8ff">
+      <rect x="452" y="486" width="70" height="52" rx="8"/><rect x="536" y="486" width="70" height="52" rx="8"/><rect x="620" y="486" width="70" height="52" rx="8"/><rect x="704" y="486" width="50" height="52" rx="8"/>
+    </g>
+    <circle cx="500" cy="600" r="30" fill="#150f26"/><circle cx="700" cy="600" r="30" fill="#150f26"/>
+  </g>
+  <!-- car -->
+  <g>
+    <rect x="150" y="520" width="220" height="86" rx="22" fill="#e63946"/>
+    <path d="M190 520 Q260 470 330 520 Z" fill="#e63946"/>
+    <rect x="205" y="486" width="120" height="34" rx="8" fill="#bfe8ff"/>
+    <circle cx="205" cy="610" r="24" fill="#150f26"/><circle cx="320" cy="610" r="24" fill="#150f26"/>
+  </g>
+  <!-- tail lights glow -->
+  <circle cx="152" cy="558" r="10" fill="#ff4d4d" opacity="0.95"/>
+  <circle cx="152" cy="558" r="22" fill="#ff4d4d" opacity="0.3"/>
+</svg>

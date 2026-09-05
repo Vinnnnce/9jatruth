@@ -67,6 +67,19 @@ const config: Config = {
           warning: "hsl(var(--status-warning))",
           offline: "hsl(var(--status-offline))",
         },
+        /* ─── Feed post redesign palette (light + dark via globals.css) ─── */
+        feed: {
+          surface: "hsl(var(--feed-surface))",
+          card: "hsl(var(--feed-card))",
+          border: "hsl(var(--feed-border))",
+          text: "hsl(var(--feed-text))",
+          muted: "hsl(var(--feed-muted))",
+          accent: "hsl(var(--feed-accent))",
+          like: "hsl(var(--feed-like))",
+          gift: "hsl(var(--feed-gift))",
+          repost: "hsl(var(--feed-repost))",
+          chip: "hsl(var(--feed-chip))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
