@@ -33,7 +33,15 @@ export async function GET(request: Request) {
   // control for posts the viewer did not publish. The DELETE endpoint
   // re-checks ownership, so this is defense-in-depth, not the only gate.
   // Preserve the legacy array response shape (callers normalize it themselves).
-  const viewerHash = await getUserId(request).catch(() => null);
+  //
+  // Only treat the viewer as an author when they have a real Clerk session.
+  // Signed-out viewers get a fallback `dev_anon` hash from getUserId(), which
+  // could otherwise match posts created anonymously and surface a delete
+  // button that the DELETE route would then reject with 401 — making delete
+  // appear broken. Requiring a Clerk session here keeps the button hidden for
+  // signed-out users, which is the correct UX.
+  const clerkUserId = await getClerkUserId();
+  const viewerHash = clerkUserId ? await getUserId(request).catch(() => null) : null;
   const withAuthorship = (result || []).map((t: any) => ({
     ...t,
     isAuthor: !!(viewerHash && t.userHash && t.userHash === viewerHash),

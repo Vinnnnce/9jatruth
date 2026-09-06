@@ -20,7 +20,7 @@ import {
   Brain, Loader2, Sparkles, Zap, Fuel, Car, Tag,
   TrendingUp, TrendingDown, Minus,
   Building2, Gauge, CloudRain, Store, AlertTriangle, Wifi,
-  MessageCircle, Share2, Flag, Heart, BarChart3, Trash2,
+  MessageCircle, Share2, Flag, Heart, BarChart3,
 } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
 import { useUser } from "@/lib/use-user-safe";
@@ -31,6 +31,7 @@ import { motion } from "framer-motion";
 import { NIGERIA_STATES, getLgasForState } from "@/lib/nigeria-locations";
 import { CommunityFeeds } from "@/components/community-feeds";
 import { QuestionnairePopup } from "@/components/questionnaire/questionnaire-popup";
+import { TruthPostCard } from "@/components/truth-post-card";
 
 // ─── Types ───
 
@@ -405,7 +406,7 @@ export default function Feeds() {
                 </Badge>
               )}
             </h2>
-            <div className="grid gap-2">
+            <div className="grid gap-3">
               {[...recentTruths.truths]
                 .sort((a: any, b: any) => {
                   if (sortBy === "trust") return (b.trustScore ?? 50) - (a.trustScore ?? 50);
@@ -419,58 +420,18 @@ export default function Feeds() {
                   return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
                 })
                 .slice(0, 15)
-                .map((truth: any) => (
-                <Card key={truth.id} className="border-border hover:border-primary/30 transition-colors">
-                  <CardContent className="p-3 space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {truth.category && (
-                          <Badge variant="secondary" className="text-[9px]">
-                            {truth.category}
-                          </Badge>
-                        )}
-                        {truth.displayName && (
-                          <span className="text-[10px] text-muted-foreground">
-                            by {truth.displayName}
-                          </span>
-                        )}
-                        {truth.neighborhoodName && (
-                          <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                            <MapPin className="h-2.5 w-2.5" />
-                            {truth.neighborhoodName}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[9px] text-muted-foreground">
-                        {new Date(truth.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                    </div>
-                    <p className="text-xs text-foreground line-clamp-2">{truth.content}</p>
-                    <div className="flex items-center gap-3 pt-1">
-                      <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                        <ShieldCheck className="h-2.5 w-2.5" />
-                        Trust: {truth.trustScore ?? 50}
-                      </span>
-                      {truth.isAuthor && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-5 w-5 p-0 ml-auto text-muted-foreground hover:text-red-500"
-                          disabled={deleteTruthMutation.isPending && deleteTruthMutation.variables === truth.id}
-                          onClick={() => {
-                            if (confirm("Delete this post? This cannot be undone.")) {
-                              deleteTruthMutation.mutate(truth.id);
-                            }
-                          }}
-                          data-testid={`button-delete-truth-${truth.id}`}
-                          title="Delete your post"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                .map((truth: any, i: number) => (
+                <TruthPostCard
+                  key={truth.id}
+                  truth={truth}
+                  index={i}
+                  deleting={deleteTruthMutation.isPending && deleteTruthMutation.variables === truth.id}
+                  onDelete={(id) => {
+                    if (confirm("Delete this post? This cannot be undone.")) {
+                      deleteTruthMutation.mutate(id);
+                    }
+                  }}
+                />
               ))}
             </div>
           </div>
