@@ -42,6 +42,7 @@ export default function ExternalNewsPage() {
   });
 
   const articles = data?.articles || [];
+  const newsApiKeyConfigured = Boolean(data?.newsApiKeyConfigured);
 
   const generateAudio = async (articleId: number) => {
     setAudioLoading(articleId);
@@ -182,8 +183,30 @@ export default function ExternalNewsPage() {
           </div>
         ) : articles.length === 0 ? (
           <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              No external news articles found. New articles will appear here automatically.
+            <CardContent className="py-12 text-center">
+              <Newspaper className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
+              {newsApiKeyConfigured ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    No external news articles found{search || category ? " for this filter" : " yet"}.
+                  </p>
+                  <p className="text-xs text-muted-foreground/70 mt-2">
+                    News is fetched automatically every night. New articles will appear here shortly.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-foreground">
+                    NewsAPI is not configured
+                  </p>
+                  <p className="text-xs text-muted-foreground/70 mt-2 max-w-md mx-auto">
+                    The <code className="font-mono">NEWS_API_KEY</code> environment variable is not
+                    set, so external news can&rsquo;t be fetched. Add a NewsAPI.org key to your
+                    environment (and trigger <code className="font-mono">/api/news/cron</code>) to
+                    populate this page.
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
         ) : (

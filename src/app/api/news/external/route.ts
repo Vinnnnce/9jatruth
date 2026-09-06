@@ -101,5 +101,9 @@ export async function GET(request: Request) {
     total,
     limit,
     offset,
+    // Lets the UI distinguish "no news yet because the key isn't set" from
+    // "no news match this filter". Server-side only — the key itself is
+    // never exposed to the client.
+    newsApiKeyConfigured: Boolean(process.env.NEWS_API_KEY),
   });
 }

@@ -42,6 +42,10 @@ export interface FetchSummary {
   stored: number;
   categories: string[];
   errors: string[];
+  /** True when NEWS_API_KEY is not set in the environment. */
+  notConfigured?: boolean;
+  /** NewsAPI status code from the last failing response, if any. */
+  lastErrorCode?: string;
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -66,22 +70,45 @@ type NewsCategory = (typeof VALID_CATEGORIES)[number];
 /**
  * Fetch Nigerian news from NewsAPI.org.
  * Returns an empty array on any error (never throws).
+ *
+ * NOTE: this only returns the articles. If you need the failure reason
+ * (missing key, NewsAPI error code, network error), use
+ * `fetchNewsFromApiWithStatus` instead.
  */
 export async function fetchNewsFromApi(
   category?: string
 ): Promise<NewsApiArticle[]> {
+  return (await fetchNewsFromApiWithStatus(category)).articles;
+}
+
+export interface FetchResult {
+  articles: NewsApiArticle[];
+  /** Set when NEWS_API_KEY is missing or empty. */
+  notConfigured: boolean;
+  /** Human-readable error when the fetch failed. */
+  error?: string;
+  /** NewsAPI error code (e.g. "apiKeyInvalid", "rateLimited", "parametersIncorrect"). */
+  errorCode?: string;
+}
+
+/**
+ * Same as fetchNewsFromApi, but also returns why it failed so the cron job can
+ * surface actionable diagnostics instead of silently reporting 0 fetched.
+ */
+export async function fetchNewsFromApiWithStatus(
+  category?: string
+): Promise<FetchResult> {
   const apiKey = process.env.NEWS_API_KEY;
   if (!apiKey) {
     console.error("[news-external] NEWS_API_KEY is not set — skipping fetch");
-    return [];
+    return { articles: [], notConfigured: true };
   }
 
   // Validate category if provided
   if (category && !VALID_CATEGORIES.includes(category as NewsCategory)) {
-    console.warn(
-      `[news-external] Invalid category "${category}" — skipping fetch`
-    );
-    return [];
+    const msg = `Invalid category "${category}" — skipping fetch`;
+    console.warn(`[news-external] ${msg}`);
+    return { articles: [], notConfigured: false, error: msg, errorCode: "invalidCategory" };
   }
 
   const params = new URLSearchParams({
@@ -106,28 +133,37 @@ export async function fetchNewsFromApi(
     clearTimeout(timeout);
 
     if (!res.ok) {
-      console.error(
-        `[news-external] NewsAPI returned ${res.status}: ${res.statusText}`
-      );
-      return [];
+      // NewsAPI returns 426 on the free tier when called from a non-localhost
+      // (production) origin, and 401/403 for a bad/missing key. Surface the
+      // status so the cron summary explains *why* nothing was stored.
+      const msg = `NewsAPI returned ${res.status} ${res.statusText}`;
+      console.error(`[news-external] ${msg}`);
+      return {
+        articles: [],
+        notConfigured: false,
+        error: msg,
+        errorCode: `http${res.status}`,
+      };
     }
 
     const data = (await res.json()) as NewsApiResponse;
 
     if (data.status !== "ok") {
-      console.error(
-        `[news-external] NewsAPI error: ${data.code ?? "unknown"} — ${
-          data.message ?? "no message"
-        }`
-      );
-      return [];
+      const msg = `NewsAPI error: ${data.code ?? "unknown"} — ${data.message ?? "no message"}`;
+      console.error(`[news-external] ${msg}`);
+      return {
+        articles: [],
+        notConfigured: false,
+        error: msg,
+        errorCode: data.code,
+      };
     }
 
-    return data.articles ?? [];
+    return { articles: data.articles ?? [], notConfigured: false };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[news-external] Failed to fetch news: ${msg}`);
-    return [];
+    return { articles: [], notConfigured: false, error: msg };
   }
 }
 
@@ -300,12 +336,17 @@ export async function fetchAndStoreAllNews(): Promise<FetchSummary> {
 
   // 1. Fetch top headlines (general, no category)
   try {
-    const topArticles = await fetchNewsFromApi();
-    summary.fetched += topArticles.length;
-    const count = await storeNewsArticles(topArticles, "general");
+    const result = await fetchNewsFromApiWithStatus();
+    summary.fetched += result.articles.length;
+    const count = await storeNewsArticles(result.articles, "general");
     summary.stored += count;
     if (!summary.categories.includes("general")) {
       summary.categories.push("general");
+    }
+    if (result.notConfigured) summary.notConfigured = true;
+    if (result.error) {
+      summary.errors.push(`top-headlines: ${result.error}`);
+      if (result.errorCode) summary.lastErrorCode = result.errorCode;
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -315,12 +356,17 @@ export async function fetchAndStoreAllNews(): Promise<FetchSummary> {
   // 2. Fetch each category
   for (const category of VALID_CATEGORIES) {
     try {
-      const articles = await fetchNewsFromApi(category);
-      summary.fetched += articles.length;
-      const count = await storeNewsArticles(articles, category);
+      const result = await fetchNewsFromApiWithStatus(category);
+      summary.fetched += result.articles.length;
+      const count = await storeNewsArticles(result.articles, category);
       summary.stored += count;
       if (!summary.categories.includes(category)) {
         summary.categories.push(category);
+      }
+      if (result.notConfigured) summary.notConfigured = true;
+      if (result.error) {
+        summary.errors.push(`${category}: ${result.error}`);
+        if (result.errorCode) summary.lastErrorCode = result.errorCode;
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
