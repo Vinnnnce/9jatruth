@@ -5,9 +5,10 @@ import { ensureDbInitialized, getDb } from "@/lib/db";
  *
  * Public endpoint — returns active questionnaires where:
  *   status = 'active'
- *   (expires_at IS NULL OR expires_at > NOW())
+ *   effective expiry (expires_at, falling back to created_at + 24h) is in the future
  *
- * Each questionnaire has its questions array parsed from JSON.
+ * Each questionnaire has its questions array parsed from JSON and an
+ * `expiresAt` field that the countdown badge can always rely on.
  */
 export const dynamic = "force-dynamic";
 
@@ -17,9 +18,11 @@ export async function GET() {
     const sql = getDb();
 
     const rows = (await sql`
-      SELECT * FROM questionnaires
+      SELECT *,
+             COALESCE(expires_at, created_at + INTERVAL '24 hours') AS effective_expires_at
+      FROM questionnaires
       WHERE status = 'active'
-        AND (expires_at IS NULL OR expires_at > NOW())
+        AND COALESCE(expires_at, created_at + INTERVAL '24 hours') > NOW()
       ORDER BY created_at DESC
     `) as unknown as any[];
 
@@ -32,7 +35,7 @@ export async function GET() {
       createdBy: r.created_by,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
-      expiresAt: r.expires_at,
+      expiresAt: r.effective_expires_at ?? r.expires_at,
     }));
 
     return Response.json({

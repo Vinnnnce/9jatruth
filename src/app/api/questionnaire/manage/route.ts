@@ -28,6 +28,8 @@ const createQuestionnaireSchema = z.object({
   description: z.string().max(1000).optional(),
   questions: z.array(questionSchema).min(1).max(50),
   status: z.enum(["active", "inactive"]).default("active"),
+  // Optional explicit expiry (ISO string). Defaults to 24h from creation.
+  expiresAt: z.string().datetime().optional(),
 });
 
 /**
@@ -108,10 +110,16 @@ export async function POST(request: Request) {
 
   const sql = getDb();
 
+  // New active questionnaires auto-expire after 24h unless an explicit
+  // expiry was provided. This powers the "Expires in 24h" countdown badge.
+  const expiresAt = data.expiresAt
+    ? new Date(data.expiresAt).toISOString()
+    : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
   const rows = (await sql`
-    INSERT INTO questionnaires (title, description, questions, status, created_by)
+    INSERT INTO questionnaires (title, description, questions, status, created_by, expires_at)
     VALUES (${data.title}, ${data.description || null}, ${JSON.stringify(data.questions)},
-            ${data.status}, ${clerkUserId})
+            ${data.status}, ${clerkUserId}, ${expiresAt})
     RETURNING *
   `) as unknown as any[];
 
@@ -134,6 +142,7 @@ export async function POST(request: Request) {
       description: rows[0].description,
       questions: JSON.parse(rows[0].questions),
       status: rows[0].status,
+      expiresAt: rows[0].expires_at,
       createdBy: rows[0].created_by,
       createdAt: rows[0].created_at,
     },

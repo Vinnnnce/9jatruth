@@ -28,9 +28,9 @@ import { NewsFeed } from "@/components/news-feed";
 import { FeedComments } from "@/components/feed-comments";
 import { PollCard } from "@/components/poll-card";
 import { motion } from "framer-motion";
-import { ClipboardList, Send as SendIcon } from "lucide-react";
 import { NIGERIA_STATES, getLgasForState } from "@/lib/nigeria-locations";
 import { CommunityFeeds } from "@/components/community-feeds";
+import { QuestionnairePopup } from "@/components/questionnaire/questionnaire-popup";
 
 // ─── Types ───
 
@@ -86,15 +86,6 @@ type Suggestion = {
   createdAt: string;
   score: number;
   reason: string;
-};
-
-type QuestionnaireQuestion = {
-  id: string;
-  text: string;
-  type: string;
-  options?: string[];
-  required?: boolean;
-  placeholder?: string;
 };
 
 // ─── Category metadata with 9jatruth brand colors ───
@@ -250,25 +241,6 @@ export default function Feeds() {
       return res.json();
     },
     enabled: isLoaded && isSignedIn,
-  });
-
-  // Fetch active questionnaire questions (auto-hides after 24h via expires_at)
-  const { data: questionnaireData } = useQuery<{ questionnaires: { id: number; title?: string; description?: string; questions: QuestionnaireQuestion[]; expiresAt?: string }[] }>({
-    queryKey: ["/api/questionnaire/active"],
-  });
-  const activeQuestionnaire = questionnaireData?.questionnaires?.[0];
-  const activeQuestions = activeQuestionnaire?.questions ?? [];
-
-  const submitAnswerMutation = useMutation({
-    mutationFn: (data: { questionId: number; answer: string }) =>
-      apiRequest("POST", "/api/questionnaire/manage/answer", data),
-    onSuccess: () => {
-      toast({ title: "Answer submitted" });
-      queryClient.invalidateQueries({ queryKey: ["/api/questionnaire/active"] });
-    },
-    onError: () => {
-      toast({ title: "Failed to submit answer", variant: "destructive" });
-    },
   });
 
   useEffect(() => {
@@ -640,109 +612,9 @@ export default function Feeds() {
           <NewsFeed />
         </div>
 
-        {/* ─── Questionnaire Section (auto-hides after 24h via expires_at) ─── */}
-        {activeQuestions.length > 0 && (
-          <div className="rounded-2xl p-4 space-y-3 bg-card border border-border">
-            <div className="flex items-center gap-2">
-              <ClipboardList className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold text-foreground">
-                {activeQuestionnaire?.title || "Active Questionnaire"}
-              </h2>
-              {activeQuestionnaire?.expiresAt && (
-                <span className="text-[10px] text-muted-foreground ml-auto">
-                  Expires {new Date(activeQuestionnaire.expiresAt).toLocaleString("en-NG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                </span>
-              )}
-            </div>
-            {activeQuestionnaire?.description && (
-              <p className="text-xs text-muted-foreground">{activeQuestionnaire.description}</p>
-            )}
-            <div className="space-y-3">
-              {activeQuestions.map((q, i) => (
-                <motion.div
-                  key={q.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: i * 0.08 }}
-                  className="rounded-xl border border-border p-3 space-y-2"
-                >
-                  <p className="text-xs font-medium text-foreground">
-                    {q.text}
-                    {q.required && <span className="text-red-500 ml-0.5">*</span>}
-                  </p>
-                  <QuestionnaireItem
-                    question={q}
-                    onSubmit={(answer) => submitAnswerMutation.mutate({ questionId: activeQuestionnaire?.id ?? 1, answer })}
-                    isPending={submitAnswerMutation.isPending}
-                  />
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* ─── Questionnaire Popup (system-level modal, auto-hides after 24h) ─── */}
+        <QuestionnairePopup />
       </div>
-    </div>
-  );
-}
-
-// ─── Questionnaire Item (inline answer) ───
-
-function QuestionnaireItem({
-  question,
-  onSubmit,
-  isPending,
-}: {
-  question: QuestionnaireQuestion;
-  onSubmit: (answer: string) => void;
-  isPending: boolean;
-}) {
-  const [answer, setAnswer] = useState("");
-
-  const handleSubmit = () => {
-    if (!answer.trim()) return;
-    onSubmit(answer.trim());
-    setAnswer("");
-  };
-
-  if (question.options && question.options.length > 0) {
-    return (
-      <div className="space-y-2">
-        <div className="flex flex-wrap gap-1.5">
-          {question.options.map((opt) => (
-            <button
-              key={opt}
-              onClick={() => onSubmit(opt)}
-              disabled={isPending}
-              className="rounded-md border border-border px-2.5 py-1 text-[11px] hover:border-primary/30 hover:bg-primary/5 transition-colors disabled:opacity-50"
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex gap-2">
-      <input
-        value={answer}
-        onChange={(e) => setAnswer(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !isPending) handleSubmit();
-        }}
-        placeholder="Your answer..."
-        className="flex-1 h-8 rounded-md text-xs px-2 outline-none bg-background text-foreground border border-border"
-      />
-      <Button
-        size="sm"
-        onClick={handleSubmit}
-        disabled={isPending || !answer.trim()}
-        className="h-8 px-3 text-xs gap-1"
-      >
-        <SendIcon className="h-3 w-3" />
-        Submit
-      </Button>
     </div>
   );
 }
