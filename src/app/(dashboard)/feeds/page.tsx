@@ -425,6 +425,7 @@ export default function Feeds() {
                   key={truth.id}
                   truth={truth}
                   index={i}
+                  canDelete={!!truth.canDelete}
                   deleting={deleteTruthMutation.isPending && deleteTruthMutation.variables === truth.id}
                   onDelete={(id) => {
                     if (confirm("Delete this post? This cannot be undone.")) {

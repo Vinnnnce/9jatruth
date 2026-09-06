@@ -46,6 +46,8 @@ interface TruthPostCardProps {
   index?: number;
   onDelete?: (id: number) => void;
   deleting?: boolean;
+  /** Server-computed: viewer may delete this post (author or super admin). */
+  canDelete?: boolean;
 }
 
 const AVATAR_GRADIENTS = [
@@ -82,7 +84,7 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-NG", { day: "numeric", month: "short" });
 }
 
-export function TruthPostCard({ truth, index = 0, onDelete, deleting }: TruthPostCardProps) {
+export function TruthPostCard({ truth, index = 0, onDelete, deleting, canDelete }: TruthPostCardProps) {
   const [upvoted, setUpvoted] = useState(false);
   const [upvotes, setUpvotes] = useState(Math.max(0, Number(truth.likeCount ?? 0)));
   const [commentCount, setCommentCount] = useState(0);
@@ -163,6 +165,10 @@ export function TruthPostCard({ truth, index = 0, onDelete, deleting }: TruthPos
               <span className="inline-flex items-center gap-1 rounded-full border border-[#C89D42]/30 bg-[#C89D42]/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-[#C89D42]">
                 <Crown className="h-2.5 w-2.5" />
                 Premium
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-[#C89D42]/20 bg-[#C89D42]/5 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-[#C89D42]/80">
+                <Crown className="h-2.5 w-2.5" />
+                Super Fan
               </span>
               {truth.category && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-[#C89D42]/20 bg-[#C89D42]/5 px-2 py-[2px] text-[10px] font-semibold capitalize text-[#C89D42]/80">
@@ -314,7 +320,7 @@ export function TruthPostCard({ truth, index = 0, onDelete, deleting }: TruthPos
         </div>
 
         {/* ─── Footer: author controls ─── */}
-        {(truth.isAuthor || onDelete) && (
+        {(canDelete || truth.isAuthor || onDelete) && (
           <div className="flex items-center gap-1 border-t border-[#2A261F] pt-3">
             <button
               type="button"
@@ -324,7 +330,7 @@ export function TruthPostCard({ truth, index = 0, onDelete, deleting }: TruthPos
             >
               <Pencil className="h-3.5 w-3.5" />
             </button>
-            {truth.isAuthor && onDelete && (
+            {(canDelete || truth.isAuthor) && onDelete && (
               <button
                 type="button"
                 disabled={deleting}

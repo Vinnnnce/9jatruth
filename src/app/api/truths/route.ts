@@ -11,6 +11,7 @@ import {
 import { csrfCheck } from "@/lib/security";
 import { securityCheck } from "@/lib/ai-security";
 import { getClientIP } from "@/lib/rate-limiter";
+import { isSuperAdmin } from "@/lib/admin-auth";
 import { insertMicroTruthSchema, TRUTH_CATEGORIES } from "@shared/schema";
 import { z } from "zod";
 
@@ -42,10 +43,17 @@ export async function GET(request: Request) {
   // signed-out users, which is the correct UX.
   const clerkUserId = await getClerkUserId();
   const viewerHash = clerkUserId ? await getUserId(request).catch(() => null) : null;
-  const withAuthorship = (result || []).map((t: any) => ({
-    ...t,
-    isAuthor: !!(viewerHash && t.userHash && t.userHash === viewerHash),
-  }));
+  const admin = await isSuperAdmin();
+  const withAuthorship = (result || []).map((t: any) => {
+    const isAuthor = !!(viewerHash && t.userHash && t.userHash === viewerHash);
+    return {
+      ...t,
+      isAuthor,
+      // Admins can delete any post; the DELETE route re-checks ownership/admin
+      // status server-side, so this is a UI hint, not the only gate.
+      canDelete: isAuthor || admin,
+    };
+  });
   return Response.json(withAuthorship);
 }
 

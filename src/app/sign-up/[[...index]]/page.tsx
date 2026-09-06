@@ -1,6 +1,7 @@
 "use client";
 
 import { SignUp } from "@clerk/nextjs";
+import { ClerkAuthBoundary } from "@/components/clerk-auth-boundary";
 
 const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 const isClerkConfigured =
@@ -42,6 +43,7 @@ export default function SignUpPage() {
             Create an account to start reporting and verifying truths
           </p>
         </div>
+        <ClerkAuthBoundary>
         <SignUp
           appearance={{
             elements: {
@@ -63,6 +65,7 @@ export default function SignUpPage() {
           fallbackRedirectUrl="/feeds"
           forceRedirectUrl="/feeds"
         />
+        </ClerkAuthBoundary>
       </div>
     </div>
   );
