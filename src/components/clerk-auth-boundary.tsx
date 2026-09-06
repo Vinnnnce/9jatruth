@@ -35,29 +35,19 @@ export function ClerkAuthBoundary({ children }: { children: React.ReactNode }) {
   }
 
   if (!isLoaded && timedOut) {
-    // Clerk failed to initialize. Most commonly this means the current origin
-    // (e.g. https://www.9jatruth.com) is not listed in the Clerk dashboard's
-    // Allowed Origins, so the SDK's client request is rejected and the
-    // <SignIn/> widget never mounts. Offer the apex origin as a workaround
-    // (it is already approved in Clerk) plus a retry.
-    const isWww =
-      typeof window !== "undefined" &&
-      window.location.hostname.startsWith("www.");
-    const apexUrl = isWww
-      ? window.location.href.replace(
-          "//www.",
-          "//"
-        )
-      : null;
-
+    // Clerk failed to initialize. The production origin (e.g. https://www.9jatruth.com)
+    // is not listed in the Clerk dashboard's Allowed Origins, so the SDK's
+    // /v1/client request is rejected (403) and the <SignIn/> widget never mounts.
+    // This is a Clerk dashboard configuration fix (add the www origin), not
+    // something we can resolve from the client. Show a clear message + retry.
     return (
       <div className="w-full rounded-xl border border-border bg-card p-6 text-center shadow-sm">
         <h2 className="text-base font-semibold text-foreground">
           Sign-in is taking longer than expected
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          The secure sign-in service didn&apos;t load. This usually means the
-          site domain needs to be approved in our auth provider.
+          The secure sign-in service didn&apos;t load. This is usually a
+          temporary hiccup — please try again in a moment.
         </p>
         <div className="mt-5 flex flex-col items-center gap-2">
           <button
@@ -67,14 +57,12 @@ export function ClerkAuthBoundary({ children }: { children: React.ReactNode }) {
           >
             Try again
           </button>
-          {apexUrl && (
-            <a
-              href={apexUrl}
-              className="text-sm text-primary underline underline-offset-4 hover:text-primary/80"
-            >
-              Open on 9jatruth.com instead
-            </a>
-          )}
+          <a
+            href="/feeds"
+            className="text-sm text-primary underline underline-offset-4 hover:text-primary/80"
+          >
+            Back to feeds
+          </a>
         </div>
       </div>
     );
