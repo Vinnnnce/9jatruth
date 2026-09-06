@@ -46,8 +46,8 @@ export function ClerkAuthBoundary({ children }: { children: React.ReactNode }) {
           Sign-in is taking longer than expected
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          The secure sign-in service didn&apos;t load. This is usually a
-          temporary hiccup — please try again in a moment.
+          The secure sign-in service is temporarily unavailable while the
+          sign-in domain is being approved. Please try again in a moment.
         </p>
         <div className="mt-5 flex flex-col items-center gap-2">
           <button
