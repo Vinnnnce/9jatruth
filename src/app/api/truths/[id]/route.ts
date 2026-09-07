@@ -140,7 +140,7 @@ export async function GET(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[GET /api/truths/[id]] error:", msg, err);
-    return Response.json({ message: "Failed to load post", error: msg }, { status: 500 });
+    return Response.json({ message: "Failed to load post" }, { status: 500 });
   }
 }
 
