@@ -17,6 +17,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
   await ensureDbInitialized();
   const { id } = await params;
   const parsed = validate(idParamSchema, { id });
@@ -136,6 +137,11 @@ export async function GET(
     viewerPoints,
     signedIn: Boolean(clerkUserId),
   });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[GET /api/truths/[id]] error:", msg, err);
+    return Response.json({ message: "Failed to load post", error: msg }, { status: 500 });
+  }
 }
 
 /**
