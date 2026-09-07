@@ -26,11 +26,43 @@ export function getDb(): NeonQueryFunction<true, true> {
  */
 let initialized = false;
 
-export const SCHEMA_VERSION = "2026-09-07-v8";
+// Separate guard for the new engagement tables. These are created with
+// standalone idempotent CREATE statements that run independently of the main
+// DDL transaction (which can roll back entirely if any single statement in the
+// 80+ statement batch fails — leaving the new tables uncreated even though the
+// schema version gets recorded, which would then skip all future init).
+let engagementTablesEnsured = false;
+
+export const SCHEMA_VERSION = "2026-09-07-v9";
 
 export async function ensureDbInitialized() {
   if (initialized) return;
   const sql = getDb();
+
+  // ── Engagement tables (feed_dislikes, feed_reposts, truth_gifts) ──
+  // These MUST be created with standalone idempotent statements, OUTSIDE the
+  // main DDL transaction. The main transaction batches 80+ CREATE/ALTER
+  // statements and rolls back entirely if any single one fails — which would
+  // leave these new tables uncreated even though SCHEMA_VERSION gets recorded
+  // (the recording is in a separate try/catch that always runs). Running them
+  // standalone guarantees they exist regardless of the main batch's outcome.
+  // Runs once per process; CREATE IF NOT EXISTS makes it safe to repeat.
+  if (!engagementTablesEnsured) {
+    engagementTablesEnsured = true;
+    try {
+      await sql`CREATE TABLE IF NOT EXISTS feed_dislikes (id SERIAL PRIMARY KEY, truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE, user_hash TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(truth_id, user_hash))`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_feed_dislikes_truth ON feed_dislikes(truth_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_feed_dislikes_user ON feed_dislikes(user_hash)`;
+      await sql`CREATE TABLE IF NOT EXISTS feed_reposts (id SERIAL PRIMARY KEY, truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE, user_hash TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(truth_id, user_hash))`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_feed_reposts_truth ON feed_reposts(truth_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_feed_reposts_user ON feed_reposts(user_hash)`;
+      await sql`CREATE TABLE IF NOT EXISTS truth_gifts (id SERIAL PRIMARY KEY, truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE, sender_hash TEXT NOT NULL, recipient_hash TEXT NOT NULL, gift_id TEXT NOT NULL, points INTEGER NOT NULL DEFAULT 1, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_truth_gifts_truth ON truth_gifts(truth_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_truth_gifts_recipient ON truth_gifts(recipient_hash)`;
+    } catch (e) {
+      console.error("[DB Init] engagement tables ensure error (non-fatal):", e);
+    }
+  }
 
   // Fast path: if the schema is already at the current version, skip ALL
   // initialization (DDL + seeding). This makes cold serverless starts a
