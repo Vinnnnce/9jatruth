@@ -19,7 +19,7 @@ const listSchema = z.object({
  *   - category (optional: business, entertainment, general, health, science, sports, technology)
  *   - search  (optional: case-insensitive ILIKE on title + description)
  *
- * Returns: { articles: [...], total: N, limit, offset }
+ * Returns: { articles: [...], total: N, limit, offset, newsApiKeyConfigured }
  */
 export async function GET(request: Request) {
   await ensureDbInitialized();
@@ -62,48 +62,69 @@ export async function GET(request: Request) {
   const where =
     conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  // Count total matching rows
-  const countParams = params.slice(0, conditions.length);
-  const countRows = (await sql.query(
-    `SELECT COUNT(*) as total FROM news_external ${where}`,
-    countParams
-  )) as unknown as { total: number }[];
+  try {
+    // Count total matching rows
+    const countParams = params.slice(0, conditions.length);
+    const countRows = (await sql.query(
+      `SELECT COUNT(*) as total FROM news_external ${where}`,
+      countParams
+    )) as unknown as { total: number }[];
 
-  const total = countRows[0]?.total ?? 0;
+    const total = countRows[0]?.total ?? 0;
 
-  // Fetch paginated rows
-  const fetchParams = [...params, limit, offset];
-  const rows = (await sql.query(
-    `SELECT
-       id,
-       source_name,
-       author,
-       title,
-       description,
-       content,
-       url,
-       image_url,
-       published_at,
-       category,
-       created_at,
-       is_audio_generated,
-       audio_url
-     FROM news_external
-     ${where}
-     ORDER BY published_at DESC NULLS LAST, created_at DESC
-     LIMIT $${fetchParams.length - 1}
-     OFFSET $${fetchParams.length}`,
-    fetchParams
-  )) as unknown as Record<string, unknown>[];
+    // Fetch paginated rows
+    const fetchParams = [...params, limit, offset];
+    const rows = (await sql.query(
+      `SELECT
+         id,
+         source_name,
+         author,
+         title,
+         description,
+         content,
+         url,
+         image_url,
+         published_at,
+         category,
+         created_at,
+         is_audio_generated,
+         audio_url
+       FROM news_external
+       ${where}
+       ORDER BY published_at DESC NULLS LAST, created_at DESC
+       LIMIT $${fetchParams.length - 1}
+       OFFSET $${fetchParams.length}`,
+      fetchParams
+    )) as unknown as Record<string, unknown>[];
 
-  return Response.json({
-    articles: rows,
-    total,
-    limit,
-    offset,
-    // Lets the UI distinguish "no news yet because the key isn't set" from
-    // "no news match this filter". Server-side only — the key itself is
-    // never exposed to the client.
-    newsApiKeyConfigured: Boolean(process.env.NEWS_API_KEY),
-  });
+    return Response.json({
+      articles: rows,
+      total,
+      limit,
+      offset,
+      // Lets the UI distinguish "no news yet because the key isn't set" from
+      // "no news match this filter". Server-side only — the key itself is
+      // never exposed to the client.
+      newsApiKeyConfigured: Boolean(process.env.NEWS_API_KEY),
+    });
+  } catch (err) {
+    // Most likely cause: the news_external table doesn't exist yet on this Neon
+    // DB. ensureDbInitialized() creates it idempotently on the next request that
+    // touches the DB, so surface a clear message instead of a bare 500.
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[news/external] query failed:", msg);
+    return Response.json(
+      {
+        message:
+          "External news table unavailable. It is auto-created on DB init; please retry in a moment.",
+        error: msg,
+        articles: [],
+        total: 0,
+        limit,
+        offset,
+        newsApiKeyConfigured: Boolean(process.env.NEWS_API_KEY),
+      },
+      { status: 503 }
+    );
+  }
 }

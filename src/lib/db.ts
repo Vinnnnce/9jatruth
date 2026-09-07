@@ -33,6 +33,13 @@ let initialized = false;
 // schema version gets recorded, which would then skip all future init).
 let engagementTablesEnsured = false;
 
+// Separate guard for the news_external table. Like the engagement tables, it
+// is created with a standalone idempotent CREATE that runs OUTSIDE the main DDL
+// transaction and BEFORE the SCHEMA_VERSION fast-path. It has its OWN guard so a
+// failure in the engagement DDL can't prevent news_external from being created,
+// and so a warm instance retries if a previous attempt failed.
+let newsExternalEnsured = false;
+
 export const SCHEMA_VERSION = "2026-09-07-v9";
 
 export async function ensureDbInitialized() {
@@ -61,6 +68,25 @@ export async function ensureDbInitialized() {
       await sql`CREATE INDEX IF NOT EXISTS idx_truth_gifts_recipient ON truth_gifts(recipient_hash)`;
     } catch (e) {
       console.error("[DB Init] engagement tables ensure error (non-fatal):", e);
+    }
+  }
+
+  // ── news_external table ──
+  // Prisma-managed table that is NOT part of the main DDL batch. Because the
+  // SCHEMA_VERSION fast-path below returns early once the version is recorded,
+  // adding it to the main batch would never run in production. Create it here in
+  // its OWN try/catch with its own guard so a failure in the engagement-tables
+  // block (which depends on micro_truths) can't prevent news_external from being
+  // created. Idempotent; retried on the next request if it ever fails.
+  if (!newsExternalEnsured) {
+    try {
+      await sql`CREATE TABLE IF NOT EXISTS news_external (id SERIAL PRIMARY KEY, source_name TEXT, author TEXT, title TEXT NOT NULL, description TEXT, content TEXT, url TEXT NOT NULL UNIQUE, image_url TEXT, published_at TIMESTAMPTZ, category TEXT NOT NULL DEFAULT 'general', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), is_audio_generated BOOLEAN NOT NULL DEFAULT FALSE, audio_url TEXT)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_news_external_category ON news_external(category)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_news_external_published ON news_external(published_at)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_news_external_source ON news_external(source_name)`;
+      newsExternalEnsured = true;
+    } catch (e) {
+      console.error("[DB Init] news_external table ensure error (non-fatal):", e);
     }
   }
 
