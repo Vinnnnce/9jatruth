@@ -1039,3 +1039,43 @@ model NewsExternal {
   @@index([sourceName])
   @@map("news_external")
 }
+
+// ─── Community Feed Engagement (likes/dislikes/reposts/gifts) ───
+
+model FeedDislike {
+  id        Int      @id @default(autoincrement())
+  truthId   Int      @map("truth_id")
+  userHash  String   @map("user_hash")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([truthId, userHash])
+  @@index([truthId])
+  @@index([userHash])
+  @@map("feed_dislikes")
+}
+
+model FeedRepost {
+  id        Int      @id @default(autoincrement())
+  truthId   Int      @map("truth_id")
+  userHash  String   @map("user_hash")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([truthId, userHash])
+  @@index([truthId])
+  @@index([userHash])
+  @@map("feed_reposts")
+}
+
+model TruthGift {
+  id            Int      @id @default(autoincrement())
+  truthId       Int      @map("truth_id")
+  senderHash    String   @map("sender_hash")
+  recipientHash String   @map("recipient_hash")
+  giftId        String   @map("gift_id")
+  points        Int      @default(1)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([truthId])
+  @@index([recipientHash])
+  @@map("truth_gifts")
+}

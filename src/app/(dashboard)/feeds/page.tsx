@@ -159,6 +159,37 @@ export default function Feeds() {
   const [geoFilter, setGeoFilter] = useState<{ state: string; lga: string }>({ state: "", lga: "" });
   const [sortBy, setSortBy] = useState<"recent" | "nearest" | "trending" | "trust">("recent");
 
+  // User location for the "nearest" sort. We request browser geolocation and
+  // then fetch truths ordered by real distance via /api/truths/nearby.
+  const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null);
+  const [locStatus, setLocStatus] = useState<"idle" | "prompting" | "denied">("idle");
+
+  const requestLocation = useCallback(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setLocStatus("denied");
+      return;
+    }
+    setLocStatus("prompting");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocStatus("idle");
+      },
+      () => {
+        setLocStatus("denied");
+      },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 }
+    );
+  }, []);
+
+  // Auto-prompt for geolocation when the user picks "nearest".
+  useEffect(() => {
+    if (sortBy === "nearest" && !userLoc && locStatus === "idle") {
+      requestLocation();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortBy]);
+
   // "Dev" toggle — shows the community questionnaire section even when none
   // is published yet, so admins/contributors can preview the survey UX.
   // Persists in localStorage so the preference survives page refreshes.
@@ -221,6 +252,28 @@ export default function Feeds() {
     },
     enabled: isLoaded,
     refetchInterval: 10000,
+    refetchOnWindowFocus: true,
+  });
+
+  // When sorting by "nearest", fetch truths ordered by real distance from the
+  // user's geolocation via /api/truths/nearby (haversine).
+  const { data: nearbyTruths } = useQuery({
+    queryKey: ["/api/truths/nearby", userLoc],
+    queryFn: async ({ queryKey }) => {
+      const [, loc] = queryKey as [string, { lat: number; lng: number } | null];
+      if (!loc) return { truths: [] as any[] };
+      const params = new URLSearchParams({
+        lat: String(loc.lat),
+        lng: String(loc.lng),
+        radiusKm: "100",
+      });
+      const res = await apiRequest("GET", `/api/truths/nearby?${params.toString()}`);
+      const data = await res.json();
+      // nearby returns an array with distanceKm; normalize to { truths: [...] }
+      return Array.isArray(data) ? { truths: data } : data;
+    },
+    enabled: isLoaded && sortBy === "nearest" && !!userLoc,
+    refetchInterval: 15000,
     refetchOnWindowFocus: true,
   });
 
@@ -382,15 +435,22 @@ export default function Feeds() {
         </div>
 
         {/* ─── Recent Posts (direct truth feed) ─── */}
-        {recentTruths?.truths && recentTruths.truths.length > 0 && (
+        {(() => {
+          // When sorting by nearest and we have the user's location, show
+          // distance-sorted truths from /api/truths/nearby instead of the
+          // default recency list.
+          const useNearby = sortBy === "nearest" && !!userLoc && (nearbyTruths?.truths?.length ?? 0) > 0;
+          const sourceTruths = useNearby ? (nearbyTruths?.truths ?? []) : (recentTruths?.truths ?? []);
+          if (sourceTruths.length === 0) return null;
+          return (
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
               <Newspaper className="h-4 w-4 text-primary" />
-              Recent Posts
+              {sortBy === "nearest" && useNearby ? "Posts Near You" : "Recent Posts"}
               <span className="text-[10px] text-muted-foreground font-normal">
-                ({recentTruths.truths.length})
+                ({sourceTruths.length})
               </span>
-              {sortBy === "nearest" && (
+              {sortBy === "nearest" && useNearby && (
                 <Badge variant="outline" className="text-[8px] gap-0.5 ml-1">
                   <MapPin className="h-2 w-2" /> Nearest First
                 </Badge>
@@ -406,13 +466,36 @@ export default function Feeds() {
                 </Badge>
               )}
             </h2>
+
+            {/* Prompt for geolocation when "nearest" is chosen but not granted yet */}
+            {sortBy === "nearest" && !userLoc && (
+              <div className="rounded-xl border border-dashed border-border bg-card/40 p-3 text-xs text-muted-foreground">
+                {locStatus === "denied" ? (
+                  <span>Location permission denied. Showing posts by area match instead — enable location to sort by distance.</span>
+                ) : locStatus === "prompting" ? (
+                  <span>Waiting for location permission…</span>
+                ) : (
+                  <span className="flex flex-wrap items-center gap-2">
+                    <MapPin className="h-3.5 w-3.5" />
+                    Allow location to sort posts by distance from you.
+                    <button type="button" onClick={requestLocation} className="rounded-full bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground">
+                      Use my location
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
+
             <div className="grid gap-3">
-              {[...recentTruths.truths]
+              {[...sourceTruths]
                 .sort((a: any, b: any) => {
                   if (sortBy === "trust") return (b.trustScore ?? 50) - (a.trustScore ?? 50);
                   if (sortBy === "trending") return (b.likeCount ?? 0) - (a.likeCount ?? 0);
-                  // For 'nearest', sort by neighborhood name proximity (state/lga match first)
+                  // 'nearest': prefer real distance when available, else area match.
                   if (sortBy === "nearest") {
+                    if (useNearby) {
+                      return (a.distanceKm ?? 9999) - (b.distanceKm ?? 9999);
+                    }
                     const aMatch = (a.stateName === geoFilter.state ? 2 : 0) + (a.lgaName === geoFilter.lga ? 1 : 0);
                     const bMatch = (b.stateName === geoFilter.state ? 2 : 0) + (b.lgaName === geoFilter.lga ? 1 : 0);
                     return bMatch - aMatch;
@@ -436,10 +519,15 @@ export default function Feeds() {
               ))}
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* ─── Empty state when no posts ─── */}
-        {(!recentTruths?.truths || recentTruths.truths.length === 0) && (
+        {(() => {
+          const useNearby = sortBy === "nearest" && !!userLoc;
+          const sourceEmpty = useNearby ? (nearbyTruths?.truths?.length ?? 0) === 0 : (!recentTruths?.truths || recentTruths.truths.length === 0);
+          if (!sourceEmpty) return null;
+          return (
           <Card className="border-border border-dashed">
             <CardContent className="p-6 text-center space-y-2">
               <Newspaper className="h-8 w-8 text-muted-foreground mx-auto" />
@@ -454,7 +542,8 @@ export default function Feeds() {
               </a>
             </CardContent>
           </Card>
-        )}
+          );
+        })()}
 
         {/* ─── Active Polls ─── */}
         {pollsData?.polls && pollsData.polls.length > 0 && (

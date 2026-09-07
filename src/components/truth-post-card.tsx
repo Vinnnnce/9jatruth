@@ -9,6 +9,7 @@
 // optimistic + best-effort API calls where endpoints exist.
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { apiRequest } from "@/lib/queryClient";
@@ -85,6 +86,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export function TruthPostCard({ truth, index = 0, onDelete, deleting, canDelete }: TruthPostCardProps) {
+  const router = useRouter();
   const [upvoted, setUpvoted] = useState(false);
   const [upvotes, setUpvotes] = useState(Math.max(0, Number(truth.likeCount ?? 0)));
   const [commentCount, setCommentCount] = useState(0);
@@ -140,7 +142,16 @@ export function TruthPostCard({ truth, index = 0, onDelete, deleting, canDelete 
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-30px" }}
       transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94], delay: Math.min(index, 4) * 0.05 }}
-      className="rounded-[24px] border border-[#2A261F] bg-[#0D0F14] p-5 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.35)]"
+      className="cursor-pointer rounded-[24px] border border-[#2A261F] bg-[#0D0F14] p-5 shadow-[0_4px_24px_rgba(0,0,0,0.35)] transition-colors hover:border-[#C89D42]/30 sm:p-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C89D42]/40"
+      onClick={() => router.push(`/truths/${truth.id}`)}
+      role="link"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          router.push(`/truths/${truth.id}`);
+        }
+      }}
     >
       <div className="flex flex-col gap-4">
         {/* ─── Header ─── */}
@@ -215,7 +226,10 @@ export function TruthPostCard({ truth, index = 0, onDelete, deleting, canDelete 
         </p>
 
         {/* ─── Action bar ─── */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div
+          className="flex flex-wrap items-center gap-2"
+          onClick={(e) => e.stopPropagation()}
+        >
           {/* Flame / upvote pill */}
           <button
             type="button"
@@ -321,7 +335,10 @@ export function TruthPostCard({ truth, index = 0, onDelete, deleting, canDelete 
 
         {/* ─── Footer: author controls ─── */}
         {(canDelete || truth.isAuthor || onDelete) && (
-          <div className="flex items-center gap-1 border-t border-[#2A261F] pt-3">
+          <div
+            className="flex items-center gap-1 border-t border-[#2A261F] pt-3"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               type="button"
               className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[#7A818E] transition-colors hover:bg-[#1C1F26] hover:text-[#DEC196]"

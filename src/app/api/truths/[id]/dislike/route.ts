@@ -2,14 +2,8 @@ import { ensureDbInitialized, getDb } from "@/lib/db";
 import { getClerkUserId, getUserId } from "@/lib/api-helpers";
 import { csrfCheck } from "@/lib/security";
 
-/**
- * Clamp a trust score to [0, 100].
- */
 const clampTrust = (n: number) => Math.max(0, Math.min(100, n));
 
-/**
- * Apply a trust delta to a truth and return the new value.
- */
 async function applyTrustDelta(sql: any, truthId: number, delta: number): Promise<number> {
   const rows = (await sql`SELECT trust_score::int AS t FROM micro_truths WHERE id = ${truthId} AND deleted_at IS NULL LIMIT 1`) as unknown as any[];
   if (!rows.length) return 50;
@@ -19,8 +13,8 @@ async function applyTrustDelta(sql: any, truthId: number, delta: number): Promis
 }
 
 /**
- * POST /api/truths/[id]/like — Like a truth.
- * Liking increases the post's trust count (+1) and removes any dislike.
+ * POST /api/truths/[id]/dislike — Dislike a truth.
+ * Disliking reduces the post's trust count (-1) and removes any like.
  */
 export async function POST(
   request: Request,
@@ -29,7 +23,7 @@ export async function POST(
   await ensureDbInitialized();
   const clerkUserId = await getClerkUserId();
   if (!clerkUserId) {
-    return Response.json({ message: "Unauthorized — Please sign in to like a post" }, { status: 401 });
+    return Response.json({ message: "Unauthorized — Please sign in to dislike a post" }, { status: 401 });
   }
 
   const csrfError = csrfCheck(request);
@@ -43,26 +37,31 @@ export async function POST(
   const sql = getDb();
 
   try {
-    // Remove any existing dislike (mutual exclusion) then record the like.
-    await sql`DELETE FROM feed_dislikes WHERE truth_id = ${truthId} AND user_hash = ${userHash}`;
+    // Remove any existing like (mutual exclusion) then record the dislike.
+    await sql`DELETE FROM feed_likes WHERE truth_id = ${truthId} AND user_hash = ${userHash}`;
     await sql`
-      INSERT INTO feed_likes (truth_id, user_hash)
+      INSERT INTO feed_dislikes (truth_id, user_hash)
       VALUES (${truthId}, ${userHash})
       ON CONFLICT (truth_id, user_hash) DO NOTHING
     `;
-    // Like → trust up. (If the row already existed, this is a no-op trust bump
-    // for a re-like, which is fine — it just re-affirms trust.)
-    const trustScore = await applyTrustDelta(sql, truthId, 1);
+    // Dislike → trust down.
+    const trustScore = await applyTrustDelta(sql, truthId, -1);
 
-    const count = (await sql`SELECT COUNT(*)::int AS count FROM feed_likes WHERE truth_id = ${truthId}`) as unknown as any[];
-    return Response.json({ liked: true, likeCount: Number(count[0].count), trustScore });
+    const count = (await sql`SELECT COUNT(*)::int AS count FROM feed_dislikes WHERE truth_id = ${truthId}`) as unknown as any[];
+    const likeCount = (await sql`SELECT COUNT(*)::int AS count FROM feed_likes WHERE truth_id = ${truthId}`) as unknown as any[];
+    return Response.json({
+      disliked: true,
+      dislikeCount: Number(count[0].count),
+      likeCount: Number(likeCount[0].count),
+      trustScore,
+    });
   } catch (err) {
-    return Response.json({ message: "Failed to like" }, { status: 500 });
+    return Response.json({ message: "Failed to dislike" }, { status: 500 });
   }
 }
 
 /**
- * DELETE /api/truths/[id]/like — Unlike a truth (reverses the trust bump).
+ * DELETE /api/truths/[id]/dislike — Remove a dislike (reverses the trust reduction).
  */
 export async function DELETE(
   request: Request,
@@ -81,12 +80,11 @@ export async function DELETE(
   const userHash = await getUserId(request);
   const sql = getDb();
 
-  const removed = (await sql`DELETE FROM feed_likes WHERE truth_id = ${truthId} AND user_hash = ${userHash} RETURNING id`) as unknown as any[];
+  const removed = (await sql`DELETE FROM feed_dislikes WHERE truth_id = ${truthId} AND user_hash = ${userHash} RETURNING id`) as unknown as any[];
   let trustScore: number | undefined;
   if (removed.length > 0) {
-    // Reverse the trust bump only when a real like was removed.
-    trustScore = await applyTrustDelta(sql, truthId, -1);
+    trustScore = await applyTrustDelta(sql, truthId, 1);
   }
-  const count = (await sql`SELECT COUNT(*)::int AS count FROM feed_likes WHERE truth_id = ${truthId}`) as unknown as any[];
-  return Response.json({ liked: false, likeCount: Number(count[0].count), trustScore });
+  const count = (await sql`SELECT COUNT(*)::int AS count FROM feed_dislikes WHERE truth_id = ${truthId}`) as unknown as any[];
+  return Response.json({ disliked: false, dislikeCount: Number(count[0].count), trustScore });
 }

@@ -26,7 +26,7 @@ export function getDb(): NeonQueryFunction<true, true> {
  */
 let initialized = false;
 
-export const SCHEMA_VERSION = "2026-08-29-v7";
+export const SCHEMA_VERSION = "2026-09-07-v8";
 
 export async function ensureDbInitialized() {
   if (initialized) return;
@@ -488,6 +488,40 @@ export async function ensureDbInitialized() {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
   _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feed_shares_truth ON feed_shares(truth_id)`);
+
+  _q.push(sql`CREATE TABLE IF NOT EXISTS feed_dislikes (
+    id SERIAL PRIMARY KEY,
+    truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE,
+    user_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(truth_id, user_hash)
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feed_dislikes_truth ON feed_dislikes(truth_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feed_dislikes_user ON feed_dislikes(user_hash)`);
+
+  // Reposts (a user re-sharing a truth to their own audience)
+  _q.push(sql`CREATE TABLE IF NOT EXISTS feed_reposts (
+    id SERIAL PRIMARY KEY,
+    truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE,
+    user_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(truth_id, user_hash)
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feed_reposts_truth ON feed_reposts(truth_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_feed_reposts_user ON feed_reposts(user_hash)`);
+
+  // Gifts sent to a truth's author using accumulated reward points
+  _q.push(sql`CREATE TABLE IF NOT EXISTS truth_gifts (
+    id SERIAL PRIMARY KEY,
+    truth_id INTEGER NOT NULL REFERENCES micro_truths(id) ON DELETE CASCADE,
+    sender_hash TEXT NOT NULL,
+    recipient_hash TEXT NOT NULL,
+    gift_id TEXT NOT NULL,
+    points INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_truth_gifts_truth ON truth_gifts(truth_id)`);
+  _q.push(sql`CREATE INDEX IF NOT EXISTS idx_truth_gifts_recipient ON truth_gifts(recipient_hash)`);
 
   // Add rich comment columns to feed_comments (idempotent)
   _q.push(sql`ALTER TABLE feed_comments ADD COLUMN IF NOT EXISTS image_url TEXT`);

@@ -318,6 +318,129 @@ export async function generateAudio(
   }
 }
 
+// ─── RSS fallback (used when NewsAPI is unavailable) ───────────────────────
+
+/**
+ * When NEWS_API_KEY is missing, or NewsAPI's free tier rejects the request
+ * from a production (non-localhost) origin with HTTP 426, news would never be
+ * fetched. To keep the news feature working regardless, we fall back to free,
+ * server-side RSS feeds from major Nigerian news outlets. No API key needed.
+ */
+const RSS_FEEDS: { url: string; category: string }[] = [
+  { url: "https://punch.ng/feed/", category: "general" },
+  { url: "https://www.vanguardngr.com/feed/", category: "general" },
+  { url: "https://guardian.ng/feed/", category: "general" },
+  { url: "https://www.premiumtimesng.com/feed", category: "general" },
+  { url: "https://dailytrust.com/feed/", category: "general" },
+  { url: "https://www.channelstv.com/feed/", category: "general" },
+  { url: "https://punch.ng/business/feed/", category: "business" },
+  { url: "https://punch.ng/sports/feed/", category: "sports" },
+  { url: "https://punch.ng/entertainment/feed/", category: "entertainment" },
+];
+
+function decodeEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/<!\[CDATA\[/g, "")
+    .replace(/\]\]>/g, "");
+}
+
+function stripHtml(html: string): string {
+  return decodeEntities(html.replace(/<[^>]*>/g, "")).replace(/\s+/g, " ").trim();
+}
+
+/** Extract the first <img src="..."> from an RSS item's content/encoded HTML. */
+function extractImage(html: string): string | null {
+  const m = html.match(/<img[^>]+src=["']([^"']+)['"][^>]*>/i);
+  return m ? m[1] : null;
+}
+
+/** Parse RSS/Atom XML into articles using regex (no external dependency). */
+function parseRssItems(xml: string, category: string): NewsApiArticle[] {
+  const items: NewsApiArticle[] = [];
+  // Match both RSS <item> and Atom <entry> blocks.
+  const itemRe = /<(?:item|entry)[^>]*>([\s\S]*?)<\/(?:item|entry)>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = itemRe.exec(xml)) !== null) {
+    const block = m[1];
+    const pick = (re: RegExp): string | undefined => {
+      const x = block.match(re);
+      return x ? decodeEntities(x[1]).trim() : undefined;
+    };
+    const title = pick(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const link = pick(/<link[^>]*>([\s\S]*?)<\/link>/i) || pick(/<link[^>]*href=["']([^"']+)['"][^>]*>/i);
+    const description = pick(/<description[^>]*>([\s\S]*?)<\/description>/i);
+    const contentEncoded = pick(/<content:encoded[^>]*>([\s\S]*?)<\/content:encoded>/i);
+    const pubDate = pick(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i) || pick(/<published[^>]*>([\s\S]*?)<\/published>/i);
+    const author = pick(/<(?:dc:creator|author)>([\s\S]*?)<\/(?:dc:creator|author)>/i);
+
+    if (!title || !link) continue;
+    const htmlBody = contentEncoded || description || "";
+    items.push({
+      title: stripHtml(title),
+      description: description ? stripHtml(description) : null,
+      content: contentEncoded ? stripHtml(contentEncoded).slice(0, 4000) : null,
+      url: link,
+      urlToImage: extractImage(htmlBody),
+      publishedAt: pubDate || null,
+      author: author || null,
+      source: { name: new URL(link).hostname.replace(/^www\./, "") },
+    });
+  }
+  return items;
+}
+
+export interface RssFetchResult {
+  articles: NewsApiArticle[];
+  category: string;
+  errors: string[];
+}
+
+export async function fetchNewsFromRss(category?: string): Promise<RssFetchResult> {
+  const feeds = category ? RSS_FEEDS.filter((f) => f.category === category) : RSS_FEEDS;
+  const target = feeds.length > 0 ? feeds : RSS_FEEDS;
+  const all: NewsApiArticle[] = [];
+  const errors: string[] = [];
+
+  await Promise.all(
+    target.map(async (feed) => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10_000);
+        const res = await fetch(feed.url, {
+          signal: controller.signal,
+          headers: { "User-Agent": "9jatruth/1.0" },
+        });
+        clearTimeout(timeout);
+        if (!res.ok) {
+          errors.push(`${feed.url}: HTTP ${res.status}`);
+          return;
+        }
+        const xml = await res.text();
+        const items = parseRssItems(xml, feed.category);
+        all.push(...items);
+      } catch (err) {
+        errors.push(`${feed.url}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    })
+  );
+
+  // Deduplicate by URL (multiple feeds may carry the same wire story).
+  const seen = new Set<string>();
+  const unique = all.filter((a) => {
+    if (!a.url || seen.has(a.url)) return false;
+    seen.add(a.url);
+    return true;
+  });
+
+  return { articles: unique, category: category || "general", errors };
+}
+
 // ─── fetchAndStoreAllNews ────────────────────────────────────────────────────
 
 /**
@@ -334,19 +457,44 @@ export async function fetchAndStoreAllNews(): Promise<FetchSummary> {
     errors: [],
   };
 
+  // Decide whether NewsAPI is usable at all. If the key is missing we skip it
+  // entirely and go straight to the RSS fallback — otherwise we try NewsAPI
+  // first and only fall back if it errors (e.g. free-tier HTTP 426 on a
+  // production origin, or rate limiting).
+  const hasApiKey = Boolean(process.env.NEWS_API_KEY);
+
   // 1. Fetch top headlines (general, no category)
+  let usedFallback = false;
   try {
-    const result = await fetchNewsFromApiWithStatus();
-    summary.fetched += result.articles.length;
-    const count = await storeNewsArticles(result.articles, "general");
-    summary.stored += count;
-    if (!summary.categories.includes("general")) {
-      summary.categories.push("general");
+    if (hasApiKey) {
+      const result = await fetchNewsFromApiWithStatus();
+      summary.fetched += result.articles.length;
+      const count = await storeNewsArticles(result.articles, "general");
+      summary.stored += count;
+      if (!summary.categories.includes("general")) {
+        summary.categories.push("general");
+      }
+      if (result.notConfigured) summary.notConfigured = true;
+      if (result.error) {
+        summary.errors.push(`top-headlines: ${result.error}`);
+        if (result.errorCode) summary.lastErrorCode = result.errorCode;
+      }
+      // If NewsAPI returned nothing usable, fall back to RSS for this category.
+      if (result.articles.length === 0) usedFallback = true;
+    } else {
+      usedFallback = true;
+      summary.notConfigured = true;
+      summary.errors.push("top-headlines: NEWS_API_KEY not set — using RSS fallback");
     }
-    if (result.notConfigured) summary.notConfigured = true;
-    if (result.error) {
-      summary.errors.push(`top-headlines: ${result.error}`);
-      if (result.errorCode) summary.lastErrorCode = result.errorCode;
+    if (usedFallback) {
+      const rss = await fetchNewsFromRss("general");
+      summary.fetched += rss.articles.length;
+      const count = await storeNewsArticles(rss.articles, "general");
+      summary.stored += count;
+      if (!summary.categories.includes("general")) {
+        summary.categories.push("general");
+      }
+      for (const e of rss.errors) summary.errors.push(`rss-general: ${e}`);
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -356,17 +504,37 @@ export async function fetchAndStoreAllNews(): Promise<FetchSummary> {
   // 2. Fetch each category
   for (const category of VALID_CATEGORIES) {
     try {
-      const result = await fetchNewsFromApiWithStatus(category);
-      summary.fetched += result.articles.length;
-      const count = await storeNewsArticles(result.articles, category);
-      summary.stored += count;
-      if (!summary.categories.includes(category)) {
-        summary.categories.push(category);
+      let storedHere = 0;
+      let fetchedHere = 0;
+      let needFallback = !hasApiKey;
+
+      if (hasApiKey) {
+        const result = await fetchNewsFromApiWithStatus(category);
+        fetchedHere += result.articles.length;
+        const count = await storeNewsArticles(result.articles, category);
+        storedHere += count;
+        if (result.notConfigured) summary.notConfigured = true;
+        if (result.error) {
+          summary.errors.push(`${category}: ${result.error}`);
+          if (result.errorCode) summary.lastErrorCode = result.errorCode;
+        }
+        if (result.articles.length === 0) needFallback = true;
+      } else {
+        summary.notConfigured = true;
       }
-      if (result.notConfigured) summary.notConfigured = true;
-      if (result.error) {
-        summary.errors.push(`${category}: ${result.error}`);
-        if (result.errorCode) summary.lastErrorCode = result.errorCode;
+
+      if (needFallback) {
+        const rss = await fetchNewsFromRss(category);
+        fetchedHere += rss.articles.length;
+        const count = await storeNewsArticles(rss.articles, category);
+        storedHere += count;
+        for (const e of rss.errors) summary.errors.push(`rss-${category}: ${e}`);
+      }
+
+      summary.fetched += fetchedHere;
+      summary.stored += storedHere;
+      if (storedHere > 0 && !summary.categories.includes(category)) {
+        summary.categories.push(category);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

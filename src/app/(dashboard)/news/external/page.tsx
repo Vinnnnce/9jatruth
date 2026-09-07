@@ -44,6 +44,28 @@ export default function ExternalNewsPage() {
   const articles = data?.articles || [];
   const newsApiKeyConfigured = Boolean(data?.newsApiKeyConfigured);
 
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshNews = async () => {
+    setRefreshing(true);
+    try {
+      // Try the admin endpoint first (super-admin); fall back to the cron endpoint.
+      let res = await apiRequest("POST", "/api/admin/news/refresh").catch(() => null);
+      if (!res || !res.ok) {
+        res = await apiRequest("GET", "/api/news/cron").catch(() => null);
+      }
+      const result = res ? await res.json().catch(() => ({})) : {};
+      qc.invalidateQueries({ queryKey: ["/api/news/external"] });
+      toast({
+        title: "News refreshed",
+        description: `Fetched ${result.fetched ?? 0} articles, stored ${result.stored ?? 0}.${result.notConfigured ? " (NewsAPI key not set — used RSS fallback)" : ""}`,
+      });
+    } catch {
+      toast({ title: "Refresh failed", description: "Try again later.", variant: "destructive" });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const generateAudio = async (articleId: number) => {
     setAudioLoading(articleId);
     try {
@@ -130,6 +152,10 @@ export default function ExternalNewsPage() {
             className="pl-9"
           />
         </div>
+        <Button variant="outline" size="sm" onClick={refreshNews} disabled={refreshing} className="gap-1.5 shrink-0">
+          {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Newspaper className="h-3.5 w-3.5" />}
+          {refreshing ? "Fetching…" : "Refresh news"}
+        </Button>
       </div>
 
       {/* Category Tabs */}
@@ -197,13 +223,13 @@ export default function ExternalNewsPage() {
               ) : (
                 <>
                   <p className="text-sm font-medium text-foreground">
-                    NewsAPI is not configured
+                    No news fetched yet
                   </p>
                   <p className="text-xs text-muted-foreground/70 mt-2 max-w-md mx-auto">
                     The <code className="font-mono">NEWS_API_KEY</code> environment variable is not
-                    set, so external news can&rsquo;t be fetched. Add a NewsAPI.org key to your
-                    environment (and trigger <code className="font-mono">/api/news/cron</code>) to
-                    populate this page.
+                    set. News will still be fetched from free RSS feeds (Punch, Vanguard, Guardian,
+                    etc.) as a fallback. Click <strong>Refresh news</strong> above to fetch now,
+                    or wait for the nightly auto-refresh.
                   </p>
                 </>
               )}
