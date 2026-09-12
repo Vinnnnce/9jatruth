@@ -27,6 +27,7 @@ import com.ninejatruth.app.presentation.theme.NigeriaYellow
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onNavigateToRegister: () -> Unit,
+    onContinueAsGuest: () -> Unit = {},
     viewModel: AuthViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -37,6 +38,12 @@ fun LoginScreen(
     LaunchedEffect(uiState.isLoggedIn) {
         if (uiState.isLoggedIn) {
             onLoginSuccess()
+        }
+    }
+
+    LaunchedEffect(uiState.isGuest) {
+        if (uiState.isGuest) {
+            onContinueAsGuest()
         }
     }
 
@@ -169,6 +176,20 @@ fun LoginScreen(
                         color = NigeriaGreen
                     )
                 }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Continue as guest
+            TextButton(
+                onClick = { viewModel.continueAsGuest() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    "Continue as Guest",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

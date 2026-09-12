@@ -31,7 +31,8 @@ import com.ninejatruth.app.presentation.profile.SettingsScreen
 @Composable
 fun NavGraph(
     navController: NavHostController,
-    startDestination: String
+    startDestination: String,
+    onAuthRequired: () -> Unit = {}
 ) {
     NavHost(
         navController = navController,
@@ -46,6 +47,11 @@ fun NavGraph(
                 },
                 onNavigateToRegister = {
                     navController.navigate(Routes.REGISTER)
+                },
+                onContinueAsGuest = {
+                    navController.navigate(Routes.HOME) {
+                        popUpTo(Routes.LOGIN) { inclusive = true }
+                    }
                 }
             )
         }
@@ -72,6 +78,11 @@ fun NavGraph(
                 },
                 onSkip = {
                     navController.navigate(Routes.LOGIN) {
+                        popUpTo(Routes.ONBOARDING) { inclusive = true }
+                    }
+                },
+                onContinueAsGuest = {
+                    navController.navigate(Routes.HOME) {
                         popUpTo(Routes.ONBOARDING) { inclusive = true }
                     }
                 }
@@ -102,13 +113,19 @@ fun NavGraph(
         composable(Routes.FEEDS) {
             FeedsScreen(
                 onNavigateToPost = { navController.navigate(Routes.postDetail(it)) },
-                onNavigateToCreatePost = { navController.navigate(Routes.CREATE_POST) }
+                onNavigateToCreatePost = {
+                    onAuthRequired()
+                    navController.navigate(Routes.CREATE_POST)
+                }
             )
         }
 
         composable(Routes.NEWS) {
             NewsScreen(
-                onNavigateToNewsDetail = { navController.navigate(Routes.newsDetail(it)) }
+                onNavigateToNewsDetail = {
+                    onAuthRequired()
+                    navController.navigate(Routes.newsDetail(it))
+                }
             )
         }
 
@@ -116,6 +133,11 @@ fun NavGraph(
             ProfileScreen(
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
                 onNavigateToAssistant = { navController.navigate(Routes.ASSISTANT) },
+                onNavigateToLogin = {
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
                 onLogout = {
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }

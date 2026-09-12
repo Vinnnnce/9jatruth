@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.ninejatruth.app.presentation.auth.AuthViewModel
 import com.ninejatruth.app.presentation.components.LoadingIndicator
 import com.ninejatruth.app.presentation.components.TruthScoreBadge
 import com.ninejatruth.app.presentation.theme.NigeriaGreen
@@ -24,9 +25,12 @@ fun ProfileScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToAssistant: () -> Unit,
     onLogout: () -> Unit,
-    viewModel: ProfileViewModel = hiltViewModel()
+    onNavigateToLogin: () -> Unit = {},
+    viewModel: ProfileViewModel = hiltViewModel(),
+    authViewModel: AuthViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val authState by authViewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
@@ -48,6 +52,42 @@ fun ProfileScreen(
             }
         }
     ) { padding ->
+        if (authState.isGuest) {
+            // Guest mode: show login prompt
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "You're browsing as a guest",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Sign in to access your profile, post to the feed, and read news articles.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(
+                    onClick = onNavigateToLogin,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = NigeriaGreen
+                    )
+                ) {
+                    Text("Sign In", fontWeight = FontWeight.SemiBold)
+                }
+            }
+            return@Scaffold
+        }
+
         if (uiState.isLoading) {
             LoadingIndicator(modifier = Modifier.padding(padding))
             return@Scaffold

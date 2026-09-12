@@ -19,6 +19,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun OnboardingScreen(
     onContinue: () -> Unit,
     onSkip: () -> Unit,
+    onContinueAsGuest: () -> Unit = {},
     viewModel: AuthViewModel = hiltViewModel()
 ) {
     val states by viewModel.states
@@ -150,6 +151,23 @@ fun OnboardingScreen(
                         "Continue",
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Continue as guest
+                TextButton(
+                    onClick = {
+                        viewModel.continueAsGuest()
+                        onContinueAsGuest()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "Continue as Guest",
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontWeight = FontWeight.Normal
                     )
                 }
             }

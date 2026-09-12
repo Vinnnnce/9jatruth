@@ -20,7 +20,8 @@ data class AuthUiState(
     val isLoading: Boolean = false,
     val user: User? = null,
     val error: String? = null,
-    val isLoggedIn: Boolean = false
+    val isLoggedIn: Boolean = false,
+    val isGuest: Boolean = false
 )
 
 @HiltViewModel
@@ -124,6 +125,10 @@ class AuthViewModel @Inject constructor(
 
     fun selectLga(lgaId: String) {
         _selectedLga.value = lgaId
+    }
+
+    fun continueAsGuest() {
+        _uiState.value = _uiState.value.copy(isGuest = true, isLoggedIn = false)
     }
 
     fun logout() {

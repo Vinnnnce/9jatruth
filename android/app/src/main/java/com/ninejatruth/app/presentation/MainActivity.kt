@@ -5,9 +5,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -39,9 +41,12 @@ class MainActivity : ComponentActivity() {
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentRoute = navBackStackEntry?.destination?.route
 
-                    val startDestination = if (authState.isLoggedIn) Routes.HOME else Routes.LOGIN
+                    val startDestination = if (authState.isLoggedIn || authState.isGuest) Routes.HOME else Routes.LOGIN
 
                     val showBottomNav = currentRoute in BottomNavItem.items.map { it.route }
+
+                    // Show a snackbar when auth is required for guest users
+                    var showAuthRequiredMessage by remember { mutableStateOf(false) }
 
                     Scaffold(
                         bottomBar = {
@@ -77,8 +82,34 @@ class MainActivity : ComponentActivity() {
                     ) { _ ->
                         NavGraph(
                             navController = navController,
-                            startDestination = startDestination
+                            startDestination = startDestination,
+                            onAuthRequired = {
+                                if (authState.isGuest) {
+                                    showAuthRequiredMessage = true
+                                }
+                            }
                         )
+                    }
+
+                    if (showAuthRequiredMessage) {
+                        Snackbar(
+                            modifier = Modifier.padding(16.dp),
+                            action = {
+                                TextButton(onClick = {
+                                    showAuthRequiredMessage = false
+                                    navController.navigate(Routes.LOGIN)
+                                }) {
+                                    Text("Sign In")
+                                }
+                            },
+                            dismissAction = {
+                                TextButton(onClick = { showAuthRequiredMessage = false }) {
+                                    Text("Dismiss")
+                                }
+                            }
+                        ) {
+                            Text("Please sign in to access this feature")
+                        }
                     }
                 }
             }
