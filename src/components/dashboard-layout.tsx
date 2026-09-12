@@ -19,7 +19,8 @@ import {
 import { SokeLogoFull, SokeLogo } from "@/components/logo";
 import { OfflineStatus } from "@/components/offline-status";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { UserButton, SignedIn, useUser } from "@clerk/nextjs";
+import { UserButton, SignedIn, useUser as useClerkUser } from "@clerk/nextjs";
+import { useUser as useSafeUser } from "@/lib/use-user-safe";
 import { useQuery } from "@tanstack/react-query";
 import { isSuperAdminProfile, getDashboardType } from "@/lib/admin-auth-client";
 import { NotificationBell } from "@/components/notification-bell";
@@ -330,46 +331,32 @@ function TopBar() {
  * controls (NotificationBell + UserButton) once Clerk confirms a session.
  */
 function NavbarAuth() {
-  if (!isClerkConfigured) {
+  // Use the safe auth hook that checks both Clerk and fallback JWT auth
+  const { isSignedIn, isLoaded } = useSafeUser();
+
+  // Signed in (via Clerk or fallback auth) → show account controls
+  if (isLoaded && isSignedIn) {
     return (
       <>
-        <Link href="/sign-in" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted">
-          Log In
-        </Link>
-        <Link href="/sign-up" className="text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 transition-colors px-4 py-1.5 rounded-md">
-          Sign Up
-        </Link>
+        <NotificationBell />
+        {isClerkConfigured ? (
+          <SignedIn>
+            <UserButton afterSignOutUrl="/sign-in" />
+          </SignedIn>
+        ) : (
+          <Link href="/user" className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted transition-colors">
+            <span className="text-sm font-medium text-foreground">Account</span>
+          </Link>
+        )}
       </>
     );
   }
 
-  return <ClerkAuthButtons />;
-}
-
-function ClerkAuthButtons() {
-  const { isSignedIn, isLoaded } = useUser();
-
-  // Signed in → show account controls only.
-  if (isSignedIn) {
-    return (
-      <SignedIn>
-        <NotificationBell />
-        <UserButton afterSignOutUrl="/sign-in" />
-      </SignedIn>
-    );
-  }
-
-  // Loading or signed out → always show visible entry buttons that navigate
-  // to the dedicated Clerk auth pages. We intentionally use plain <Link>
-  // navigation rather than Clerk's modal mode: the modal silently no-ops when
-  // the Clerk frontend SDK fails to initialise (unreachable custom domain,
-  // blocked script, missing allowed origin). A full-page navigation to
-  // /sign-in re-runs Clerk's bootstrap and always gives the user a working
-  // auth surface, so the navbar is never left with dead buttons.
+  // Loading or signed out → show visible entry buttons
   return (
     <>
       <Link href="/sign-in" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted">
-        {isLoaded ? "Log In" : "Log In"}
+        Log In
       </Link>
       <Link href="/sign-up" className="text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 transition-colors px-4 py-1.5 rounded-md">
         Sign Up

@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { apiRequest } from "@/lib/queryClient";
+import { GiftModal } from "@/components/gift-modal";
 import {
   Flame,
   MessageCircle,
@@ -40,6 +41,8 @@ export interface TruthPostData {
   lga?: string | null;
   isAuthor?: boolean;
   likeCount?: number | null;
+  userHash?: string | null;
+  mediaUrls?: string[] | null;
 }
 
 interface TruthPostCardProps {
@@ -225,6 +228,38 @@ export function TruthPostCard({ truth, index = 0, onDelete, deleting, canDelete 
           {truth.content}
         </p>
 
+        {/* ─── Media ─── */}
+        {truth.mediaUrls && truth.mediaUrls.length > 0 && (
+          <div className="grid gap-2" style={{ gridTemplateColumns: truth.mediaUrls.length === 1 ? "1fr" : "repeat(2, 1fr)" }}>
+            {truth.mediaUrls.map((url, i) => {
+              const isVideo = url.startsWith("data:video/") || url.match(/\.(mp4|webm)$/i);
+              const isAudio = url.startsWith("data:audio/") || url.match(/\.(webm|mp3|wav|ogg)$/i) || url.startsWith("data:audio/");
+              if (isVideo) {
+                return (
+                  <video key={i} controls className="w-full rounded-lg border border-[#2A261F]" src={url} />
+                );
+              }
+              if (isAudio) {
+                return (
+                  <div key={i} className="flex items-center gap-2 rounded-lg border border-[#2A261F] bg-[#15171D] p-3">
+                    <audio controls className="h-8 flex-1" src={url} />
+                  </div>
+                );
+              }
+              return (
+                <img
+                  key={i}
+                  src={url}
+                  alt="Post media"
+                  className="w-full rounded-lg border border-[#2A261F] object-cover"
+                  loading="lazy"
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                />
+              );
+            })}
+          </div>
+        )}
+
         {/* ─── Action bar ─── */}
         <div
           className="flex flex-wrap items-center gap-2"
@@ -286,18 +321,39 @@ export function TruthPostCard({ truth, index = 0, onDelete, deleting, canDelete 
           </button>
 
           {/* Gift */}
-          <button
-            type="button"
-            onClick={() => setGifted((v) => !v)}
-            className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${
-              gifted
-                ? "border-[#7A5A1F] bg-[#2A2114] text-[#D6A838]"
-                : "border-[#2A261F] bg-[#15171D] text-[#8A857A] hover:text-[#DEC196]"
-            }`}
-            aria-label="Gift"
-          >
-            <Gift className="h-3.5 w-3.5" />
-          </button>
+          {truth.userHash ? (
+            <GiftModal
+              recipientUserHash={truth.userHash}
+              recipientName={truth.displayName || undefined}
+              trigger={
+                <button
+                  type="button"
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${
+                    gifted
+                      ? "border-[#7A5A1F] bg-[#2A2114] text-[#D6A838]"
+                      : "border-[#2A261F] bg-[#15171D] text-[#8A857A] hover:text-[#DEC196]"
+                  }`}
+                  aria-label="Gift"
+                  onClick={(e) => { e.stopPropagation(); setGifted(true); }}
+                >
+                  <Gift className="h-3.5 w-3.5" />
+                </button>
+              }
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setGifted((v) => !v)}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${
+                gifted
+                  ? "border-[#7A5A1F] bg-[#2A2114] text-[#D6A838]"
+                  : "border-[#2A261F] bg-[#15171D] text-[#8A857A] hover:text-[#DEC196]"
+              }`}
+              aria-label="Gift"
+            >
+              <Gift className="h-3.5 w-3.5" />
+            </button>
+          )}
 
           {/* Reaction */}
           <div className="relative">

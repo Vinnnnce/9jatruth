@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Activity as ActivityIcon,
   Trophy,
@@ -14,6 +16,10 @@ import {
   BarChart3,
   TrendingUp,
   ChevronRight,
+  User,
+  Camera,
+  Sparkles,
+  Gift,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -178,8 +184,91 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: string) => void }) {
   );
 }
 
+function ProfileTab() {
+  const { data: profile, isLoading } = useQuery<any>({
+    queryKey: ["/api/user/profile"],
+    queryFn: () => apiRequest("GET", "/api/user/profile").then((r) => r.json()),
+    retry: 1,
+  });
+  const { data: rewards } = useQuery<{ balance?: number }>({
+    queryKey: ["/api/rewards/balance"],
+    queryFn: () => apiRequest("GET", "/api/rewards/balance").then((r) => r.json()).catch(() => ({ balance: 0 })),
+    retry: 1,
+  });
+  const displayName = profile?.name || "Community Member";
+  const avatarUrl = profile?.avatarUrl || undefined;
+  const balance = rewards?.balance ?? 0;
+
+  if (isLoading) return <Skeleton className="h-64" />;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="p-4 md:p-6">
+          <div className="flex items-start gap-4">
+            <Avatar className="h-20 w-20 shrink-0">
+              <AvatarImage src={avatarUrl} alt={displayName} />
+              <AvatarFallback className="text-xl">
+                {displayName.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg font-bold">{displayName}</h2>
+              {profile?.occupation && (
+                <p className="text-sm text-muted-foreground">{profile.occupation}</p>
+              )}
+              {profile?.bio && (
+                <p className="mt-2 text-sm text-muted-foreground line-clamp-3">{profile.bio}</p>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {profile?.interests && Array.isArray(profile.interests) && profile.interests.map((tag: string) => (
+                  <Badge key={tag} variant="secondary" className="text-[10px]">{tag}</Badge>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button size="sm" asChild>
+              <a href="/user"><User className="h-3.5 w-3.5" /> Edit Profile</a>
+            </Button>
+            <Button size="sm" variant="outline" asChild>
+              <a href="/user"><Camera className="h-3.5 w-3.5" /> Upload Photo</a>
+            </Button>
+            <Button size="sm" variant="outline" asChild>
+              <a href="/user"><Sparkles className="h-3.5 w-3.5" /> AI Bio</a>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardContent className="p-4 text-center">
+            <Gift className="h-5 w-5 text-primary mx-auto mb-1" />
+            <p className="text-2xl font-bold tabular-nums">{balance}</p>
+            <p className="text-xs text-muted-foreground">Reward Points</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <Trophy className="h-5 w-5 text-amber-500 mx-auto mb-1" />
+            <p className="text-2xl font-bold tabular-nums">{profile?.totalSubmissions ?? 0}</p>
+            <p className="text-xs text-muted-foreground">Truths Posted</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <ActivityIcon className="h-5 w-5 text-blue-500 mx-auto mb-1" />
+            <p className="text-2xl font-bold tabular-nums">{profile?.totalVerifications ?? 0}</p>
+            <p className="text-xs text-muted-foreground">Verifications</p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 export default function PortfolioPage() {
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState("profile");
   return (
     <div className="space-y-6">
       <div className="p-4 md:p-6 pb-0">
@@ -189,6 +278,7 @@ export default function PortfolioPage() {
       <Tabs value={tab} onValueChange={setTab} className="space-y-6">
         <div className="px-4 md:px-6">
           <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
+            <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
             <TabsTrigger value="trends">Trends</TabsTrigger>
@@ -196,6 +286,7 @@ export default function PortfolioPage() {
             <TabsTrigger value="rewards">Rewards</TabsTrigger>
           </TabsList>
         </div>
+        <TabsContent value="profile" className="p-4 md:p-6 pt-0 mt-0"><ProfileTab /></TabsContent>
         <TabsContent value="overview" className="p-4 md:p-6 pt-0 mt-0"><OverviewTab onNavigate={setTab} /></TabsContent>
         <TabsContent value="activity" className="mt-0"><ActivityPage /></TabsContent>
         <TabsContent value="trends" className="p-4 md:p-6 pt-0 mt-0"><TrendsTab /></TabsContent>

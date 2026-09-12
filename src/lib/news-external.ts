@@ -356,8 +356,35 @@ function stripHtml(html: string): string {
 
 /** Extract the first <img src="..."> from an RSS item's content/encoded HTML. */
 function extractImage(html: string): string | null {
-  const m = html.match(/<img[^>]+src=["']([^"']+)['"][^>]*>/i);
-  return m ? m[1] : null;
+  // 1. Try <img> tags in HTML content
+  const imgMatch = html.match(/<img[^>]+src=["']([^"']+)['"][^>]*>/i);
+  if (imgMatch) return imgMatch[1];
+  return null;
+}
+
+/** Extract image from RSS item block (enclosure, media:content, media:thumbnail, image tag) */
+function extractRssImage(block: string): string | null {
+  // <enclosure url="..." type="image/...">
+  const enc = block.match(/<enclosure[^>]+url=["']([^"']+)['"][^>]*type=["']image\/[^"']*['"][^>]*>/i)
+    || block.match(/<enclosure[^>]+type=["']image\/[^"']*['"][^>]*url=["']([^"']+)['"][^>]*>/i)
+    || block.match(/<enclosure[^>]+url=["']([^"']+)['"][^>]*>/i);
+  if (enc) return enc[1];
+
+  // <media:content url="..." type="image/..."><media:thumbnail url="..." />
+  const mediaContent = block.match(/<media:content[^>]+url=["']([^"']+)['"][^>]*>/i);
+  if (mediaContent) return mediaContent[1];
+  const mediaThumb = block.match(/<media:thumbnail[^>]+url=["']([^"']+)['"][^>]*>/i);
+  if (mediaThumb) return mediaThumb[1];
+
+  // <image><url>...</url></image> (RSS 2.0 channel image)
+  const imageTag = block.match(/<image[^>]*>[\s\S]*?<url[^>]*>([^<]+)<\/url>/i);
+  if (imageTag) return imageTag[1].trim();
+
+  // Direct <url> image in media namespace
+  const urlTag = block.match(/<media:url[^>]*>([^<]+)<\/media:url>/i);
+  if (urlTag) return urlTag[1].trim();
+
+  return null;
 }
 
 /** Parse RSS/Atom XML into articles using regex (no external dependency). */
@@ -381,12 +408,15 @@ function parseRssItems(xml: string, category: string): NewsApiArticle[] {
 
     if (!title || !link) continue;
     const htmlBody = contentEncoded || description || "";
+    // Try RSS-specific image tags first, then fall back to HTML <img> extraction
+    const rssImage = extractRssImage(block);
+    const htmlImage = extractImage(htmlBody);
     items.push({
       title: stripHtml(title),
       description: description ? stripHtml(description) : null,
       content: contentEncoded ? stripHtml(contentEncoded).slice(0, 4000) : null,
       url: link,
-      urlToImage: extractImage(htmlBody),
+      urlToImage: rssImage || htmlImage,
       publishedAt: pubDate || null,
       author: author || null,
       source: { name: new URL(link).hostname.replace(/^www\./, "") },

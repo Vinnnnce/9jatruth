@@ -32,6 +32,7 @@ import { NIGERIA_STATES, getLgasForState } from "@/lib/nigeria-locations";
 import { CommunityFeeds } from "@/components/community-feeds";
 import { QuestionnairePopup } from "@/components/questionnaire/questionnaire-popup";
 import { TruthPostCard } from "@/components/truth-post-card";
+import { GiftModal } from "@/components/gift-modal";
 
 // ─── Types ───
 
@@ -97,7 +98,18 @@ const CATEGORY_META: Record<string, { icon: typeof Zap; color: string; dot: stri
   traffic:  { icon: Car,   color: "text-electric-blue", dot: "bg-blue-500",   label: "Traffic" },
   prices:   { icon: Tag,   color: "text-purple-glow", dot: "bg-purple-500", label: "Prices" },
   safety:   { icon: ShieldCheck, color: "text-neon-green", dot: "bg-green-500", label: "Safety" },
+  security: { icon: ShieldCheck, color: "text-neon-green", dot: "bg-green-500", label: "Security" },
 };
+
+const FILTER_CATEGORIES = [
+  { key: "all",      label: "All",      icon: Newspaper },
+  { key: "power",    label: "Power",    icon: Zap },
+  { key: "fuel",     label: "Fuel",     icon: Fuel },
+  { key: "traffic",  label: "Traffic",  icon: Car },
+  { key: "prices",   label: "Prices",   icon: Tag },
+  { key: "safety",   label: "Safety",   icon: ShieldCheck },
+  { key: "security", label: "Security", icon: ShieldCheck },
+];
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -146,6 +158,190 @@ function useBrowsingTracker() {
   return { recordEvent };
 }
 
+// ─── Compact Truth Card with media + gift ───
+
+function CompactTruthCard({
+  truth,
+  index,
+  canDelete,
+  deleting,
+  onDelete,
+}: {
+  truth: any;
+  index: number;
+  canDelete: boolean;
+  deleting: boolean;
+  onDelete: (id: number) => void;
+}) {
+  const meta = CATEGORY_META[truth.category] || CATEGORY_META.safety;
+  const Icon = meta.icon;
+  const mediaUrls: string[] = Array.isArray(truth.mediaUrls) ? truth.mediaUrls : [];
+  const images = mediaUrls.filter((u) => /\.(jpg|jpeg|png|webp|gif)$/i.test(u));
+  const videos = mediaUrls.filter((u) => /\.(mp4|webm|mov|m4v)$/i.test(u));
+  const audios = mediaUrls.filter((u) => /\.(mp3|wav|ogg|m4a)$/i.test(u));
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, delay: Math.min(index, 6) * 0.04 }}
+      className="rounded-xl border border-border bg-card overflow-hidden hover:border-primary/20 transition-colors"
+    >
+      {/* Category bar */}
+      <div className="flex items-center justify-between px-3 pt-2.5 pb-1.5">
+        <div className="flex items-center gap-1.5">
+          <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+          <Icon className={`h-3 w-3 ${meta.color}`} />
+          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{meta.label}</span>
+        </div>
+        <span className="text-[10px] text-muted-foreground">{timeAgo(truth.createdAt)}</span>
+      </div>
+
+      {/* Content */}
+      <div className="px-3 pb-2">
+        <p className="text-sm text-foreground line-clamp-3">{truth.content}</p>
+      </div>
+
+      {/* Media */}
+      {images.length > 0 && (
+        <div className={`grid gap-0.5 px-3 pb-2 ${images.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+          {images.slice(0, 4).map((url, i) => (
+            <img
+              key={i}
+              src={url}
+              alt={`media-${i}`}
+              className="w-full h-32 object-cover rounded-lg"
+              loading="lazy"
+            />
+          ))}
+        </div>
+      )}
+      {videos.length > 0 && (
+        <div className="px-3 pb-2 space-y-1">
+          {videos.map((url, i) => (
+            <video key={i} src={url} controls className="w-full rounded-lg max-h-48" />
+          ))}
+        </div>
+      )}
+      {audios.length > 0 && (
+        <div className="px-3 pb-2 space-y-1">
+          {audios.map((url, i) => (
+            <audio key={i} src={url} controls className="w-full" />
+          ))}
+        </div>
+      )}
+
+      {/* Footer: location + trust + actions */}
+      <div className="flex items-center justify-between px-3 py-2 border-t border-border">
+        <div className="flex items-center gap-2 min-w-0">
+          {truth.neighborhoodName && (
+            <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground truncate">
+              <MapPin className="h-2.5 w-2.5 shrink-0" />
+              {truth.neighborhoodName}
+            </span>
+          )}
+          {typeof truth.trustScore === "number" && (
+            <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
+              <ShieldCheck className="h-2.5 w-2.5" />
+              {truth.trustScore}%
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <GiftModal
+            recipientUserHash={truth.userHash || "anonymous"}
+            recipientName={truth.displayName || "Anonymous"}
+            trigger={
+              <button
+                type="button"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-purple-glow hover:bg-purple-glow/10 transition-colors"
+                aria-label="Send gift"
+                title="Send gift"
+              >
+                <Heart className="h-3.5 w-3.5" />
+              </button>
+            }
+          />
+          {canDelete && (
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => {
+                if (confirm("Delete this post? This cannot be undone.")) {
+                  onDelete(truth.id);
+                }
+              }}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+              aria-label="Delete post"
+              title="Delete post"
+            >
+              <Flag className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Loading skeleton matching the redesigned layout ───
+
+function FeedsLoadingSkeleton() {
+  return (
+    <div className="min-h-screen pb-8 bg-background text-foreground">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 pt-4 space-y-4">
+        {/* Summary cards skeleton */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="rounded-2xl p-4 space-y-2 bg-card border border-border">
+              <div className="h-4 w-4 rounded bg-muted animate-pulse" />
+              <div className="h-6 w-16 rounded bg-muted animate-pulse" />
+              <div className="h-3 w-20 rounded bg-muted animate-pulse" />
+            </div>
+          ))}
+        </div>
+
+        {/* Category chips skeleton */}
+        <div className="flex items-center gap-2 overflow-hidden">
+          {[...Array(7)].map((_, i) => (
+            <div key={i} className="h-8 w-20 rounded-full bg-card border border-border animate-pulse shrink-0" />
+          ))}
+        </div>
+
+        {/* Toggle skeleton */}
+        <div className="flex items-center justify-between">
+          <div className="h-8 w-48 rounded-lg bg-card border border-border animate-pulse" />
+          <div className="h-8 w-24 rounded-lg bg-card border border-border animate-pulse" />
+        </div>
+
+        {/* Truth cards skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="rounded-xl border border-border bg-card p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-muted animate-pulse" />
+                  <div className="h-3 w-16 rounded bg-muted animate-pulse" />
+                </div>
+                <div className="h-3 w-10 rounded bg-muted animate-pulse" />
+              </div>
+              <div className="space-y-1.5">
+                <div className="h-3 w-full rounded bg-muted animate-pulse" />
+                <div className="h-3 w-3/4 rounded bg-muted animate-pulse" />
+              </div>
+              <div className="h-24 w-full rounded-lg bg-muted animate-pulse" />
+              <div className="flex items-center justify-between pt-1">
+                <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+                <div className="h-6 w-12 rounded bg-muted animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───
 
 export default function Feeds() {
@@ -158,6 +354,11 @@ export default function Feeds() {
   // Geo filters for feeds (state and lga only)
   const [geoFilter, setGeoFilter] = useState<{ state: string; lga: string }>({ state: "", lga: "" });
   const [sortBy, setSortBy] = useState<"recent" | "nearest" | "trending" | "trust">("recent");
+
+  // Feed mode: Latest vs Trending
+  const [feedMode, setFeedMode] = useState<"latest" | "trending">("latest");
+  // Category filter chips
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
   // User location for the "nearest" sort. We request browser geolocation and
   // then fetch truths ordered by real distance via /api/truths/nearby.
@@ -342,14 +543,7 @@ export default function Feeds() {
   });
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen p-4 md:p-6 max-w-7xl mx-auto space-y-4">
-        <div className="h-24 rounded-2xl bg-card animate-pulse" />
-        <div className="h-8 rounded-lg bg-card animate-pulse" />
-        <div className="h-[400px] rounded-2xl bg-card animate-pulse" />
-        <div className="h-[400px] rounded-2xl bg-card animate-pulse" />
-      </div>
-    );
+    return <FeedsLoadingSkeleton />;
   }
 
   const summary = feedData?.summary;
@@ -358,9 +552,37 @@ export default function Feeds() {
   const hasNearbyFeeds = neighborhoods.length > 0;
   const showFallback = !hasNearbyFeeds;
 
+  // Process truths for display: filter by category, sort by feed mode
+  const useNearby = sortBy === "nearest" && !!userLoc && (nearbyTruths?.truths?.length ?? 0) > 0;
+  const sourceTruths = useNearby ? (nearbyTruths?.truths ?? []) : (recentTruths?.truths ?? []);
+
+  // Filter by selected category
+  const filteredTruths = categoryFilter === "all"
+    ? sourceTruths
+    : sourceTruths.filter((t: any) => t.category === categoryFilter);
+
+  // Sort based on feed mode
+  const sortedTruths = [...filteredTruths].sort((a: any, b: any) => {
+    if (feedMode === "trending") {
+      return (b.likeCount ?? 0) - (a.likeCount ?? 0);
+    }
+    // latest: most recent first
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  }).slice(0, 20);
+
+  // Group truths by category for display
+  const truthsByCategory = sortedTruths.reduce((acc: Record<string, any[]>, truth: any) => {
+    const cat = truth.category || "other";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(truth);
+    return acc;
+  }, {});
+
+  const categoryOrder = ["power", "fuel", "traffic", "prices", "safety", "security", "other"];
+
   return (
     <div className="min-h-screen pb-8 bg-background text-foreground">
-      <div className="max-w-7xl mx-auto px-4 md:px-6 pt-4 space-y-4">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 pt-4 space-y-5">
         {/* ─── Summary Grid (responsive: 2 cols mobile, 4 cols desktop) ─── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           <SummaryCard icon={Newspaper} label="Active Truths" value={summary?.activeTruths ?? 0} colorClass="text-neon-green" loading={!summary} />
@@ -372,10 +594,62 @@ export default function Feeds() {
         {/* ─── Community Feeds System (Tabs + Cascading Filters + Post Creation) ─── */}
         <CommunityFeeds />
 
-        {/* ─── Geo Filters + Sort ─── */}
-        <div className="rounded-xl p-3 space-y-2 bg-card border border-border">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium uppercase text-muted-foreground">Filter by Location</span>
+        {/* ─── Category Filter Chips ─── */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+          {FILTER_CATEGORIES.map((cat) => {
+            const Icon = cat.icon;
+            const active = categoryFilter === cat.key;
+            return (
+              <button
+                key={cat.key}
+                type="button"
+                onClick={() => setCategoryFilter(cat.key)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all ${
+                  active
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/30"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {cat.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ─── Feed Mode Toggle + Sort + Geo Filters ─── */}
+        <div className="rounded-xl p-3 space-y-3 bg-card border border-border">
+          {/* Top row: toggle + sort */}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            {/* Latest / Trending toggle */}
+            <div className="inline-flex items-center rounded-lg bg-muted/50 p-0.5">
+              <button
+                type="button"
+                onClick={() => setFeedMode("latest")}
+                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                  feedMode === "latest"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Clock className="h-3 w-3" />
+                Latest
+              </button>
+              <button
+                type="button"
+                onClick={() => setFeedMode("trending")}
+                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                  feedMode === "trending"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <TrendingUp className="h-3 w-3" />
+                Trending
+              </button>
+            </div>
+
+            {/* Sort + Dev toggle */}
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -403,6 +677,8 @@ export default function Feeds() {
               )}
             </div>
           </div>
+
+          {/* Geo filter dropdowns */}
           <div className="grid grid-cols-2 gap-2">
             <select
               value={geoFilter.state}
@@ -434,40 +710,26 @@ export default function Feeds() {
           </span>
         </div>
 
-        {/* ─── Recent Posts (direct truth feed) ─── */}
-        {(() => {
-          // When sorting by nearest and we have the user's location, show
-          // distance-sorted truths from /api/truths/nearby instead of the
-          // default recency list.
-          const useNearby = sortBy === "nearest" && !!userLoc && (nearbyTruths?.truths?.length ?? 0) > 0;
-          const sourceTruths = useNearby ? (nearbyTruths?.truths ?? []) : (recentTruths?.truths ?? []);
-          if (sourceTruths.length === 0) return null;
-          return (
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-              <Newspaper className="h-4 w-4 text-primary" />
-              {sortBy === "nearest" && useNearby ? "Posts Near You" : "Recent Posts"}
-              <span className="text-[10px] text-muted-foreground font-normal">
-                ({sourceTruths.length})
-              </span>
-              {sortBy === "nearest" && useNearby && (
-                <Badge variant="outline" className="text-[8px] gap-0.5 ml-1">
-                  <MapPin className="h-2 w-2" /> Nearest First
+        {/* ─── Truth Feed: Grouped by Category ─── */}
+        {sortedTruths.length > 0 && (
+          <div className="space-y-4">
+            {/* Section header */}
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                <Newspaper className="h-4 w-4 text-primary" />
+                {feedMode === "trending" ? "Trending Posts" : "Latest Posts"}
+                <span className="text-[10px] text-muted-foreground font-normal">
+                  ({sortedTruths.length})
+                </span>
+              </h2>
+              {feedMode === "trending" && (
+                <Badge variant="outline" className="text-[9px] gap-0.5">
+                  <TrendingUp className="h-2.5 w-2.5" /> Hot
                 </Badge>
               )}
-              {sortBy === "trending" && (
-                <Badge variant="outline" className="text-[8px] gap-0.5 ml-1">
-                  <TrendingUp className="h-2 w-2" /> Trending
-                </Badge>
-              )}
-              {sortBy === "trust" && (
-                <Badge variant="outline" className="text-[8px] gap-0.5 ml-1">
-                  <ShieldCheck className="h-2 w-2" /> By Trust Score
-                </Badge>
-              )}
-            </h2>
+            </div>
 
-            {/* Prompt for geolocation when "nearest" is chosen but not granted yet */}
+            {/* Geolocation prompt */}
             {sortBy === "nearest" && !userLoc && (
               <div className="rounded-xl border border-dashed border-border bg-card/40 p-3 text-xs text-muted-foreground">
                 {locStatus === "denied" ? (
@@ -486,47 +748,72 @@ export default function Feeds() {
               </div>
             )}
 
-            <div className="grid gap-3">
-              {[...sourceTruths]
-                .sort((a: any, b: any) => {
-                  if (sortBy === "trust") return (b.trustScore ?? 50) - (a.trustScore ?? 50);
-                  if (sortBy === "trending") return (b.likeCount ?? 0) - (a.likeCount ?? 0);
-                  // 'nearest': prefer real distance when available, else area match.
-                  if (sortBy === "nearest") {
-                    if (useNearby) {
-                      return (a.distanceKm ?? 9999) - (b.distanceKm ?? 9999);
-                    }
-                    const aMatch = (a.stateName === geoFilter.state ? 2 : 0) + (a.lgaName === geoFilter.lga ? 1 : 0);
-                    const bMatch = (b.stateName === geoFilter.state ? 2 : 0) + (b.lgaName === geoFilter.lga ? 1 : 0);
-                    return bMatch - aMatch;
-                  }
-                  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-                })
-                .slice(0, 15)
-                .map((truth: any, i: number) => (
-                <TruthPostCard
-                  key={truth.id}
-                  truth={truth}
-                  index={i}
-                  canDelete={!!truth.canDelete}
-                  deleting={deleteTruthMutation.isPending && deleteTruthMutation.variables === truth.id}
-                  onDelete={(id) => {
-                    if (confirm("Delete this post? This cannot be undone.")) {
-                      deleteTruthMutation.mutate(id);
-                    }
-                  }}
-                />
-              ))}
-            </div>
+            {/* Truth cards grouped by category */}
+            {categoryFilter === "all" ? (
+              /* Grouped by category when "All" is selected */
+              <div className="space-y-5">
+                {categoryOrder
+                  .filter((cat) => truthsByCategory[cat] && truthsByCategory[cat].length > 0)
+                  .map((cat) => {
+                    const meta = CATEGORY_META[cat] || { icon: Newspaper, color: "text-muted-foreground", dot: "bg-muted-foreground", label: cat.charAt(0).toUpperCase() + cat.slice(1) };
+                    const Icon = meta.icon;
+                    const group = truthsByCategory[cat];
+                    return (
+                      <div key={cat} className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
+                          <Icon className={`h-3.5 w-3.5 ${meta.color}`} />
+                          <h3 className="text-xs font-semibold text-foreground">{meta.label}</h3>
+                          <Badge variant="outline" className="text-[9px] py-0">{group.length}</Badge>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {group.map((truth: any, i: number) => (
+                            <CompactTruthCard
+                              key={truth.id}
+                              truth={truth}
+                              index={i}
+                              canDelete={!!truth.canDelete}
+                              deleting={deleteTruthMutation.isPending && deleteTruthMutation.variables === truth.id}
+                              onDelete={(id) => {
+                                if (confirm("Delete this post? This cannot be undone.")) {
+                                  deleteTruthMutation.mutate(id);
+                                }
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            ) : (
+              /* Flat grid when a specific category is filtered */
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {sortedTruths.map((truth: any, i: number) => (
+                  <CompactTruthCard
+                    key={truth.id}
+                    truth={truth}
+                    index={i}
+                    canDelete={!!truth.canDelete}
+                    deleting={deleteTruthMutation.isPending && deleteTruthMutation.variables === truth.id}
+                    onDelete={(id) => {
+                      if (confirm("Delete this post? This cannot be undone.")) {
+                        deleteTruthMutation.mutate(id);
+                      }
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-          );
-        })()}
+        )}
 
         {/* ─── Empty state when no posts ─── */}
         {(() => {
-          const useNearby = sortBy === "nearest" && !!userLoc;
-          const sourceEmpty = useNearby ? (nearbyTruths?.truths?.length ?? 0) === 0 : (!recentTruths?.truths || recentTruths.truths.length === 0);
-          if (!sourceEmpty) return null;
+          const useNearbyEmpty = sortBy === "nearest" && !!userLoc;
+          const sourceEmpty = useNearbyEmpty ? (nearbyTruths?.truths?.length ?? 0) === 0 : (!recentTruths?.truths || recentTruths.truths.length === 0);
+          if (!sourceEmpty && sortedTruths.length > 0) return null;
+          if (!sourceEmpty && sortedTruths.length === 0) return null;
           return (
           <Card className="border-border border-dashed">
             <CardContent className="p-6 text-center space-y-2">
@@ -548,10 +835,10 @@ export default function Feeds() {
         {/* ─── Active Polls ─── */}
         {pollsData?.polls && pollsData.polls.length > 0 && (
           <div className="space-y-2">
-            <h2 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5">
               <BarChart3 className="h-4 w-4 text-primary" />
-              Active Polls
-            </h2>
+              <h2 className="text-sm font-semibold text-foreground">Active Polls</h2>
+            </div>
             <div className="grid gap-2">
               {pollsData.polls.map((poll: any) => (
                 <PollCard key={poll.id} pollId={poll.id} />

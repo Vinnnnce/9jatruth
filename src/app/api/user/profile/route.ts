@@ -190,6 +190,7 @@ export async function PUT(request: Request) {
     dateOfBirth: "date_of_birth",
     gender: "gender",
     displayName: "display_name",
+    avatarUrl: "avatar_url",
   };
 
   const updates: { col: string; val: any }[] = [];
@@ -240,6 +241,8 @@ export async function PUT(request: Request) {
         await sql`UPDATE platform_users SET gender = ${val}, updated_at = NOW(), profile_completed = TRUE WHERE clerk_user_id = ${clerkUserId}`
       } else if (col === "display_name") {
         await sql`UPDATE platform_users SET display_name = ${val}, updated_at = NOW(), profile_completed = TRUE WHERE clerk_user_id = ${clerkUserId}`
+      } else if (col === "avatar_url") {
+        await sql`UPDATE platform_users SET avatar_url = ${val}, updated_at = NOW(), profile_completed = TRUE WHERE clerk_user_id = ${clerkUserId}`
       } else if (col === "interests") {
         const arr = val as string[]
         await sql`UPDATE platform_users SET interests = ${arr as any}, updated_at = NOW(), profile_completed = TRUE WHERE clerk_user_id = ${clerkUserId}`
@@ -265,6 +268,7 @@ export async function PUT(request: Request) {
         interests: platformUser?.interests ?? null,
         skills: platformUser?.skills ?? null,
         displayName: platformUser?.display_name ?? null,
+        avatarUrl: platformUser?.avatar_url ?? null,
         profileCompleted: platformUser?.profile_completed ?? true,
       },
     });

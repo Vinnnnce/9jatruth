@@ -7,7 +7,7 @@
  * personal stats, recent truths, reward ledger, and gamification profile.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@/lib/use-user-safe";
 import { apiRequest } from "@/lib/queryClient";
@@ -42,9 +42,13 @@ import {
   Calendar,
   Save,
   Loader2,
+  Camera,
+  Sparkles,
+  Gift,
 } from "lucide-react";
 import { UserAnalyticsCharts } from "@/components/user-analytics";
 import { LocationPreferences } from "@/components/location-preferences";
+import { GiftModal } from "@/components/gift-modal";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -82,6 +86,7 @@ type UserProfile = {
   interests?: string[] | null;
   skills?: string[] | null;
   profileCompleted?: boolean;
+  avatarUrl?: string | null;
 };
 
 type Truth = {
@@ -147,7 +152,7 @@ export default function PortfolioPage() {
     profile?.name || clerkUser?.fullName || clerkUser?.username || "Community Member";
   const email = profile?.email || clerkUser?.primaryEmailAddress?.emailAddress || "—";
   const memberSince = profile?.createdAt || clerkUser?.createdAt?.toString();
-  const avatarUrl = clerkUser?.imageUrl || undefined;
+  const avatarUrl = profile?.avatarUrl || clerkUser?.imageUrl || undefined;
 
   const isLoading = profileLoading || !clerkLoaded;
 
@@ -552,6 +557,10 @@ function LedgerList({ ledger, loading }: { ledger?: RewardLedgerEntry[]; loading
 function ProfileDetailsForm({ profile, loading }: { profile?: UserProfile; loading: boolean }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [aiBioLoading, setAiBioLoading] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     displayName: "",
     bio: "",
@@ -611,7 +620,65 @@ function ProfileDetailsForm({ profile, loading }: { profile?: UserProfile; loadi
     if (formData.gender) payload.gender = formData.gender;
     if (formData.interests) payload.interests = formData.interests.split(",").map((s) => s.trim()).filter(Boolean);
     if (formData.skills) payload.skills = formData.skills.split(",").map((s) => s.trim()).filter(Boolean);
+    if (photoUrl) payload.avatarUrl = photoUrl;
     updateMutation.mutate(payload);
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Maximum size is 10MB", variant: "destructive" });
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Invalid file", description: "Please upload an image", variant: "destructive" });
+      return;
+    }
+    setPhotoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/media/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.url) throw new Error(data.message || "Upload failed");
+      setPhotoUrl(data.url);
+      updateMutation.mutate({ avatarUrl: data.url });
+      toast({ title: "Photo updated", description: "Your profile photo has been updated" });
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err?.message || "Could not upload photo", variant: "destructive" });
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const handleAiBio = async () => {
+    setAiBioLoading(true);
+    try {
+      const interests = formData.interests || "";
+      const occupation = formData.occupation || "";
+      const displayName = formData.displayName || "Community Member";
+      const prompt = `Generate a short, engaging bio (2-3 sentences, max 200 chars) for a 9jatruth community member named ${displayName}. Occupation: ${occupation}. Interests: ${interests}. Make it personal and community-focused for a Nigerian neighborhood truth platform.`;
+      const res = await fetch("/api/ai/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, maxTokens: 200 }),
+      });
+      if (!res.ok) throw new Error("AI generation failed");
+      const data = await res.json();
+      if (data.text) {
+        setFormData({ ...formData, bio: data.text });
+        toast({ title: "AI bio generated", description: "Review and save your new bio" });
+      } else {
+        throw new Error("No text returned");
+      }
+    } catch (err: any) {
+      const fallbackBio = `Community member on 9jatruth${formData.occupation ? `, ${formData.occupation}` : ""}. Passionate about truth, transparency, and building better neighborhoods.`;
+      setFormData({ ...formData, bio: fallbackBio });
+      toast({ title: "Bio generated", description: "Using fallback template — edit as needed" });
+    } finally {
+      setAiBioLoading(false);
+    }
   };
 
   if (loading) {
@@ -634,6 +701,44 @@ function ProfileDetailsForm({ profile, loading }: { profile?: UserProfile; loadi
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
+        {/* Profile Photo Upload */}
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Avatar className="h-20 w-20">
+              <AvatarImage src={photoUrl || profile?.avatarUrl || undefined} alt="Profile photo" />
+              <AvatarFallback className="text-xl">
+                {(formData.displayName || "U").slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={photoUploading}
+              className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shadow-md disabled:opacity-50"
+              title="Upload photo"
+            >
+              {photoUploading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Camera className="h-3.5 w-3.5" />
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoUpload}
+              className="hidden"
+            />
+          </div>
+          <div className="flex-1">
+            <p className="text-xs font-medium">Profile Photo</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              Upload a profile photo (max 10MB). JPG, PNG, WebP supported.
+            </p>
+          </div>
+        </div>
+
         <p className="text-xs text-muted-foreground">
           These fields are optional. Fill them in to help others in the community know you better.
         </p>
@@ -654,7 +759,24 @@ function ProfileDetailsForm({ profile, loading }: { profile?: UserProfile; loadi
 
         {/* Bio */}
         <div className="space-y-1.5">
-          <Label htmlFor="bio" className="text-xs">Bio</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="bio" className="text-xs">Bio</Label>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={handleAiBio}
+              disabled={aiBioLoading}
+              className="h-6 text-[10px] gap-1 text-primary"
+            >
+              {aiBioLoading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Sparkles className="h-3 w-3" />
+              )}
+              AI Generate
+            </Button>
+          </div>
           <Textarea
             id="bio"
             value={formData.bio}
