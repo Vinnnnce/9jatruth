@@ -29,7 +29,6 @@ import { FeedComments } from "@/components/feed-comments";
 import { PollCard } from "@/components/poll-card";
 import { motion } from "framer-motion";
 import { NIGERIA_STATES, getLgasForState } from "@/lib/nigeria-locations";
-import { CommunityFeeds } from "@/components/community-feeds";
 import { QuestionnairePopup } from "@/components/questionnaire/questionnaire-popup";
 import { TruthPostCard } from "@/components/truth-post-card";
 import { GiftModal } from "@/components/gift-modal";
@@ -556,10 +555,10 @@ export default function Feeds() {
   const useNearby = sortBy === "nearest" && !!userLoc && (nearbyTruths?.truths?.length ?? 0) > 0;
   const sourceTruths = useNearby ? (nearbyTruths?.truths ?? []) : (recentTruths?.truths ?? []);
 
-  // Filter by selected category
-  const filteredTruths = categoryFilter === "all"
-    ? sourceTruths
-    : sourceTruths.filter((t: any) => t.category === categoryFilter);
+  // Filter by selected category and remove corrupted content ([object Object])
+  const filteredTruths = sourceTruths
+    .filter((t: any) => !String(t.content || "").includes("[object Object]"))
+    .filter((t: any) => categoryFilter === "all" ? true : t.category === categoryFilter);
 
   // Sort based on feed mode
   const sortedTruths = [...filteredTruths].sort((a: any, b: any) => {
@@ -590,9 +589,6 @@ export default function Feeds() {
           <SummaryCard icon={ShieldCheck} label="Avg Safety Index" value={summary?.avgSafetyIndex ?? 0} colorClass="text-neon-green" loading={!summary} />
           <SummaryCard icon={Gauge} label="Avg Price Index" value={summary?.avgPriceIndex ?? 0} colorClass="text-purple-glow" loading={!summary} />
         </div>
-
-        {/* ─── Community Feeds System (Tabs + Cascading Filters + Post Creation) ─── */}
-        <CommunityFeeds />
 
         {/* ─── Category Filter Chips ─── */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
