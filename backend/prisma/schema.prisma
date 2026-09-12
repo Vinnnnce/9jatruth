@@ -1,0 +1,491 @@
+// 9jatruth Prisma schema
+// Database: PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────
+
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum OfficeLevel {
+  FEDERAL
+  STATE
+  LOCAL
+}
+
+enum ElectionStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum GeoScopeType {
+  NATIONAL
+  STATE
+  LGA
+  WARD
+  COMMUNITY
+}
+
+enum ReactionType {
+  LIKE
+  DISLIKE
+  SUPPORT
+  OPPOSE
+}
+
+enum PollStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+}
+
+enum FactCheckStatus {
+  TRUE
+  FALSE
+  MIXED
+  UNVERIFIED
+}
+
+enum NewsCategory {
+  POLITICS
+  GOVERNANCE
+  ELECTIONS
+  SECURITY
+  ECONOMY
+  SOCIAL
+  INFRASTRUCTURE
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+enum ReportTargetType {
+  POST
+  COMMENT
+  USER
+  CANDIDATE
+}
+
+enum NotificationType {
+  COMMENT
+  REACTION
+  MENTION
+  FACT_CHECK
+  POLL
+  SYSTEM
+  REPORT
+}
+
+// ─── User ────────────────────────────────────────────────
+
+model User {
+  id                String            @id @default(cuid())
+  name              String
+  username          String            @unique
+  email             String            @unique
+  phone             String?           @unique
+  passwordHash      String
+  roles             Role[]            @default([USER])
+  avatarUrl         String?
+  bio               String?
+  verificationStatus VerificationStatus @default(UNVERIFIED)
+  countryId         String?
+  stateId           String?
+  lgaId             String?
+  wardId            String?
+  communityId       String?
+  refreshTokenHash  String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  country           Country?          @relation(fields: [countryId], references: [id])
+  state             State?            @relation(fields: [stateId], references: [id])
+  lga               LGA?              @relation(fields: [lgaId], references: [id])
+  ward              Ward?             @relation(fields: [wardId], references: [id])
+  community         Community?        @relation(fields: [communityId], references: [id])
+
+  posts             Post[]
+  comments          Comment[]
+  reactions         Reaction[]
+  polls             Poll[]
+  pollVotes         PollVote[]
+  reports           Report[]
+  notifications     Notification[]
+
+  @@index([countryId])
+  @@index([stateId])
+  @@index([lgaId])
+  @@index([wardId])
+  @@index([communityId])
+  @@index([createdAt])
+  @@index([email])
+  @@index([username])
+  @@map("users")
+}
+
+// ─── Geo ─────────────────────────────────────────────────
+
+model Country {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  code      String   @unique
+  createdAt DateTime @default(now())
+
+  states    State[]
+  users     User[]
+
+  @@map("countries")
+}
+
+model State {
+  id        String   @id @default(cuid())
+  name      String
+  countryId String
+  createdAt DateTime @default(now())
+
+  country   Country  @relation(fields: [countryId], references: [id])
+  lgas      LGA[]
+  users     User[]
+
+  @@unique([name, countryId])
+  @@index([countryId])
+  @@map("states")
+}
+
+model LGA {
+  id        String   @id @default(cuid())
+  name      String
+  stateId   String
+  createdAt DateTime @default(now())
+
+  state     State    @relation(fields: [stateId], references: [id])
+  wards     Ward[]
+  users     User[]
+
+  @@unique([name, stateId])
+  @@index([stateId])
+  @@map("lgas")
+}
+
+model Ward {
+  id          String     @id @default(cuid())
+  name        String
+  lgaId       String
+  createdAt   DateTime   @default(now())
+
+  lga         LGA        @relation(fields: [lgaId], references: [id])
+  communities Community[]
+  users       User[]
+
+  @@unique([name, lgaId])
+  @@index([lgaId])
+  @@map("wards")
+}
+
+model Community {
+  id        String   @id @default(cuid())
+  name      String
+  wardId    String
+  createdAt DateTime @default(now())
+
+  ward      Ward     @relation(fields: [wardId], references: [id])
+  users     User[]
+
+  @@unique([name, wardId])
+  @@index([wardId])
+  @@map("communities")
+}
+
+// ─── Politics ────────────────────────────────────────────
+
+model Party {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  acronym      String   @unique
+  logoUrl      String?
+  ideology     String?
+  regionFocus String?
+  createdAt    DateTime @default(now())
+
+  candidates   Candidate[]
+
+  @@map("parties")
+}
+
+model Office {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  level     OfficeLevel
+  createdAt DateTime   @default(now())
+
+  candidates Candidate[]
+
+  @@map("offices")
+}
+
+model Candidate {
+  id         String   @id @default(cuid())
+  name       String
+  partyId    String
+  officeId   String
+  bio        String?
+  manifesto  String?
+  mediaLinks Json?
+  createdAt  DateTime @default(now())
+
+  party      Party    @relation(fields: [partyId], references: [id])
+  office     Office   @relation(fields: [officeId], references: [id])
+
+  @@index([partyId])
+  @@index([officeId])
+  @@map("candidates")
+}
+
+model Election {
+  id              String         @id @default(cuid())
+  name            String
+  date            DateTime
+  level           OfficeLevel
+  geoScope        String?
+  officesInvolved Json?
+  status          ElectionStatus @default(UPCOMING)
+  createdAt       DateTime       @default(now())
+
+  @@index([date])
+  @@index([status])
+  @@map("elections")
+}
+
+// ─── Feed / Posts ────────────────────────────────────────
+
+model Post {
+  id            String       @id @default(cuid())
+  authorId      String
+  geoScopeType  GeoScopeType @default(NATIONAL)
+  stateId       String?
+  lgaId         String?
+  wardId        String?
+  communityId   String?
+  title         String
+  body          String
+  media         Json?
+  tags          Json?
+  truthScore    Int?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  author        User         @relation(fields: [authorId], references: [id])
+  comments      Comment[]
+  reactions     Reaction[]
+  factChecks    FactCheckItem[]
+  truthScores   TruthScore[]
+
+  @@index([authorId])
+  @@index([geoScopeType])
+  @@index([stateId])
+  @@index([lgaId])
+  @@index([wardId])
+  @@index([communityId])
+  @@index([createdAt])
+  @@index([truthScore])
+  @@map("posts")
+}
+
+model Comment {
+  id              String   @id @default(cuid())
+  postId          String
+  authorId        String
+  body            String
+  parentCommentId String?
+  createdAt       DateTime @default(now())
+
+  post            Post     @relation(fields: [postId], references: [id])
+  author          User     @relation(fields: [authorId], references: [id])
+  parentComment   Comment? @relation("CommentReplies", fields: [parentCommentId], references: [id])
+  replies         Comment[] @relation("CommentReplies")
+
+  @@index([postId])
+  @@index([authorId])
+  @@index([parentCommentId])
+  @@index([createdAt])
+  @@map("comments")
+}
+
+model Reaction {
+  id        String       @id @default(cuid())
+  postId    String
+  userId    String
+  type      ReactionType
+  createdAt DateTime     @default(now())
+
+  post      Post         @relation(fields: [postId], references: [id])
+  user      User         @relation(fields: [userId], references: [id])
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+  @@index([type])
+  @@map("reactions")
+}
+
+// ─── Polls ───────────────────────────────────────────────
+
+model Poll {
+  id            String       @id @default(cuid())
+  question      String
+  options       Json
+  geoScopeType  GeoScopeType @default(NATIONAL)
+  stateId       String?
+  lgaId         String?
+  wardId        String?
+  communityId   String?
+  startAt       DateTime
+  endAt         DateTime
+  createdAt     DateTime     @default(now())
+
+  votes         PollVote[]
+  users         User[]
+
+  @@index([geoScopeType])
+  @@index([stateId])
+  @@index([lgaId])
+  @@index([startAt])
+  @@index([endAt])
+  @@map("polls")
+}
+
+model PollVote {
+  id        String   @id @default(cuid())
+  pollId    String
+  userId    String
+  optionId  String
+  createdAt DateTime @default(now())
+
+  poll      Poll     @relation(fields: [pollId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([pollId, userId])
+  @@index([pollId])
+  @@index([userId])
+  @@index([optionId])
+  @@map("poll_votes")
+}
+
+// ─── Fact Check ─────────────────────────────────────────
+
+model FactCheckItem {
+  id            String          @id @default(cuid())
+  relatedPostId String
+  status        FactCheckStatus
+  sources       Json?
+  summary       String?
+  createdAt     DateTime        @default(now())
+
+  post          Post            @relation(fields: [relatedPostId], references: [id])
+
+  @@index([relatedPostId])
+  @@index([status])
+  @@map("fact_check_items")
+}
+
+model TruthScore {
+  id               String   @id @default(cuid())
+  postId           String
+  score            Int
+  algorithmMetadata Json?
+  createdAt        DateTime @default(now())
+
+  post             Post     @relation(fields: [postId], references: [id])
+
+  @@unique([postId])
+  @@index([postId])
+  @@index([score])
+  @@map("truth_scores")
+}
+
+// ─── News ────────────────────────────────────────────────
+
+model NewsArticle {
+  id           String       @id @default(cuid())
+  source       String
+  title        String
+  description  String?
+  url          String       @unique
+  imageUrl     String?
+  publishedAt  DateTime?
+  geoScopeType GeoScopeType @default(NATIONAL)
+  stateId      String?
+  tags         Json?
+  category     NewsCategory @default(POLITICS)
+  createdAt    DateTime     @default(now())
+
+  @@index([publishedAt])
+  @@index([category])
+  @@index([stateId])
+  @@index([geoScopeType])
+  @@map("news_articles")
+}
+
+// ─── Reports ─────────────────────────────────────────────
+
+model Report {
+  id         String         @id @default(cuid())
+  reporterId String
+  targetType ReportTargetType
+  targetId   String
+  reason     String
+  status     ReportStatus  @default(PENDING)
+  createdAt  DateTime       @default(now())
+
+  reporter   User           @relation(fields: [reporterId], references: [id])
+
+  @@index([reporterId])
+  @@index([targetType, targetId])
+  @@index([status])
+  @@map("reports")
+}
+
+// ─── Notifications ───────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user      User             @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+  @@map("notifications")
+}

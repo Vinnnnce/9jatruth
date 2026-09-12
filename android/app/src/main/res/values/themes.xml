@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme (Material3) -->
+    <style name="Theme.NinejaTruth" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/nigeria_green</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowBackground">@color/white</item>
+    </style>
+
+    <!-- Splash screen theme -->
+    <style name="Theme.NinejaTruth.Splash" parent="Theme.NinejaTruth">
+        <item name="android:windowBackground">@color/nigeria_green</item>
+    </style>
+</resources>

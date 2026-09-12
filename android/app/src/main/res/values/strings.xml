@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">9jaTruth</string>
+    <string name="app_tagline">Truth. Accountability. Nigeria.</string>
+
+    <!-- Bottom Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_politics">Politics</string>
+    <string name="nav_feeds">Feeds</string>
+    <string name="nav_news">News</string>
+    <string name="nav_profile">Profile</string>
+
+    <!-- Auth -->
+    <string name="login_title">Welcome Back</string>
+    <string name="login_subtitle">Sign in to continue to 9jaTruth</string>
+    <string name="register_title">Create Account</string>
+    <string name="register_subtitle">Join the movement for truth in Nigeria</string>
+    <string name="email_label">Email Address</string>
+    <string name="password_label">Password</string>
+    <string name="full_name_label">Full Name</string>
+    <string name="phone_label">Phone Number</string>
+    <string name="username_label">Username</string>
+    <string name="login_button">Sign In</string>
+    <string name="register_button">Create Account</string>
+    <string name="no_account">Don\'t have an account? </string>
+    <string name="have_account">Already have an account? </string>
+    <string name="sign_up">Sign Up</string>
+    <string name="sign_in">Sign In</string>
+    <string name="onboarding_title">Welcome to 9jaTruth</string>
+    <string name="onboarding_subtitle">Select your location to get started</string>
+    <string name="select_state">Select State</string>
+    <string name="select_lga">Select LGA</string>
+    <string name="select_ward">Select Ward</string>
+    <string name="continue_button">Continue</string>
+    <string name="skip">Skip</string>
+
+    <!-- Home -->
+    <string name="hero_title">Know Your Leaders.\nHold Them Accountable.</string>
+    <string name="hero_subtitle">Track promises. Verify facts. Vote wisely.</string>
+    <string name="quick_action_politics">Politics</string>
+    <string name="quick_action_news">News</string>
+    <string name="quick_action_polls">Polls</string>
+    <string name="quick_action_feed">Feed</string>
+    <string name="section_top_stories">Top Stories</string>
+    <string name="section_upcoming_elections">Upcoming Elections</string>
+    <string name="section_trending">Trending Topics</string>
+    <string name="section_ask_ai">Ask 9jaTruth AI</string>
+    <string name="ai_assistant_title">9jaTruth AI Assistant</string>
+    <string name="ai_assistant_subtitle">Ask about politicians, parties, elections, or civic duties</string>
+
+    <!-- Politics -->
+    <string name="tab_parties">Parties</string>
+    <string name="tab_candidates">Candidates</string>
+    <string name="tab_offices">Offices</string>
+    <string name="tab_elections">Elections</string>
+
+    <!-- Feeds -->
+    <string name="feed_title">Community Feed</string>
+    <string name="create_post_title">Create Post</string>
+    <string name="post_title_hint">Post Title</string>
+    <string name="post_content_hint">Share your thoughts…</string>
+    <string name="post_tags_hint">Tags (comma separated)</string>
+    <string name="publish_button">Publish</string>
+
+    <!-- News -->
+    <string name="news_title">News</string>
+    <string name="news_all">All</string>
+    <string name="news_politics">Politics</string>
+    <string name="news_governance">Governance</string>
+    <string name="news_elections">Elections</string>
+    <string name="news_fact_check">Fact Check</string>
+
+    <!-- Profile -->
+    <string name="profile_title">Profile</string>
+    <string name="settings_title">Settings</string>
+    <string name="edit_profile">Edit Profile</string>
+    <string name="logout">Log Out</string>
+    <string name="about">About</string>
+    <string name="notifications">Notifications</string>
+    <string name="dark_mode">Dark Mode</string>
+    <string name="language">Language</string>
+
+    <!-- Assistant -->
+    <string name="assistant_title">AI Assistant</string>
+    <string name="assistant_hint">Ask about Nigerian politics…</string>
+    <string name="assistant_suggestion_1">Who are the candidates in my state?</string>
+    <string name="assistant_suggestion_2">What promises has my governor made?</string>
+    <string name="assistant_suggestion_3">When is the next election?</string>
+    <string name="assistant_suggestion_4">How do I register to vote?</string>
+
+    <!-- Common -->
+    <string name="loading">Loading…</string>
+    <string name="error_generic">Something went wrong. Please try again.</string>
+    <string name="retry">Retry</string>
+    <string name="empty_title">Nothing here yet</string>
+    <string name="empty_subtitle">Check back later for updates</string>
+    <string name="truth_score">Truth Score</string>
+    <string name="verified">Verified</string>
+    <string name="reactions">Reactions</string>
+    <string name="comments">Comments</string>
+    <string name="content_description_back">Back</string>
+</resources>

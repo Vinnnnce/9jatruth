@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  # ─── Databases & Cache ──────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: 9jatruth_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-9jatruth}
+      POSTGRES_USER: ${POSTGRES_USER:-9jatruth}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-9jatruth_secret}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-9jatruth}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: 9jatruth_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: 9jatruth_minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio_secret}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Backend API ─────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: 9jatruth_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-9jatruth}:${POSTGRES_PASSWORD:-9jatruth_secret}@postgres:5432/${POSTGRES_DB:-9jatruth}?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change_me_access_secret}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change_me_refresh_secret}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-900}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-604800}
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minio_secret}
+      S3_BUCKET: ${S3_BUCKET:-9jatruth-uploads}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      NEWS_API_KEY: ${NEWS_API_KEY:-}
+      PORT: 3001
+      NODE_ENV: production
+    ports:
+      - "3001:3001"
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed && node dist/main"
+
+  # ─── Admin Dashboard ─────────────────────────────────────────────────
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+    container_name: 9jatruth_admin
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: http://backend:3001
+    ports:
+      - "3002:80"
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
