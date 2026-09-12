@@ -208,7 +208,7 @@ function AppSidebar() {
       onMouseLeave={handleMouseLeave}
       onMouseEnter={handleMouseEnter}
     >
-      <SidebarHeader className="border-b border-sidebar-border px-4 h-16 flex flex-row items-center justify-center group-data-[collapsible=icon]:px-2">
+      <SidebarHeader className="app-header border-b border-sidebar-border px-4 h-16 flex flex-row items-center justify-center overflow-hidden group-data-[collapsible=icon]:px-2">
         <Link
           href="/"
           onClick={() => {
@@ -272,9 +272,17 @@ function AppSidebar() {
           <Link href="/faq" className="hover:underline">FAQ</Link>
         </div>
         <a
-          href="/manifest.webmanifest"
+          href="/downloads/9jatruth.apk"
           download
           className="mt-2 flex items-center gap-1.5 text-[10px] text-primary hover:underline group-data-[collapsible=icon]:hidden"
+        >
+          <Download className="h-3 w-3" />
+          Download Android App
+        </a>
+        <a
+          href="/manifest.webmanifest"
+          download
+          className="mt-1.5 flex items-center gap-1.5 text-[10px] text-primary hover:underline group-data-[collapsible=icon]:hidden"
           onClick={(e) => {
             e.preventDefault();
             if (typeof window !== "undefined" && "serviceWorker" in navigator) {
@@ -284,7 +292,7 @@ function AppSidebar() {
           }}
         >
           <Download className="h-3 w-3" />
-          Download App
+          Install Web App
         </a>
       </SidebarFooter>
     </Sidebar>
@@ -293,7 +301,7 @@ function AppSidebar() {
 
 function TopBar() {
   return (
-    <header className="flex items-center justify-between h-16 px-4 md:px-6 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-30">
+    <header className="app-header flex items-center justify-between h-16 px-4 md:px-6 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-40">
       <div className="flex items-center gap-2 md:gap-3">
         <SidebarTrigger className="md:hidden" />
         <SidebarTrigger className="hidden md:flex" />

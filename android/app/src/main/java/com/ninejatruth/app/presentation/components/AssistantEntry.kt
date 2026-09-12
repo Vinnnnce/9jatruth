@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.ninejatruth.app.presentation.theme.NigeriaGreen
 import com.ninejatruth.app.presentation.theme.NigeriaYellow
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssistantEntry(
     onClick: () -> Unit,

@@ -11,8 +11,8 @@ import retrofit2.http.PUT
 interface UserApi {
 
     @GET("users/me")
-    suspend fun getMe(): Response<ApiResponse<UserDto>>
+    suspend fun getMe(): Response<ApiResponse<UserDto, Any>>
 
     @PUT("users/me")
-    suspend fun updateMe(@Body request: UpdateUserRequest): Response<ApiResponse<UserDto>>
+    suspend fun updateMe(@Body request: UpdateUserRequest): Response<ApiResponse<UserDto, Any>>
 }

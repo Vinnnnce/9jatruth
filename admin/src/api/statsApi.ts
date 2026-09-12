@@ -3,17 +3,17 @@ import type { DashboardStats, PostsByStateData, UserGrowthData, TruthScoreDistri
 
 export const statsApi = {
   getDashboardStats: (): Promise<DashboardStats> =>
-    apiClient.get('/stats/dashboard'),
+    apiClient.get('/admin/stats'),
 
   getPostsByState: (): Promise<PostsByStateData[]> =>
-    apiClient.get('/stats/posts-by-state'),
+    apiClient.get('/admin/stats/posts-by-state'),
 
   getUserGrowth: (days = 30): Promise<UserGrowthData[]> =>
-    apiClient.get('/stats/user-growth', { params: { days } }),
+    apiClient.get('/admin/stats/user-growth', { params: { days } }),
 
   getTruthScoreDistribution: (): Promise<TruthScoreDistribution[]> =>
-    apiClient.get('/stats/truth-score-distribution'),
+    apiClient.get('/admin/stats/truth-score-distribution'),
 
   getTopReportedPosts: (limit = 10): Promise<any[]> =>
-    apiClient.get('/stats/top-reported-posts', { params: { limit } }),
+    apiClient.get('/admin/stats/top-reported-posts', { params: { limit } }),
 };

@@ -12,6 +12,7 @@ import com.ninejatruth.app.presentation.theme.CardShape
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ElectionCard(
     election: Election,

@@ -4,65 +4,65 @@ import type { Party, Candidate, Office, Election, PaginatedResponse, PaginationP
 export const politicsApi = {
   // Parties
   getParties: (params?: PaginationParams): Promise<PaginatedResponse<Party>> =>
-    apiClient.get('/politics/parties', { params }),
+    apiClient.get('/parties', { params }),
 
   getParty: (id: string): Promise<Party> =>
-    apiClient.get(`/politics/parties/${id}`),
+    apiClient.get(`/parties/${id}`),
 
   createParty: (data: Partial<Party>): Promise<Party> =>
-    apiClient.post('/politics/parties', data),
+    apiClient.post('/parties', data),
 
   updateParty: (id: string, data: Partial<Party>): Promise<Party> =>
-    apiClient.put(`/politics/parties/${id}`, data),
+    apiClient.put(`/parties/${id}`, data),
 
   deleteParty: (id: string): Promise<void> =>
-    apiClient.delete(`/politics/parties/${id}`),
+    apiClient.delete(`/parties/${id}`),
 
   // Candidates
   getCandidates: (params?: PaginationParams): Promise<PaginatedResponse<Candidate>> =>
-    apiClient.get('/politics/candidates', { params }),
+    apiClient.get('/candidates', { params }),
 
   getCandidate: (id: string): Promise<Candidate> =>
-    apiClient.get(`/politics/candidates/${id}`),
+    apiClient.get(`/candidates/${id}`),
 
   createCandidate: (data: Partial<Candidate>): Promise<Candidate> =>
-    apiClient.post('/politics/candidates', data),
+    apiClient.post('/candidates', data),
 
   updateCandidate: (id: string, data: Partial<Candidate>): Promise<Candidate> =>
-    apiClient.put(`/politics/candidates/${id}`, data),
+    apiClient.put(`/candidates/${id}`, data),
 
   deleteCandidate: (id: string): Promise<void> =>
-    apiClient.delete(`/politics/candidates/${id}`),
+    apiClient.delete(`/candidates/${id}`),
 
   // Offices
   getOffices: (params?: PaginationParams): Promise<PaginatedResponse<Office>> =>
-    apiClient.get('/politics/offices', { params }),
+    apiClient.get('/offices', { params }),
 
   getOffice: (id: string): Promise<Office> =>
-    apiClient.get(`/politics/offices/${id}`),
+    apiClient.get(`/offices/${id}`),
 
   createOffice: (data: Partial<Office>): Promise<Office> =>
-    apiClient.post('/politics/offices', data),
+    apiClient.post('/offices', data),
 
   updateOffice: (id: string, data: Partial<Office>): Promise<Office> =>
-    apiClient.put(`/politics/offices/${id}`, data),
+    apiClient.put(`/offices/${id}`, data),
 
   deleteOffice: (id: string): Promise<void> =>
-    apiClient.delete(`/politics/offices/${id}`),
+    apiClient.delete(`/offices/${id}`),
 
   // Elections
   getElections: (params?: PaginationParams): Promise<PaginatedResponse<Election>> =>
-    apiClient.get('/politics/elections', { params }),
+    apiClient.get('/elections', { params }),
 
   getElection: (id: string): Promise<Election> =>
-    apiClient.get(`/politics/elections/${id}`),
+    apiClient.get(`/elections/${id}`),
 
   createElection: (data: Partial<Election>): Promise<Election> =>
-    apiClient.post('/politics/elections', data),
+    apiClient.post('/elections', data),
 
   updateElection: (id: string, data: Partial<Election>): Promise<Election> =>
-    apiClient.put(`/politics/elections/${id}`, data),
+    apiClient.put(`/elections/${id}`, data),
 
   deleteElection: (id: string): Promise<void> =>
-    apiClient.delete(`/politics/elections/${id}`),
+    apiClient.delete(`/elections/${id}`),
 };

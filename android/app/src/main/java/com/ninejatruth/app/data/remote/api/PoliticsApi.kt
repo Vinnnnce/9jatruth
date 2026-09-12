@@ -16,10 +16,10 @@ interface PoliticsApi {
     suspend fun getParties(
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 20
-    ): Response<ApiResponse<List<PartyDto>>>
+    ): Response<ApiResponse<List<PartyDto>, Any>>
 
     @GET("parties/{id}")
-    suspend fun getParty(@Path("id") partyId: String): Response<ApiResponse<PartyDto>>
+    suspend fun getParty(@Path("id") partyId: String): Response<ApiResponse<PartyDto, Any>>
 
     @GET("candidates")
     suspend fun getCandidates(
@@ -28,23 +28,23 @@ interface PoliticsApi {
         @Query("partyId") partyId: String? = null,
         @Query("officeId") officeId: String? = null,
         @Query("stateId") stateId: String? = null
-    ): Response<ApiResponse<List<CandidateDto>>>
+    ): Response<ApiResponse<List<CandidateDto>, Any>>
 
     @GET("candidates/{id}")
-    suspend fun getCandidate(@Path("id") candidateId: String): Response<ApiResponse<CandidateDto>>
+    suspend fun getCandidate(@Path("id") candidateId: String): Response<ApiResponse<CandidateDto, Any>>
 
     @GET("offices")
-    suspend fun getOffices(): Response<ApiResponse<List<OfficeDto>>>
+    suspend fun getOffices(): Response<ApiResponse<List<OfficeDto>, Any>>
 
     @GET("offices/{id}")
-    suspend fun getOffice(@Path("id") officeId: String): Response<ApiResponse<OfficeDto>>
+    suspend fun getOffice(@Path("id") officeId: String): Response<ApiResponse<OfficeDto, Any>>
 
     @GET("elections")
     suspend fun getElections(
         @Query("status") status: String? = null,
         @Query("stateId") stateId: String? = null
-    ): Response<ApiResponse<List<ElectionDto>>>
+    ): Response<ApiResponse<List<ElectionDto>, Any>>
 
     @GET("elections/{id}")
-    suspend fun getElection(@Path("id") electionId: String): Response<ApiResponse<ElectionDto>>
+    suspend fun getElection(@Path("id") electionId: String): Response<ApiResponse<ElectionDto, Any>>
 }

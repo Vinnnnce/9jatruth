@@ -15,6 +15,7 @@ import coil.compose.AsyncImage
 import com.ninejatruth.app.domain.model.Party
 import com.ninejatruth.app.presentation.theme.CardShape
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PartyCard(
     party: Party,

@@ -19,5 +19,5 @@ interface NewsApi {
     ): Response<ApiResponse<List<NewsArticleDto>, PaginationMeta>>
 
     @GET("news/{id}")
-    suspend fun getNewsArticle(@Path("id") articleId: String): Response<ApiResponse<NewsArticleDto>>
+    suspend fun getNewsArticle(@Path("id") articleId: String): Response<ApiResponse<NewsArticleDto, Any>>
 }

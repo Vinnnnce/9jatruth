@@ -317,6 +317,32 @@ html {
   z-index: 40;
 }
 
+/* Ensure header/logo stays above loading skeletons and content */
+[data-slot="sidebar-header"],
+.app-header {
+  position: relative;
+  z-index: 40;
+}
+
+/* Logo sizing — fixed height, never overlap header */
+.header-logo {
+  height: 48px;
+  max-width: 160px;
+  object-fit: contain;
+}
+
+/* Loading skeleton must stay below header and within content area */
+.page-skeleton {
+  position: relative;
+  z-index: 1;
+}
+
+.page-skeleton.fullscreen {
+  position: relative;
+  padding-top: 0;
+  z-index: 1;
+}
+
 /* Smooth sidebar transition */
 [data-sidebar="sidebar"] {
   transition: transform 0.3s ease, width 0.3s ease;

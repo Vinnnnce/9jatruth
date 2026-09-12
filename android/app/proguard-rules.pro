@@ -37,3 +37,9 @@
 -keepclasseswithmembers class * {
     @dagger.hilt.android.AndroidEntryPoint <methods>;
 }
+
+# Optional Error Prone annotations referenced by Tink through AndroidX Security.
+-dontwarn com.google.errorprone.annotations.CanIgnoreReturnValue
+-dontwarn com.google.errorprone.annotations.CheckReturnValue
+-dontwarn com.google.errorprone.annotations.Immutable
+-dontwarn com.google.errorprone.annotations.RestrictedApi

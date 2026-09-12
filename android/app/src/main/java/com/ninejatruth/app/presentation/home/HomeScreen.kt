@@ -4,6 +4,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.filled.HowToVote
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,22 +81,22 @@ fun HomeScreen(
             QuickActionBar(
                 actions = listOf(
                     QuickAction(
-                        icon = androidx.compose.material.icons.Icons.Filled.AccountBalance,
+                        icon = Icons.Filled.AccountBalance,
                         label = "Politics",
                         onClick = onNavigateToPolitics
                     ),
                     QuickAction(
-                        icon = androidx.compose.material.icons.Icons.Filled.Article,
+                        icon = Icons.Filled.Article,
                         label = "News",
                         onClick = onNavigateToNews
                     ),
                     QuickAction(
-                        icon = androidx.compose.material.icons.Icons.Filled.HowToVote,
+                        icon = Icons.Filled.HowToVote,
                         label = "Polls",
                         onClick = onNavigateToFeeds
                     ),
                     QuickAction(
-                        icon = androidx.compose.material.icons.Icons.Filled.Forum,
+                        icon = Icons.Filled.Forum,
                         label = "Feed",
                         onClick = onNavigateToFeeds
                     )

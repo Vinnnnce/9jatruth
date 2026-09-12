@@ -26,20 +26,20 @@ interface FeedApi {
     ): Response<ApiResponse<List<PostDto>, PaginationMeta>>
 
     @GET("feeds/{id}")
-    suspend fun getPost(@Path("id") postId: String): Response<ApiResponse<PostDto>>
+    suspend fun getPost(@Path("id") postId: String): Response<ApiResponse<PostDto, Any>>
 
     @POST("feeds")
-    suspend fun createPost(@Body request: CreatePostRequest): Response<ApiResponse<PostDto>>
+    suspend fun createPost(@Body request: CreatePostRequest): Response<ApiResponse<PostDto, Any>>
 
     @POST("feeds/{id}/comments")
     suspend fun createComment(
         @Path("id") postId: String,
         @Body request: CreateCommentRequest
-    ): Response<ApiResponse<CommentDto>>
+    ): Response<ApiResponse<CommentDto, Any>>
 
     @POST("feeds/{id}/reactions")
     suspend fun createReaction(
         @Path("id") postId: String,
         @Body request: CreateReactionRequest
-    ): Response<ApiResponse<ReactionDto>>
+    ): Response<ApiResponse<ReactionDto, Any>>
 }

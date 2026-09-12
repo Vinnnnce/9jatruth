@@ -22,6 +22,7 @@ import com.ninejatruth.app.presentation.theme.ButtonShape
 import com.ninejatruth.app.presentation.theme.NigeriaGreen
 import com.ninejatruth.app.presentation.theme.NigeriaGreenDark
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(
     onRegisterSuccess: () -> Unit,

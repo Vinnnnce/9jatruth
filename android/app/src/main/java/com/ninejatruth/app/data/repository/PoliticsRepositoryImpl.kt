@@ -243,6 +243,9 @@ class PoliticsRepositoryImpl @Inject constructor(
         ideology = ideology,
         chairman = chairman,
         headquarters = headquarters,
-        truthScore = truthScore
+        website = null,
+        motto = null,
+        truthScore = truthScore,
+        memberCount = null
     )
 }

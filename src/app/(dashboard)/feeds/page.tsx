@@ -287,7 +287,7 @@ function CompactTruthCard({
 
 function FeedsLoadingSkeleton() {
   return (
-    <div className="min-h-screen pb-8 bg-background text-foreground">
+    <div className="min-h-[calc(100dvh-4rem)] pb-8 bg-background text-foreground relative z-0">
       <div className="max-w-7xl mx-auto px-4 md:px-6 pt-4 space-y-4">
         {/* Summary cards skeleton */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -580,7 +580,7 @@ export default function Feeds() {
   const categoryOrder = ["power", "fuel", "traffic", "prices", "safety", "security", "other"];
 
   return (
-    <div className="min-h-screen pb-8 bg-background text-foreground">
+    <div className="min-h-[calc(100dvh-4rem)] pb-8 bg-background text-foreground relative z-0">
       <div className="max-w-7xl mx-auto px-4 md:px-6 pt-4 space-y-5">
         {/* ─── Summary Grid (responsive: 2 cols mobile, 4 cols desktop) ─── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">

@@ -12,14 +12,14 @@ import retrofit2.http.Path
 interface PollsApi {
 
     @GET("polls")
-    suspend fun getPolls(): Response<ApiResponse<List<PollDto>>>
+    suspend fun getPolls(): Response<ApiResponse<List<PollDto>, Any>>
 
     @GET("polls/{id}")
-    suspend fun getPoll(@Path("id") pollId: String): Response<ApiResponse<PollDto>>
+    suspend fun getPoll(@Path("id") pollId: String): Response<ApiResponse<PollDto, Any>>
 
     @POST("polls/{id}/vote")
     suspend fun votePoll(
         @Path("id") pollId: String,
         @Body request: VoteRequest
-    ): Response<ApiResponse<PollDto>>
+    ): Response<ApiResponse<PollDto, Any>>
 }

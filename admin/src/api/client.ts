@@ -1,10 +1,12 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+// Support both VITE_API_URL (legacy) and VITE_API_BASE_URL (new)
+const API_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '/api';
 
 export const apiClient = axios.create({
   baseURL: API_URL,
   timeout: 30000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },

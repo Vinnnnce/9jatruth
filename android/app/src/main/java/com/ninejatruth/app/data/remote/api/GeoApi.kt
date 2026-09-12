@@ -12,14 +12,14 @@ import retrofit2.http.Path
 interface GeoApi {
 
     @GET("geo/states")
-    suspend fun getStates(): Response<ApiResponse<List<StateDto>>>
+    suspend fun getStates(): Response<ApiResponse<List<StateDto>, Any>>
 
     @GET("geo/states/{stateId}/lgas")
-    suspend fun getLgas(@Path("stateId") stateId: String): Response<ApiResponse<List<LgaDto>>>
+    suspend fun getLgas(@Path("stateId") stateId: String): Response<ApiResponse<List<LgaDto>, Any>>
 
     @GET("geo/lgas/{lgaId}/wards")
-    suspend fun getWards(@Path("lgaId") lgaId: String): Response<ApiResponse<List<WardDto>>>
+    suspend fun getWards(@Path("lgaId") lgaId: String): Response<ApiResponse<List<WardDto>, Any>>
 
     @GET("geo/wards/{wardId}/communities")
-    suspend fun getCommunities(@Path("wardId") wardId: String): Response<ApiResponse<List<CommunityDto>>>
+    suspend fun getCommunities(@Path("wardId") wardId: String): Response<ApiResponse<List<CommunityDto>, Any>>
 }

@@ -38,6 +38,12 @@ coverage/
 /android/local.properties
 /android/captures/
 /android/.cxx/
+/android/keystore.properties
+/android/app/9jatruth-release.jks
+/android/app/*.jks
+/android/app/*.keystore
+*.jks
+*.keystore
 
 # Prisma
 /backend/prisma/migrations/dev.db*

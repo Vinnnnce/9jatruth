@@ -33,6 +33,7 @@ fun QuickActionBar(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun QuickActionButton(action: QuickAction) {
     Column(

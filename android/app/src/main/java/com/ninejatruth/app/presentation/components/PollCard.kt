@@ -111,7 +111,7 @@ private fun PollOptionRow(
                     .height(36.dp)
             ) {
                 LinearProgressIndicator(
-                    progress = { (option.percentage / 100).toFloat() },
+                    progress = option.percentage.toFloat() / 100f,
                     modifier = Modifier.fillMaxSize(),
                     color = color,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant
