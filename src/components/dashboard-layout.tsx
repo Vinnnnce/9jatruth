@@ -372,7 +372,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <SidebarInset>
         <TopBar />
         <NewUserTour />
-        <main className="flex-1 overflow-y-auto scrollbar-thin">{children}</main>
+        <main className="flex-1 overflow-y-auto scrollbar-thin pb-32">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );

@@ -13,8 +13,14 @@ export default function CookieConsent() {
   useEffect(() => {
     const consent = localStorage.getItem(STORAGE_KEY);
     if (!consent) {
-      const timer = setTimeout(() => setVisible(true), 1500);
-      return () => clearTimeout(timer);
+      const showTimer = setTimeout(() => setVisible(true), 1500);
+      // Auto-dismiss after 15 seconds if no action taken
+      const dismissTimer = setTimeout(() => {
+        localStorage.setItem(STORAGE_KEY, "declined");
+        setClosing(true);
+        setTimeout(() => setVisible(false), 400);
+      }, 16000);
+      return () => { clearTimeout(showTimer); clearTimeout(dismissTimer); };
     }
   }, []);
 
