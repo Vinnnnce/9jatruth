@@ -1112,7 +1112,7 @@ function NeighborhoodSnapshotCard({
           <p className="text-[10px] py-2 text-muted-foreground">No reports yet</p>
         ) : (
           <div className="space-y-0.5">
-            {card.recentReports.map((report) => {
+            {card.recentReports.filter((report: any) => !String(report.content || "").includes("[object Object]")).map((report) => {
               const meta = CATEGORY_META[report.category] || CATEGORY_META.safety;
               const Icon = meta.icon;
               return (
