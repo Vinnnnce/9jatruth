@@ -83,10 +83,9 @@ class MainActivity : ComponentActivity() {
                         NavGraph(
                             navController = navController,
                             startDestination = startDestination,
+                            isGuest = authState.isGuest,
                             onAuthRequired = {
-                                if (authState.isGuest) {
-                                    showAuthRequiredMessage = true
-                                }
+                                showAuthRequiredMessage = true
                             }
                         )
                     }

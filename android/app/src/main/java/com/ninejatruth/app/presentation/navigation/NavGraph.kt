@@ -32,6 +32,7 @@ import com.ninejatruth.app.presentation.profile.SettingsScreen
 fun NavGraph(
     navController: NavHostController,
     startDestination: String,
+    isGuest: Boolean = false,
     onAuthRequired: () -> Unit = {}
 ) {
     NavHost(
@@ -114,8 +115,8 @@ fun NavGraph(
             FeedsScreen(
                 onNavigateToPost = { navController.navigate(Routes.postDetail(it)) },
                 onNavigateToCreatePost = {
-                    onAuthRequired()
-                    navController.navigate(Routes.CREATE_POST)
+                    if (isGuest) onAuthRequired()
+                    else navController.navigate(Routes.CREATE_POST)
                 }
             )
         }
@@ -123,8 +124,8 @@ fun NavGraph(
         composable(Routes.NEWS) {
             NewsScreen(
                 onNavigateToNewsDetail = {
-                    onAuthRequired()
-                    navController.navigate(Routes.newsDetail(it))
+                    if (isGuest) onAuthRequired()
+                    else navController.navigate(Routes.newsDetail(it))
                 }
             )
         }
