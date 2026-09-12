@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, parseApiError } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +22,7 @@ import {
   Send, CheckCircle2, Info, MapPin, LocateFixed, Building2, Navigation, Coins, ShieldCheck, User,
   Clock, BarChart3, Plus, X, Upload, Image as ImageIcon, Video, RotateCw, RotateCcw, Crop,
   Wand2, Trash2, Film, AlertTriangle, Loader2, Scissors, Sun, Contrast, Palette, Rainbow,
-  ClipboardList, FlipHorizontal, VolumeX, Gauge,
+  ClipboardList, FlipHorizontal, VolumeX, Gauge, Mic, Square, Play, Pause, AudioLines,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Slider } from "@/components/ui/slider";
@@ -144,6 +144,18 @@ export default function SubmitTruth() {
 
   // Media upload
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+
+  // Voice note recording
+  const [voiceRecording, setVoiceRecording] = useState(false);
+  const [voiceRecorder, setVoiceRecorder] = useState<MediaRecorder | null>(null);
+  const [voiceChunks, setVoiceChunks] = useState<Blob[]>([]);
+  const [voiceDuration, setVoiceDuration] = useState(0);
+  const [voiceUploading, setVoiceUploading] = useState(false);
+  const [voiceUrl, setVoiceUrl] = useState<string | null>(null);
+  const [voicePlaying, setVoicePlaying] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const voiceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -624,6 +636,90 @@ export default function SubmitTruth() {
     });
   };
 
+  // ── Voice note helpers ──
+
+  const startVoiceRecording = async () => {
+    setVoiceError(null);
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setVoiceError("Voice recording is not supported on this device");
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+      const recorder = new MediaRecorder(stream, { mimeType });
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: mimeType });
+        stream.getTracks().forEach((t) => t.stop());
+        setVoiceChunks(chunks);
+        // Upload the voice note
+        setVoiceUploading(true);
+        try {
+          const file = new File([blob], `voice-${Date.now()}.${mimeType === "audio/webm" ? "webm" : "mp4"}`, { type: mimeType });
+          const fd = new FormData();
+          fd.append("file", file);
+          const res = await fetch("/api/media/upload", { method: "POST", body: fd });
+          const data = await res.json();
+          if (!res.ok || !data.url) throw new Error(data.message || "Upload failed");
+          setVoiceUrl(data.url);
+          toast({ title: "Voice note ready", description: "Your voice note has been recorded" });
+        } catch (err: any) {
+          setVoiceError(err?.message || "Failed to upload voice note");
+          toast({ title: "Voice upload failed", description: err?.message, variant: "destructive" });
+        } finally {
+          setVoiceUploading(false);
+        }
+      };
+      recorder.start();
+      setVoiceRecorder(recorder);
+      setVoiceRecording(true);
+      setVoiceDuration(0);
+      voiceTimerRef.current = setInterval(() => {
+        setVoiceDuration((d) => d + 1);
+      }, 1000);
+    } catch (err: any) {
+      setVoiceError(err?.message || "Could not access microphone");
+      toast({ title: "Microphone access denied", description: "Please allow microphone access to record voice notes", variant: "destructive" });
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (voiceRecorder && voiceRecorder.state !== "inactive") {
+      voiceRecorder.stop();
+    }
+    setVoiceRecording(false);
+    if (voiceTimerRef.current) {
+      clearInterval(voiceTimerRef.current);
+      voiceTimerRef.current = null;
+    }
+  };
+
+  const removeVoiceNote = () => {
+    setVoiceUrl(null);
+    setVoiceChunks([]);
+    setVoiceDuration(0);
+    setVoiceError(null);
+  };
+
+  const toggleVoicePlayback = () => {
+    if (!voiceUrl) return;
+    if (voicePlaying) {
+      voiceAudioRef.current?.pause();
+      setVoicePlaying(false);
+    } else {
+      if (!voiceAudioRef.current) {
+        voiceAudioRef.current = new Audio(voiceUrl);
+        voiceAudioRef.current.onended = () => setVoicePlaying(false);
+      }
+      voiceAudioRef.current.play();
+      setVoicePlaying(true);
+    }
+  };
+
   const handleSubmit = () => {
     if (!neighborhoodInput.trim() || !category || !content.trim()) {
       toast({
@@ -675,6 +771,10 @@ export default function SubmitTruth() {
       reportLat: lat ?? undefined,
       reportLng: lng ?? undefined,
       locationSource: lat ? "gps" : "ip",
+      mediaUrls: [
+        ...mediaItems.filter(m => m.uploadedUrl).map(m => m.uploadedUrl!),
+        ...(voiceUrl ? [voiceUrl] : []),
+      ],
     });
   };
 
@@ -1090,6 +1190,92 @@ export default function SubmitTruth() {
                   )}
                 </Button>
               </div>
+            )}
+          </div>
+
+          {/* Voice Note Recording */}
+          <div className="space-y-2 pt-2 border-t border-border">
+            <Label className="text-xs flex items-center gap-1">
+              <Mic className="h-3.5 w-3.5" />
+              Voice Note
+            </Label>
+            {!voiceUrl && !voiceRecording && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={startVoiceRecording}
+                disabled={voiceUploading}
+                className="gap-2"
+              >
+                <Mic className="h-4 w-4" />
+                Record Voice Note
+              </Button>
+            )}
+            {voiceRecording && (
+              <div className="flex items-center gap-3 p-3 rounded-md bg-red-500/10 border border-red-500/20">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+                  <span className="text-xs font-medium text-red-500">Recording...</span>
+                </div>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {fmtTime(voiceDuration)}
+                </span>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={stopVoiceRecording}
+                  className="ml-auto gap-1"
+                >
+                  <Square className="h-3 w-3" />
+                  Stop
+                </Button>
+              </div>
+            )}
+            {voiceUploading && (
+              <div className="flex items-center gap-2 p-3 rounded-md bg-muted/30">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span className="text-xs text-muted-foreground">Uploading voice note...</span>
+              </div>
+            )}
+            {voiceUrl && !voiceUploading && (
+              <div className="flex items-center gap-3 p-3 rounded-md bg-primary/5 border border-primary/20">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={toggleVoicePlayback}
+                  className="gap-1.5 shrink-0"
+                >
+                  {voicePlaying ? (
+                    <><Pause className="h-3.5 w-3.5" /> Pause</>
+                  ) : (
+                    <><Play className="h-3.5 w-3.5" /> Play</>
+                  )}
+                </Button>
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  <AudioLines className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <span className="text-xs text-muted-foreground truncate">
+                    Voice note ({fmtTime(voiceDuration)})
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={removeVoiceNote}
+                  className="h-7 w-7 p-0 shrink-0"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
+            {voiceError && (
+              <p className="text-[10px] text-red-500 flex items-center gap-1">
+                <AlertTriangle className="h-2.5 w-2.5" />
+                {voiceError}
+              </p>
             )}
           </div>
 

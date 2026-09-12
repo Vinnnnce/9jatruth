@@ -61,9 +61,9 @@ export async function POST(request: Request) {
   await ensureDbInitialized();
 
   // Require authentication for submitting reports (unless Clerk isn't configured)
-  const clerkUserId = await getClerkUserId();
+  const clerkUserId = await getClerkUserId(request);
   if (!clerkUserId) {
-    // Check if Clerk is configured — if not, allow anonymous submission with IP-based userHash
+    // Check if fallback auth or Clerk is configured — if not, allow anonymous submission with IP-based userHash
     const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
     const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
     if (isClerkConfigured) {
@@ -163,6 +163,7 @@ export async function POST(request: Request) {
       locationSource: data.locationSource || (ipLocation.ipLat ? "ip" : undefined),
       stateName,
       regionName,
+      mediaUrls: body.mediaUrls || [],
     });
     return Response.json(truth, { status: 201 });
   } catch (err) {

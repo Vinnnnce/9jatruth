@@ -13,6 +13,7 @@ const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 const TMP_DIR = "/tmp/9jatruth-uploads";
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_VIDEO_SIZE = 60 * 1024 * 1024; // 60MB (max 60s video)
+const MAX_AUDIO_SIZE = 25 * 1024 * 1024; // 25MB for voice notes
 const MAX_VIDEO_DURATION_SECONDS = 60;
 // On Vercel serverless, the filesystem is read-only except /tmp.
 // For files under this size, return data URLs (base64) which work everywhere.
@@ -31,6 +32,16 @@ const ALLOWED_VIDEO_TYPES = [
   "video/mp4",
   "video/webm",
   "video/quicktime",
+];
+
+const ALLOWED_AUDIO_TYPES = [
+  "audio/webm",
+  "audio/mp3",
+  "audio/mpeg",
+  "audio/wav",
+  "audio/ogg",
+  "audio/aac",
+  "audio/mp4",
 ];
 
 /**
@@ -55,7 +66,7 @@ export async function POST(request: Request) {
   const csrfError = csrfCheck(request);
   if (csrfError) return csrfError;
 
-  const clerkUserId = await getClerkUserId();
+  const clerkUserId = await getClerkUserId(request);
   if (!clerkUserId) {
     const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
     const isClerkConfigured = clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
@@ -86,16 +97,17 @@ export async function POST(request: Request) {
   // Validate file type
   const isImage = ALLOWED_IMAGE_TYPES.includes(file.type);
   const isVideo = ALLOWED_VIDEO_TYPES.includes(file.type);
+  const isAudio = ALLOWED_AUDIO_TYPES.includes(file.type);
 
-  if (!isImage && !isVideo) {
+  if (!isImage && !isVideo && !isAudio) {
     return Response.json(
-      { message: `File type ${file.type} not supported. Allowed: ${[...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES].join(", ")}` },
+      { message: `File type ${file.type} not supported. Allowed: ${[...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES, ...ALLOWED_AUDIO_TYPES].join(", ")}` },
       { status: 400 }
     );
   }
 
   // Validate file size
-  const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE;
+  const maxSize = isVideo ? MAX_VIDEO_SIZE : isAudio ? MAX_AUDIO_SIZE : MAX_IMAGE_SIZE;
   if (file.size > maxSize) {
     const maxMB = maxSize / (1024 * 1024);
     return Response.json(
@@ -133,7 +145,7 @@ export async function POST(request: Request) {
       {
         success: true,
         url: dataUrl,
-        fileType: isImage ? "image" : "video",
+        fileType: isImage ? "image" : isVideo ? "video" : "audio",
         mimeType: file.type,
         size: file.size,
         originalName: file.name,
@@ -185,7 +197,7 @@ export async function POST(request: Request) {
     {
       success: true,
       url: savedUrl,
-      fileType: isImage ? "image" : "video",
+      fileType: isImage ? "image" : isVideo ? "video" : "audio",
       mimeType: file.type,
       size: file.size,
       originalName: file.name,

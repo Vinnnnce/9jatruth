@@ -73,6 +73,7 @@ export async function POST(request: Request) {
       organizationId: authAccount.organizationId,
       stateName,
       regionName,
+      mediaUrls: body.mediaUrls || [],
     });
     return Response.json(truth, { status: 201 });
   } catch (err) {

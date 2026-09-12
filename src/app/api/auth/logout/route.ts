@@ -1,11 +1,20 @@
+import { getAuthCookieName, isFallbackAuthEnabled } from "@/lib/fallback-auth";
+
 /**
-import { csrfCheck } from "@/lib/security";
  * Logout endpoint.
  *
  * With Clerk, sessions are managed client-side via Clerk's session tokens.
- * The client should call Clerk's signOut() to destroy the session. This
- * endpoint acknowledges the request and remains for backward compatibility.
+ * With fallback auth, clears the JWT cookie.
  */
-export async function POST() {
-  return Response.json({ success: true });
+export async function POST(request: Request) {
+  const headers = new Headers();
+
+  if (isFallbackAuthEnabled()) {
+    headers.append(
+      "Set-Cookie",
+      `${getAuthCookieName()}=; httpOnly=true; secure=${process.env.NODE_ENV === "production"}; sameSite=lax; path=/; max-age=0`
+    );
+  }
+
+  return Response.json({ success: true }, { headers });
 }

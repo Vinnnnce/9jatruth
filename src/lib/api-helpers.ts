@@ -11,6 +11,7 @@
 import crypto from "node:crypto";
 import { auth } from "@clerk/nextjs/server";
 import type { ZodSchema } from "zod";
+import { getFallbackUserHash } from "@/lib/fallback-auth";
 
 /**
  * Get the authenticated user's identity hash.
@@ -20,7 +21,14 @@ import type { ZodSchema } from "zod";
  * X-Visitor-Id derivation. Falls back to a dev identity when unauthenticated
  * (e.g. public endpoints in development).
  */
-export async function getUserId(_request?: Request): Promise<string> {
+export async function getUserId(request?: Request): Promise<string> {
+  // 1. Check for fallback auth JWT (when Clerk is not configured)
+  if (request) {
+    const fallbackHash = getFallbackUserHash(request);
+    if (fallbackHash) return fallbackHash;
+  }
+
+  // 2. Try Clerk auth
   try {
     const { userId } = await auth();
     if (userId) {
@@ -49,7 +57,14 @@ export async function getUserId(_request?: Request): Promise<string> {
  * Look up the Clerk user id (raw, unhashed) for the current request.
  * Returns null when not authenticated.
  */
-export async function getClerkUserId(): Promise<string | null> {
+export async function getClerkUserId(request?: Request): Promise<string | null> {
+  // 1. Check for fallback auth JWT (when Clerk is not configured)
+  if (request) {
+    const fallbackHash = getFallbackUserHash(request);
+    if (fallbackHash) return fallbackHash;
+  }
+
+  // 2. Try Clerk auth
   try {
     const { userId } = await auth();
     return userId ?? null;

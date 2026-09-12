@@ -97,7 +97,7 @@ async function callDeepseek(
 
 // ─── Public ensemble API ───────────────────────────────────────────────────
 
-export type AiSource = "deepseek" | "kimi" | "fallback";
+export type AiSource = "deepseek" | "kimi" | "fallback" | "heuristic";
 
 export interface AiTextResult {
   text: string | null;

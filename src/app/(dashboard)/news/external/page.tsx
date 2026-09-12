@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Newspaper, Search, Volume2, Loader2, ExternalLink, Clock, Tag } from "lucide-react";
+import { VoiceSelector } from "@/components/voice-selector";
+import { useVoiceSelection } from "@/components/hooks/use-voice-selection";
+import {
+  Newspaper, Search, Volume2, VolumeX, Loader2, ExternalLink, Clock, Tag,
+  Sparkles, TrendingUp, TrendingDown, Minus, MapPin, ChevronRight, Globe,
+} from "lucide-react";
 import Link from "next/link";
 
 const CATEGORIES = [
@@ -23,13 +28,48 @@ const CATEGORIES = [
   { value: "science", label: "Science" },
 ];
 
+interface AiAnalysis {
+  summary: string;
+  tags: string[];
+  sentiment: "positive" | "negative" | "neutral";
+  sentimentScore: number;
+  takeaways: string[];
+  regionTags: string[];
+  keyEntities: string[];
+  credibilityScore: number;
+  source: string;
+}
+
+const sentimentConfig = {
+  positive: { icon: TrendingUp, color: "text-green-500", bg: "bg-green-500/10", label: "Positive" },
+  negative: { icon: TrendingDown, color: "text-red-500", bg: "bg-red-500/10", label: "Negative" },
+  neutral: { icon: Minus, color: "text-yellow-500", bg: "bg-yellow-500/10", label: "Neutral" },
+};
+
+function fmtPublished(dateStr: string | null): string {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffH = Math.floor(diffMs / (1000 * 60 * 60));
+  if (diffH < 1) return "Just now";
+  if (diffH < 24) return `${diffH}h ago`;
+  const diffD = Math.floor(diffH / 24);
+  if (diffD === 1) return "Yesterday";
+  if (diffD < 7) return `${diffD}d ago`;
+  return date.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
+}
+
 export default function ExternalNewsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [category, setCategory] = useState("");
   const [search, setSearch] = useState("");
-  const [audioLoading, setAudioLoading] = useState<number | null>(null);
-  const [playingAudio, setPlayingAudio] = useState<number | null>(null);
+  const [analyzing, setAnalyzing] = useState<Set<number>>(new Set());
+  const [analyses, setAnalyses] = useState<Record<number, AiAnalysis>>({});
+  const [playingId, setPlayingId] = useState<number | null>(null);
+
+  const { speak, stop, speaking, supported } = useVoiceSelection();
 
   const { data, isLoading } = useQuery({
     queryKey: ["/api/news/external", category, search],
@@ -48,7 +88,6 @@ export default function ExternalNewsPage() {
   const refreshNews = async () => {
     setRefreshing(true);
     try {
-      // Try the admin endpoint first (super-admin); fall back to the cron endpoint.
       let res = await apiRequest("POST", "/api/admin/news/refresh").catch(() => null);
       if (!res || !res.ok) {
         res = await apiRequest("GET", "/api/news/cron").catch(() => null);
@@ -66,64 +105,47 @@ export default function ExternalNewsPage() {
     }
   };
 
-  const generateAudio = async (articleId: number) => {
-    setAudioLoading(articleId);
+  const analyzeArticle = useCallback(async (articleId: number) => {
+    setAnalyzing((prev) => new Set(prev).add(articleId));
     try {
-      const res = await apiRequest("POST", `/api/news/external/${articleId}/audio`);
-      const result = await res.json();
-      if (result.audio_url) {
-        // Decode the data URL and use SpeechSynthesis
-        const article = articles.find((a: any) => a.id === articleId);
-        if (result.audio_url.startsWith("data:text/plain;base64,")) {
-          // Decode the base64 text from the data URL
-          const base64Text = result.audio_url.split(",")[1];
-          const text = atob(base64Text);
-          if ("speechSynthesis" in window) {
-            speakText(text);
-          }
-        } else if (article && "speechSynthesis" in window) {
-          // Fallback: speak the article content directly
-          const text = `${article.title}. ${article.description || ""} ${article.content || ""}`.slice(0, 3000);
-          speakText(text);
-        }
-        qc.invalidateQueries({ queryKey: ["/api/news/external"] });
-        toast({ title: "Audio ready", description: "Listen to the article now" });
+      const res = await fetch(`/api/news/external/${articleId}/analyze`, { method: "POST" });
+      if (!res.ok) throw new Error("Analysis failed");
+      const data = await res.json();
+      if (data.analysis) {
+        setAnalyses((prev) => ({ ...prev, [articleId]: data.analysis }));
+        toast({ title: "AI Analysis complete", description: `Analyzed via ${data.analysis.source}` });
       }
-    } catch {
-      // Fallback to browser TTS
-      const article = articles.find((a: any) => a.id === articleId);
-      if (article && "speechSynthesis" in window) {
-        const text = `${article.title}. ${article.description || ""} ${article.content || ""}`.slice(0, 3000);
-        speakText(text);
-        toast({ title: "Playing audio", description: "Using browser text-to-speech" });
-      } else {
-        toast({ title: "Audio not available", description: "Try again later", variant: "destructive" });
-      }
+    } catch (err) {
+      toast({ title: "Analysis failed", description: "Could not analyze article", variant: "destructive" });
     } finally {
-      setAudioLoading(null);
+      setAnalyzing((prev) => {
+        const next = new Set(prev);
+        next.delete(articleId);
+        return next;
+      });
     }
-  };
+  }, [toast]);
 
-  const speakText = (text: string) => {
-    if (!("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1;
-    utterance.pitch = 1;
-    setPlayingAudio(null); // will be set after we find the article
-    const article = articles.find((a: any) => a.title && text.startsWith(a.title));
-    if (article) setPlayingAudio(article.id);
-    utterance.onend = () => setPlayingAudio(null);
-    utterance.onerror = () => setPlayingAudio(null);
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const stopAudio = () => {
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
+  const handleListen = useCallback((article: any) => {
+    if (!supported) {
+      toast({ title: "Not supported", description: "Text-to-speech is not available on this browser", variant: "destructive" });
+      return;
     }
-    setPlayingAudio(null);
-  };
+    if (playingId === article.id && speaking) {
+      stop();
+      setPlayingId(null);
+      return;
+    }
+    const analysis = analyses[article.id];
+    const text = analysis?.summary || `${article.title}. ${article.description || ""}`.slice(0, 3000);
+    speak(text, () => setPlayingId(null));
+    setPlayingId(article.id);
+  }, [playingId, speaking, analyses, speak, stop, supported, toast]);
+
+  const stopListening = useCallback(() => {
+    stop();
+    setPlayingId(null);
+  }, [stop]);
 
   return (
     <div className="space-y-6">
@@ -131,15 +153,26 @@ export default function ExternalNewsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Newspaper className="h-6 w-6" />
+            <Globe className="h-6 w-6 text-primary" />
             External News
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Nigerian news aggregated from external sources
+            AI-powered Nigerian news from external sources
           </p>
         </div>
         <Badge variant="secondary">{articles.length} articles</Badge>
       </div>
+
+      {/* Voice Settings Panel */}
+      <Card>
+        <CardContent className="py-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Volume2 className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium">Audio Read Settings</span>
+          </div>
+          <VoiceSelector />
+        </CardContent>
+      </Card>
 
       {/* Search */}
       <div className="flex gap-2">
@@ -185,10 +218,12 @@ export default function ExternalNewsPage() {
                 key={article.id}
                 article={article}
                 featured
-                onListen={generateAudio}
-                onStop={stopAudio}
-                audioLoading={audioLoading}
-                playingAudio={playingAudio}
+                analysis={analyses[article.id]}
+                analyzing={analyzing.has(article.id)}
+                onAnalyze={analyzeArticle}
+                onListen={handleListen}
+                onStop={stopListening}
+                isPlaying={playingId === article.id && speaking}
               />
             ))}
           </div>
@@ -241,10 +276,12 @@ export default function ExternalNewsPage() {
               <ArticleCard
                 key={article.id}
                 article={article}
-                onListen={generateAudio}
-                onStop={stopAudio}
-                audioLoading={audioLoading}
-                playingAudio={playingAudio}
+                analysis={analyses[article.id]}
+                analyzing={analyzing.has(article.id)}
+                onAnalyze={analyzeArticle}
+                onListen={handleListen}
+                onStop={stopListening}
+                isPlaying={playingId === article.id && speaking}
               />
             ))}
           </div>
@@ -257,23 +294,27 @@ export default function ExternalNewsPage() {
 function ArticleCard({
   article,
   featured,
+  analysis,
+  analyzing,
+  onAnalyze,
   onListen,
   onStop,
-  audioLoading,
-  playingAudio,
+  isPlaying,
 }: {
   article: any;
   featured?: boolean;
-  onListen: (id: number) => void;
+  analysis?: AiAnalysis;
+  analyzing: boolean;
+  onAnalyze: (id: number) => void;
+  onListen: (article: any) => void;
   onStop: () => void;
-  audioLoading: number | null;
-  playingAudio: number | null;
+  isPlaying: boolean;
 }) {
-  const isPlaying = playingAudio === article.id;
-  const isLoading = audioLoading === article.id;
+  const sentiment = analysis ? sentimentConfig[analysis.sentiment] : null;
+  const SentimentIcon = sentiment?.icon;
 
   return (
-    <Card className={`overflow-hidden hover:shadow-lg transition-shadow ${featured ? "ring-2 ring-primary/20" : ""}`}>
+    <Card className={`overflow-hidden hover:shadow-lg transition-shadow flex flex-col ${featured ? "ring-2 ring-primary/20" : ""}`}>
       {article.image_url && (
         <div className="aspect-video bg-muted">
           <img
@@ -281,17 +322,23 @@ function ArticleCard({
             alt={article.title}
             className="w-full h-full object-cover"
             loading="lazy"
+            onError={(e) => (e.currentTarget.style.display = "none")}
           />
         </div>
       )}
       <CardHeader className="pb-2">
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
           <Badge variant="outline" className="text-xs">
             <Tag className="h-3 w-3 mr-1" />
             {article.category}
           </Badge>
           {article.source_name && (
             <span className="text-xs text-muted-foreground">{article.source_name}</span>
+          )}
+          {analysis?.credibilityScore && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+              {analysis.credibilityScore}% credible
+            </span>
           )}
         </div>
         <CardTitle className={`line-clamp-2 ${featured ? "text-lg" : "text-base"}`}>
@@ -300,48 +347,102 @@ function ArticleCard({
           </Link>
         </CardTitle>
       </CardHeader>
-      <CardContent className="pt-0">
-        {article.description && (
-          <p className="text-sm text-muted-foreground line-clamp-3 mb-3">
-            {article.description}
-          </p>
+      <CardContent className="pt-0 flex-1 flex flex-col">
+        {/* AI Summary */}
+        {analysis?.summary ? (
+          <div className="rounded-md bg-primary/5 border border-primary/10 p-2 mb-2">
+            <div className="flex items-center gap-1 mb-1">
+              <Sparkles className="h-3 w-3 text-primary" />
+              <span className="text-[9px] font-medium text-primary">AI Summary</span>
+              <span className="text-[8px] text-muted-foreground ml-auto">via {analysis.source}</span>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
+              {analysis.summary}
+            </p>
+          </div>
+        ) : (
+          article.description && (
+            <p className="text-sm text-muted-foreground line-clamp-3 mb-2">
+              {article.description}
+            </p>
+          )
         )}
-        <div className="flex items-center justify-between gap-2">
+
+        {/* Sentiment & Tags */}
+        {sentiment && SentimentIcon && (
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${sentiment.bg} ${sentiment.color} flex items-center gap-0.5 font-medium`}>
+              <SentimentIcon className="h-2.5 w-2.5" />
+              {sentiment.label}
+            </span>
+            {analysis?.tags?.map((tag, i) => (
+              <Badge key={i} variant="outline" className="text-[8px] py-0 h-3.5 px-1.5">
+                {tag}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        {/* Region tags */}
+        {analysis?.regionTags && analysis.regionTags.length > 0 && (
+          <div className="flex items-center gap-1 mb-2 flex-wrap">
+            <MapPin className="h-2.5 w-2.5 text-muted-foreground shrink-0" />
+            {analysis.regionTags.slice(0, 4).map((region, i) => (
+              <span key={i} className="text-[9px] text-muted-foreground">
+                {region}{i < Math.min(analysis.regionTags.length, 4) - 1 ? "," : ""}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* AI Takeaways */}
+        {analysis?.takeaways && analysis.takeaways.length > 0 && (
+          <details className="text-xs mb-2">
+            <summary className="cursor-pointer text-primary hover:text-primary/80 flex items-center gap-1">
+              <ChevronRight className="h-3 w-3" />
+              Key Takeaways
+            </summary>
+            <ul className="mt-1 ml-4 space-y-0.5">
+              {analysis.takeaways.map((t, i) => (
+                <li key={i} className="text-muted-foreground list-disc">{t}</li>
+              ))}
+            </ul>
+          </details>
+        )}
+
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-2 mt-auto pt-2">
           {article.published_at && (
             <span className="text-xs text-muted-foreground flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              {new Date(article.published_at).toLocaleDateString("en-NG", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              })}
+              {fmtPublished(article.published_at)}
             </span>
           )}
           <div className="flex gap-1">
             {isPlaying ? (
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={onStop}
-              >
-                <Volume2 className="h-3 w-3 mr-1" />
+              <Button size="sm" variant="destructive" onClick={onStop}>
+                <VolumeX className="h-3 w-3 mr-1" />
                 Stop
               </Button>
             ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={isLoading}
-                onClick={() => onListen(article.id)}
-              >
-                {isLoading ? (
-                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                ) : (
-                  <Volume2 className="h-3 w-3 mr-1" />
-                )}
+              <Button size="sm" variant="outline" onClick={() => onListen(article)}>
+                <Volume2 className="h-3 w-3 mr-1" />
                 Listen
               </Button>
             )}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onAnalyze(article.id)}
+              disabled={analyzing}
+            >
+              {analyzing ? (
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              ) : (
+                <Sparkles className="h-3 w-3 mr-1" />
+              )}
+              {analysis ? "Re-analyze" : "AI"}
+            </Button>
             {article.url && (
               <Button size="sm" variant="ghost" asChild>
                 <a href={article.url} target="_blank" rel="noopener noreferrer">

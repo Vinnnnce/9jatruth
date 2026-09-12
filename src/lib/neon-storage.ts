@@ -114,6 +114,7 @@ function mapTruth(r: SqlRow): MicroTruth & { displayName?: string | null } {
     communityName: r.community_name ?? null,
     villageName: r.village_name ?? null,
     regionName: r.region_name ?? null,
+    mediaUrls: typeof r.media_urls === "string" ? JSON.parse(r.media_urls || "[]") : r.media_urls || [],
   };
 }
 
@@ -368,6 +369,7 @@ export interface CreateTruthInput {
   communityName?: string;
   villageName?: string;
   regionName?: string;
+  mediaUrls?: string[];
 }
 
 export async function createTruth(data: CreateTruthInput): Promise<MicroTruth> {
@@ -377,7 +379,7 @@ export async function createTruth(data: CreateTruthInput): Promise<MicroTruth> {
   const trustScore = Math.min(100, baseTrust + Math.floor(Math.random() * 10));
   const chain = JSON.stringify(buildVerificationChain(trustScore));
 
-  const rows = (await sql`INSERT INTO micro_truths (neighborhood_id, category, content, trust_score, decay_factor, verification_chain, user_hash, status, ip_hash, ip_region, ip_city, report_lat, report_lng, location_source, organization_id, state_name, lga_name, community_name, village_name, region_name) VALUES (${data.neighborhoodId}, ${data.category}, ${data.content}, ${trustScore}, 1.0, ${chain}, ${data.userHash}, 'pending', ${data.ipHash ?? null}, ${data.ipRegion ?? null}, ${data.ipCity ?? null}, ${data.reportLat ?? null}, ${data.reportLng ?? null}, ${data.locationSource ?? null}, ${data.organizationId ?? null}, ${data.stateName ?? null}, ${data.lgaName ?? null}, ${data.communityName ?? null}, ${data.villageName ?? null}, ${data.regionName ?? null}) RETURNING *`) as unknown as SqlRow[];
+  const rows = (await sql`INSERT INTO micro_truths (neighborhood_id, category, content, trust_score, decay_factor, verification_chain, user_hash, status, ip_hash, ip_region, ip_city, report_lat, report_lng, location_source, organization_id, state_name, lga_name, community_name, village_name, region_name, media_urls) VALUES (${data.neighborhoodId}, ${data.category}, ${data.content}, ${trustScore}, 1.0, ${chain}, ${data.userHash}, 'pending', ${data.ipHash ?? null}, ${data.ipRegion ?? null}, ${data.ipCity ?? null}, ${data.reportLat ?? null}, ${data.reportLng ?? null}, ${data.locationSource ?? null}, ${data.organizationId ?? null}, ${data.stateName ?? null}, ${data.lgaName ?? null}, ${data.communityName ?? null}, ${data.villageName ?? null}, ${data.regionName ?? null}, ${JSON.stringify(data.mediaUrls || [])}) RETURNING *`) as unknown as SqlRow[];
   const truth = mapTruth(rows[0]);
 
   await sql`INSERT INTO reward_ledger (user_hash, amount, type, description) VALUES (${data.userHash}, 20, 'submission', ${`Truth submitted: ${data.category} report`})`;

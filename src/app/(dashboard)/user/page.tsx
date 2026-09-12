@@ -147,7 +147,7 @@ export default function PortfolioPage() {
     profile?.name || clerkUser?.fullName || clerkUser?.username || "Community Member";
   const email = profile?.email || clerkUser?.primaryEmailAddress?.emailAddress || "—";
   const memberSince = profile?.createdAt || clerkUser?.createdAt?.toString();
-  const avatarUrl = clerkUser?.imageUrl;
+  const avatarUrl = clerkUser?.imageUrl || undefined;
 
   const isLoading = profileLoading || !clerkLoaded;
 

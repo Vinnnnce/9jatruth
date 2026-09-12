@@ -53,6 +53,10 @@ const isPublicRoute = createRouteMatcher([
   "/sign-up(.*)",
   "/api/webhook(.*)",
   "/api/health(.*)",
+  "/api/auth/login(.*)",
+  "/api/auth/register(.*)",
+  "/api/auth/logout(.*)",
+  "/api/auth/me(.*)",
   "/api/neighborhoods(.*)",
   "/api/truths(.*)", // GET truths is public (community feed), writes are auth-checked in route
   "/api/dashboard(.*)",

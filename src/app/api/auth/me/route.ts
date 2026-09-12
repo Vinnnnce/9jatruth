@@ -6,12 +6,32 @@ import {
   upsertPlatformUser,
 } from "@/lib/neon-storage";
 import { getClerkUserId } from "@/lib/api-helpers";
+import { getFallbackUser, isFallbackAuthEnabled } from "@/lib/fallback-auth";
 import { currentUser } from "@clerk/nextjs/server";
 import { createHash } from "crypto";
 
 export async function GET(request: Request) {
   await ensureDbInitialized();
-  const clerkUserId = await getClerkUserId();
+
+  // Check for fallback auth first (when Clerk is not configured)
+  if (isFallbackAuthEnabled()) {
+    const fallbackUser = getFallbackUser(request);
+    if (fallbackUser) {
+      return Response.json({
+        account: {
+          id: fallbackUser.userId,
+          email: fallbackUser.email,
+          displayName: fallbackUser.displayName,
+          role: "user",
+        },
+        organization: null,
+        userHash: fallbackUser.userHash,
+      });
+    }
+    return Response.json({ message: "Not authenticated" }, { status: 401 });
+  }
+
+  const clerkUserId = await getClerkUserId(request);
   if (!clerkUserId) {
     return Response.json({ message: "Not authenticated" }, { status: 401 });
   }

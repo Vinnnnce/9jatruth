@@ -2,13 +2,14 @@
 
 import { SignIn } from "@clerk/nextjs";
 import { ClerkAuthBoundary } from "@/components/clerk-auth-boundary";
+import { FallbackAuthForm } from "@/components/fallback-auth-form";
 
 const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 const isClerkConfigured =
   clerkKey && !clerkKey.includes("placeholder") && clerkKey.length > 20;
 
 export default function SignInPage() {
-  // If Clerk is not configured, show a message
+  // If Clerk is not configured, show the fallback email/password form
   if (!isClerkConfigured) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -16,19 +17,12 @@ export default function SignInPage() {
           <div className="mb-8 text-center">
             <h1 className="text-2xl font-bold text-foreground">Welcome to 9jatruth</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Authentication is not yet configured.
-            </p>
-            <p className="mt-4 text-xs text-muted-foreground/70">
-              Set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY in your
-              environment variables to enable sign-in.
+              Sign in to your account to continue
             </p>
           </div>
-          <a
-            href="/"
-            className="block w-full text-center py-2 px-4 rounded-md bg-primary text-primary-foreground hover:opacity-90"
-          >
-            Continue to Dashboard
-          </a>
+          <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+            <FallbackAuthForm mode="signin" />
+          </div>
         </div>
       </div>
     );

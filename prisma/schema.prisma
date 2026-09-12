@@ -157,6 +157,9 @@ model MicroTruth {
   trendingRank       Int?     @map("trending_rank")
   aiAnalyzedAt       DateTime? @map("ai_analyzed_at")
 
+  // ─── Media URLs (images, videos, voice notes) ───
+  mediaUrls          String   @default("[]") @map("media_urls")
+
   // ─── Relations ───
   state              State?   @relation(fields: [stateId], references: [id])
   lga                Lga?     @relation(fields: [lgaId], references: [id])
@@ -1033,6 +1036,17 @@ model NewsExternal {
   createdAt         DateTime  @default(now()) @map("created_at")
   isAudioGenerated  Boolean   @default(false) @map("is_audio_generated")
   audioUrl          String?   @map("audio_url")
+
+  // AI-driven fields
+  aiSummary         String?   @map("ai_summary")
+  aiTags            String    @default("[]") @map("ai_tags")
+  aiSentiment       String?   @map("ai_sentiment")
+  aiTakeaways       String    @default("[]") @map("ai_takeaways")
+  aiRegionTags      String    @default("[]") @map("ai_region_tags")
+  aiKeyEntities     String    @default("[]") @map("ai_key_entities")
+  aiSource          String?   @map("ai_source")
+  aiAnalyzedAt      DateTime? @map("ai_analyzed_at")
+  aiCredibilityScore Int?     @map("ai_credibility_score")
 
   @@index([category])
   @@index([publishedAt])

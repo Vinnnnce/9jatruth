@@ -167,6 +167,7 @@ export const microTruths = sqliteTable("micro_truths", {
   communityName: text("community_name"),
   villageName: text("village_name"),
   regionName: text("region_name"),
+  mediaUrls: text("media_urls").default("[]"),
 });
 
 // ─── Snapshots ───
@@ -249,6 +250,7 @@ export const insertMicroTruthSchema = createInsertSchema(microTruths).omit({
   reportLng: z.number().optional(),
   locationSource: z.enum(["gps", "ip", "manual"]).optional(),
   organizationId: z.number().int().positive().optional(),
+  mediaUrls: z.array(z.string()).optional(),
 });
 
 export const insertPredictionSchema = createInsertSchema(predictions).omit({

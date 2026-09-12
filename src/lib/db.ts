@@ -39,8 +39,9 @@ let engagementTablesEnsured = false;
 // failure in the engagement DDL can't prevent news_external from being created,
 // and so a warm instance retries if a previous attempt failed.
 let newsExternalEnsured = false;
+let usersTableEnsured = false;
 
-export const SCHEMA_VERSION = "2026-09-07-v9";
+export const SCHEMA_VERSION = "2026-09-12-v10";
 
 export async function ensureDbInitialized() {
   if (initialized) return;
@@ -84,9 +85,33 @@ export async function ensureDbInitialized() {
       await sql`CREATE INDEX IF NOT EXISTS idx_news_external_category ON news_external(category)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_news_external_published ON news_external(published_at)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_news_external_source ON news_external(source_name)`;
+      // Add AI-driven columns (idempotent ALTER)
+      try { await sql`ALTER TABLE news_external ADD COLUMN IF NOT EXISTS ai_summary TEXT` } catch {}
+      try { await sql`ALTER TABLE news_external ADD COLUMN IF NOT EXISTS ai_tags TEXT DEFAULT '[]'` } catch {}
+      try { await sql`ALTER TABLE news_external ADD COLUMN IF NOT EXISTS ai_sentiment TEXT` } catch {}
+      try { await sql`ALTER TABLE news_external ADD COLUMN IF NOT EXISTS ai_takeaways TEXT DEFAULT '[]'` } catch {}
+      try { await sql`ALTER TABLE news_external ADD COLUMN IF NOT EXISTS ai_region_tags TEXT DEFAULT '[]'` } catch {}
+      try { await sql`ALTER TABLE news_external ADD COLUMN IF NOT EXISTS ai_source TEXT` } catch {}
+      try { await sql`ALTER TABLE news_external ADD COLUMN IF NOT EXISTS ai_analyzed_at TIMESTAMPTZ` } catch {}
+      try { await sql`ALTER TABLE news_external ADD COLUMN IF NOT EXISTS ai_key_entities TEXT DEFAULT '[]'` } catch {}
+      try { await sql`ALTER TABLE news_external ADD COLUMN IF NOT EXISTS ai_credibility_score INTEGER` } catch {}
+      // Add media_urls column to micro_truths for voice notes (idempotent)
+      try { await sql`ALTER TABLE micro_truths ADD COLUMN IF NOT EXISTS media_urls TEXT DEFAULT '[]'` } catch {}
       newsExternalEnsured = true;
     } catch (e) {
       console.error("[DB Init] news_external table ensure error (non-fatal):", e);
+    }
+  }
+
+  // ── users table (fallback auth) ──
+  if (!usersTableEnsured) {
+    try {
+      await sql`CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, display_name TEXT NOT NULL, user_hash TEXT NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_users_user_hash ON users(user_hash)`;
+      usersTableEnsured = true;
+    } catch (e) {
+      console.error("[DB Init] users table ensure error (non-fatal):", e);
     }
   }
 

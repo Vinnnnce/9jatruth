@@ -109,7 +109,7 @@ type AiCompareResult = {
   };
   let aiAnalysis: string | null = null;
   let aiResult: AiCompareResult | null = null;
-  let aiSource: "deepseek" | "kimi" | "fallback" | null = isAiConfigured() ? null : null;
+  let aiSource: "deepseek" | "kimi" | "fallback" | "heuristic" | null = isAiConfigured() ? null : null;
 
   if (isAiConfigured()) {
     const systemPrompt = `You are a neighborhood comparison analyst for 9jatruth, a Nigerian community truth platform. Compare two neighborhoods side-by-side based on live conditions and metrics. Be specific with the numbers provided, objective, and practical for residents, businesses, and visitors.`;
