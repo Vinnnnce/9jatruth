@@ -1,0 +1,9 @@
+node_modules
+.next
+.git
+backend
+android
+admin
+deploy_backup
+docs
+scripts
