@@ -54,3 +54,4 @@ coverage/
 
 # Uploads
 uploads/
+.env*.local

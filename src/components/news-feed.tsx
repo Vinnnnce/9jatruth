@@ -18,13 +18,14 @@ import {
   ChevronRight,
   ShieldCheck,
   Newspaper,
+  ExternalLink,
 } from "lucide-react";
 
 // ─── Types ───
 
 export type NewsArticle = {
   id: number;
-  slug: string;
+  slug: string | null;
   title: string;
   excerpt: string;
   coverImage: string | null;
@@ -34,6 +35,8 @@ export type NewsArticle = {
   publishedAt: string;
   likeCount: number;
   commentCount: number;
+  source?: "internal" | "external";
+  url?: string | null;
 };
 
 type NewsFeedResponse = {
@@ -137,84 +140,108 @@ export function NewsFeed() {
           className="flex gap-3 overflow-x-auto scrollbar-thin pb-2 snap-x snap-mandatory"
         >
           <AnimatePresence>
-            {filtered.map((article, i) => (
-              <motion.div
-                key={article.id}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.35, delay: i * 0.08 }}
-                whileHover={{ y: -6 }}
-                className="w-72 shrink-0 snap-start"
-              >
-                <Link href={`/news/${article.slug}`}>
-                  <div className="rounded-xl border border-border bg-card overflow-hidden h-full transition-colors hover:border-primary/30">
-                    {/* Cover image */}
-                    <div className="relative h-32 bg-muted overflow-hidden">
-                      {article.coverImage ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={article.coverImage}
-                          alt={article.title}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Newspaper className="h-8 w-8 text-muted-foreground/40" />
-                        </div>
-                      )}
-                      <div className="absolute top-2 left-2">
-                        <Badge className="text-[9px] px-2 py-0 rounded-full bg-primary/90 text-primary-foreground border-none">
-                          {article.category}
+            {filtered.map((article, i) => {
+              const isExternal = article.source === "external" && article.url;
+              const cardContent = (
+                <div className="rounded-xl border border-border bg-card overflow-hidden h-full transition-colors hover:border-primary/30">
+                  {/* Cover image */}
+                  <div className="relative h-32 bg-muted overflow-hidden">
+                    {article.coverImage ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={article.coverImage}
+                        alt={article.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Newspaper className="h-8 w-8 text-muted-foreground/40" />
+                      </div>
+                    )}
+                    <div className="absolute top-2 left-2">
+                      <Badge className="text-[9px] px-2 py-0 rounded-full bg-primary/90 text-primary-foreground border-none">
+                        {article.category}
+                      </Badge>
+                    </div>
+                    {isExternal ? (
+                      <div className="absolute top-2 right-2">
+                        <Badge className="text-[9px] px-1.5 py-0 rounded-full bg-orange-500/90 text-white border-none flex items-center gap-0.5">
+                          <ExternalLink className="h-2.5 w-2.5" />
+                          External
                         </Badge>
                       </div>
-                      {article.authorVerified && (
-                        <div className="absolute top-2 right-2">
-                          <Badge className="text-[9px] px-1.5 py-0 rounded-full bg-green-500/90 text-white border-none flex items-center gap-0.5">
-                            <ShieldCheck className="h-2.5 w-2.5" />
-                            Verified
-                          </Badge>
-                        </div>
-                      )}
+                    ) : article.authorVerified ? (
+                      <div className="absolute top-2 right-2">
+                        <Badge className="text-[9px] px-1.5 py-0 rounded-full bg-green-500/90 text-white border-none flex items-center gap-0.5">
+                          <ShieldCheck className="h-2.5 w-2.5" />
+                          Verified
+                        </Badge>
+                      </div>
+                    ) : null}
+                  </div>
+                  {/* Body */}
+                  <div className="p-3 space-y-2">
+                    <h4 className="text-sm font-medium leading-snug line-clamp-2 text-foreground">
+                      {article.title}
+                    </h4>
+                    <p className="text-[10px] text-muted-foreground line-clamp-2">{article.excerpt}</p>
+                    {/* Author */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <Avatar className="h-5 w-5">
+                        <AvatarFallback className="text-[9px]">
+                          {article.authorName?.slice(0, 2).toUpperCase() || "AN"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-[10px] text-muted-foreground truncate flex-1">
+                        {article.authorName || "Anonymous"}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground/70 flex items-center gap-0.5">
+                        <Clock className="h-2.5 w-2.5" />
+                        {timeAgo(article.publishedAt)}
+                      </span>
                     </div>
-                    {/* Body */}
-                    <div className="p-3 space-y-2">
-                      <h4 className="text-sm font-medium leading-snug line-clamp-2 text-foreground">
-                        {article.title}
-                      </h4>
-                      <p className="text-[10px] text-muted-foreground line-clamp-2">{article.excerpt}</p>
-                      {/* Author */}
-                      <div className="flex items-center gap-2 pt-1">
-                        <Avatar className="h-5 w-5">
-                          <AvatarFallback className="text-[9px]">
-                            {article.authorName?.slice(0, 2).toUpperCase() || "AN"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="text-[10px] text-muted-foreground truncate flex-1">
-                          {article.authorName || "Anonymous"}
-                        </span>
-                        <span className="text-[9px] text-muted-foreground/70 flex items-center gap-0.5">
-                          <Clock className="h-2.5 w-2.5" />
-                          {timeAgo(article.publishedAt)}
-                        </span>
-                      </div>
-                      {/* Stats */}
-                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground pt-1 border-t border-border">
-                        <span className="flex items-center gap-0.5">
-                          <Heart className="h-2.5 w-2.5" />
-                          {article.likeCount}
-                        </span>
-                        <span className="flex items-center gap-0.5">
-                          <MessageCircle className="h-2.5 w-2.5" />
-                          {article.commentCount}
-                        </span>
-                        <span className="ml-auto text-primary font-medium">Read More</span>
-                      </div>
+                    {/* Stats */}
+                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground pt-1 border-t border-border">
+                      {!isExternal && (
+                        <>
+                          <span className="flex items-center gap-0.5">
+                            <Heart className="h-2.5 w-2.5" />
+                            {article.likeCount}
+                          </span>
+                          <span className="flex items-center gap-0.5">
+                            <MessageCircle className="h-2.5 w-2.5" />
+                            {article.commentCount}
+                          </span>
+                        </>
+                      )}
+                      <span className="ml-auto text-primary font-medium">
+                        {isExternal ? "Read Article" : "Read More"}
+                      </span>
                     </div>
                   </div>
-                </Link>
-              </motion.div>
-            ))}
+                </div>
+              );
+
+              return (
+                <motion.div
+                  key={`${article.source || "internal"}-${article.id}`}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.35, delay: i * 0.08 }}
+                  whileHover={{ y: -6 }}
+                  className="w-72 shrink-0 snap-start"
+                >
+                  {isExternal ? (
+                    <a href={article.url!} target="_blank" rel="noopener noreferrer">
+                      {cardContent}
+                    </a>
+                  ) : (
+                    <Link href={`/news/${article.slug}`}>{cardContent}</Link>
+                  )}
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
         </div>
       )}
