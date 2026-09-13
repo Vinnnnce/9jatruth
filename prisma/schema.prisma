@@ -42,6 +42,10 @@ model State {
   lgas            Lga[]
   wards           Ward[]
   microTruths     MicroTruth[]
+  pollingUnits    GeoPollingUnit[]
+  electionEvents  ElectionEvent[]
+  electionResults ElectionResult[]
+  resultSummaries ElectionResultSummary[]
 
   @@map("states")
 }
@@ -61,6 +65,9 @@ model Lga {
   state           State?   @relation(fields: [stateId], references: [id])
   wards           Ward[]
   microTruths     MicroTruth[]
+  pollingUnits    GeoPollingUnit[]
+  electionResults ElectionResult[]
+  resultSummaries ElectionResultSummary[]
 
   @@map("lgas")
 }
@@ -781,6 +788,9 @@ model Ward {
   lga             Lga      @relation(fields: [lgaId], references: [id])
   state           State    @relation(fields: [stateId], references: [id])
   microTruths     MicroTruth[]
+  pollingUnits    GeoPollingUnit[]
+  electionResults ElectionResult[]
+  resultSummaries ElectionResultSummary[]
 
   @@unique([lgaId, code, name], name: "idx_wards_unique_lga_code_name")
   @@index([lgaId])
@@ -801,6 +811,8 @@ model PoliticalPosition {
 
   officeHolders     OfficeHolder[]
   electionCandidates ElectionCandidate[]
+  results            ElectionResult[]
+  resultSummaries    ElectionResultSummary[]
 
   @@index([level])
   @@map("political_positions")
@@ -843,6 +855,7 @@ model PoliticalPerson {
 
   officeHolders      OfficeHolder[]
   electionCandidates ElectionCandidate[]
+  results            ElectionResult[]
 
   @@index([stateOfOrigin])
   @@index([verificationStatus])
@@ -861,6 +874,10 @@ model PoliticalElection {
 
   officeHolders      OfficeHolder[]
   electionCandidates ElectionCandidate[]
+  timetables         ElectionTimetable[]
+  events             ElectionEvent[]
+  results            ElectionResult[]
+  resultSummaries    ElectionResultSummary[]
 
   @@unique([year, type, geoScope], name: "idx_elections_unique")
   @@index([year])
@@ -1092,4 +1109,163 @@ model TruthGift {
   @@index([truthId])
   @@index([recipientHash])
   @@map("truth_gifts")
+}
+
+// ─── Politics v11: Polling Units, Timetable, Results ───
+
+/// INEC polling units — 176,846 units sourced from nigeria-inec-geo
+model GeoPollingUnit {
+  id              Int      @id @default(autoincrement())
+  code            String   // Full code e.g. '01/01/01/001'
+  stateCode       String   @map("state_code")
+  stateId         Int      @map("state_id")
+  lgaCode         String   @map("lga_code")
+  lgaId           Int      @map("lga_id")
+  wardCode        String   @map("ward_code")
+  wardId          Int      @map("ward_id")
+  puCode          String   @map("pu_code")
+  name            String
+  location        String?
+  portalId        Int?     @map("portal_id")
+  source          String?  @default("INEC")
+  sourceUpdatedAt DateTime? @map("source_updated_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  state           State    @relation(fields: [stateId], references: [id])
+  lga             Lga      @relation(fields: [lgaId], references: [id])
+  ward            Ward     @relation(fields: [wardId], references: [id])
+
+  @@unique([wardId, puCode], name: "idx_pu_unique_ward_pucode")
+  @@index([stateId])
+  @@index([lgaId])
+  @@index([wardId])
+  @@index([code])
+  @@index([portalId])
+  @@map("geo_polling_units")
+}
+
+/// Election timetable — one per election cycle
+model ElectionTimetable {
+  id             Int       @id @default(autoincrement())
+  electionId     Int       @map("election_id")
+  title          String
+  description    String?
+  publishedDate  DateTime? @map("published_date")
+  status         String    @default("draft") // draft | published | archived
+  sourceUrl      String?   @map("source_url")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @map("updated_at")
+
+  election       PoliticalElection @relation(fields: [electionId], references: [id])
+  events         ElectionEvent[]
+
+  @@index([electionId])
+  @@map("election_timetable")
+}
+
+/// Individual phases within a timetable
+model ElectionEvent {
+  id              Int       @id @default(autoincrement())
+  timetableId     Int       @map("timetable_id")
+  electionId      Int       @map("election_id")
+  name            String
+  description     String?
+  eventType       String    @map("event_type") // voter_registration | party_primaries | campaign_period | election_day | collation | result_announcement
+  geoScope        String    @default("national") @map("geo_scope") // national | state | lga
+  stateId         Int?      @map("state_id")
+  startDate       DateTime? @map("start_date")
+  endDate         DateTime? @map("end_date")
+  sortOrder       Int       @default(99) @map("sort_order")
+  status          String    @default("scheduled") // scheduled | ongoing | completed | cancelled
+  notes           String?
+  sourceUrl       String?   @map("source_url")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @map("updated_at")
+
+  timetable       ElectionTimetable @relation(fields: [timetableId], references: [id])
+  election        PoliticalElection @relation(fields: [electionId], references: [id])
+  state           State?   @relation(fields: [stateId], references: [id])
+
+  @@index([timetableId])
+  @@index([electionId])
+  @@index([eventType])
+  @@index([startDate, endDate])
+  @@index([status])
+  @@index([stateId])
+  @@map("election_events")
+}
+
+/// Election results at any geo level
+model ElectionResult {
+  id                        Int       @id @default(autoincrement())
+  electionId                Int       @map("election_id")
+  positionId                Int?      @map("position_id")
+  partyAcronym              String?   @map("party_acronym")
+  candidateName             String?   @map("candidate_name")
+  candidateId               Int?      @map("candidate_id")
+  votes                     Int       @default(0)
+  geoLevel                  String    @map("geo_level") // national | state | lga | ward | polling_unit
+  stateId                   Int?      @map("state_id")
+  lgaId                     Int?      @map("lga_id")
+  wardId                    Int?      @map("ward_id")
+  pollingUnitId             Int?      @map("polling_unit_id")
+  totalRegisteredVoters     Int?      @map("total_registered_voters")
+  totalAccreditedVoters     Int?      @map("total_accredited_voters")
+  totalValidVotes           Int?      @map("total_valid_votes")
+  totalRejectedVotes        Int?      @map("total_rejected_votes")
+  totalVotesCast            Int?      @map("total_votes_cast")
+  resultType                String    @default("official") @map("result_type") // official | provisional | cancelled
+  status                    String    @default("pending") // pending | verified | published | disputed
+  sourceUrl                 String?   @map("source_url")
+  sourceName                String?   @default("INEC") @map("source_name")
+  sourceUpdatedAt           DateTime? @map("source_updated_at")
+  declaredAt                DateTime? @map("declared_at")
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @default(now()) @map("updated_at")
+
+  election                  PoliticalElection @relation(fields: [electionId], references: [id])
+  position                  PoliticalPosition? @relation(fields: [positionId], references: [id])
+  candidate                 PoliticalPerson? @relation(fields: [candidateId], references: [id])
+  state                     State?   @relation(fields: [stateId], references: [id])
+  lga                       Lga?     @relation(fields: [lgaId], references: [id])
+  ward                      Ward?    @relation(fields: [wardId], references: [id])
+
+  @@index([electionId])
+  @@index([positionId])
+  @@index([partyAcronym])
+  @@index([geoLevel, stateId, lgaId, wardId, pollingUnitId])
+  @@index([status])
+  @@map("election_results")
+}
+
+/// Aggregated result summaries for dashboard rendering
+model ElectionResultSummary {
+  id                        Int      @id @default(autoincrement())
+  electionId                Int      @map("election_id")
+  positionId                Int?     @map("position_id")
+  geoLevel                  String   @map("geo_level") // national | state | lga | ward
+  stateId                   Int?     @map("state_id")
+  lgaId                     Int?     @map("lga_id")
+  wardId                    Int?     @map("ward_id")
+  totalValidVotes           Int      @default(0) @map("total_valid_votes")
+  totalRejectedVotes        Int      @default(0) @map("total_rejected_votes")
+  totalVotesCast            Int      @default(0) @map("total_votes_cast")
+  totalRegisteredVoters     Int?     @map("total_registered_voters")
+  totalAccreditedVoters     Int?     @map("total_accredited_voters")
+  leadingParty              String?  @map("leading_party")
+  leadingVotes              Int      @default(0) @map("leading_votes")
+  resultsCount              Int      @default(0) @map("results_count")
+  status                    String   @default("pending")
+  computedAt                DateTime @default(now()) @map("computed_at")
+
+  election                  PoliticalElection @relation(fields: [electionId], references: [id])
+  position                  PoliticalPosition? @relation(fields: [positionId], references: [id])
+  state                     State?   @relation(fields: [stateId], references: [id])
+  lga                       Lga?     @relation(fields: [lgaId], references: [id])
+  ward                      Ward?    @relation(fields: [wardId], references: [id])
+
+  @@index([electionId])
+  @@index([positionId])
+  @@index([geoLevel, stateId, lgaId, wardId])
+  @@map("election_result_summaries")
 }

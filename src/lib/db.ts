@@ -40,8 +40,9 @@ let engagementTablesEnsured = false;
 // and so a warm instance retries if a previous attempt failed.
 let newsExternalEnsured = false;
 let usersTableEnsured = false;
+let politicsV11Ensured = false;
 
-export const SCHEMA_VERSION = "2026-09-12-v10";
+export const SCHEMA_VERSION = "2026-09-13-v11";
 
 export async function ensureDbInitialized() {
   if (initialized) return;
@@ -112,6 +113,153 @@ export async function ensureDbInitialized() {
       usersTableEnsured = true;
     } catch (e) {
       console.error("[DB Init] users table ensure error (non-fatal):", e);
+    }
+  }
+
+  // ── Politics v11 tables (polling units, timetable, events, results) ──
+  // Standalone idempotent DDL, runs BEFORE the SCHEMA_VERSION fast-path.
+  // Has its own guard so a failure in other DDL can't prevent these from being created.
+  if (!politicsV11Ensured) {
+    politicsV11Ensured = true;
+    try {
+      // geo_polling_units
+      await sql`CREATE TABLE IF NOT EXISTS geo_polling_units (
+        id SERIAL PRIMARY KEY,
+        code TEXT NOT NULL,
+        state_code TEXT NOT NULL,
+        state_id INTEGER NOT NULL REFERENCES states(id) ON DELETE CASCADE,
+        lga_code TEXT NOT NULL,
+        lga_id INTEGER NOT NULL REFERENCES lgas(id) ON DELETE CASCADE,
+        ward_code TEXT NOT NULL,
+        ward_id INTEGER NOT NULL REFERENCES wards(id) ON DELETE CASCADE,
+        pu_code TEXT NOT NULL,
+        name TEXT NOT NULL,
+        location TEXT,
+        portal_id INTEGER,
+        source TEXT DEFAULT 'INEC',
+        source_updated_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE (ward_id, pu_code)
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_pu_state ON geo_polling_units(state_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_pu_lga ON geo_polling_units(lga_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_pu_ward ON geo_polling_units(ward_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_pu_code ON geo_polling_units(code)`;
+
+      // election_timetable
+      await sql`CREATE TABLE IF NOT EXISTS election_timetable (
+        id SERIAL PRIMARY KEY,
+        election_id INTEGER NOT NULL REFERENCES political_elections(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        description TEXT,
+        published_date DATE,
+        status TEXT DEFAULT 'draft',
+        source_url TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_timetable_election ON election_timetable(election_id)`;
+
+      // election_events
+      await sql`CREATE TABLE IF NOT EXISTS election_events (
+        id SERIAL PRIMARY KEY,
+        timetable_id INTEGER NOT NULL REFERENCES election_timetable(id) ON DELETE CASCADE,
+        election_id INTEGER NOT NULL REFERENCES political_elections(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        description TEXT,
+        event_type TEXT NOT NULL,
+        geo_scope TEXT DEFAULT 'national',
+        state_id INTEGER REFERENCES states(id),
+        start_date DATE,
+        end_date DATE,
+        sort_order INTEGER DEFAULT 99,
+        status TEXT DEFAULT 'scheduled',
+        notes TEXT,
+        source_url TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_events_timetable ON election_events(timetable_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_events_election ON election_events(election_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_events_type ON election_events(event_type)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_events_dates ON election_events(start_date, end_date)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_events_status ON election_events(status)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_events_state ON election_events(state_id)`;
+
+      // election_results
+      await sql`CREATE TABLE IF NOT EXISTS election_results (
+        id SERIAL PRIMARY KEY,
+        election_id INTEGER NOT NULL REFERENCES political_elections(id) ON DELETE CASCADE,
+        position_id INTEGER REFERENCES political_positions(id),
+        party_acronym TEXT,
+        candidate_name TEXT,
+        candidate_id INTEGER REFERENCES political_persons(id),
+        votes INTEGER DEFAULT 0,
+        geo_level TEXT NOT NULL,
+        state_id INTEGER REFERENCES states(id),
+        lga_id INTEGER REFERENCES lgas(id),
+        ward_id INTEGER REFERENCES wards(id),
+        polling_unit_id INTEGER REFERENCES geo_polling_units(id),
+        total_registered_voters INTEGER,
+        total_accredited_voters INTEGER,
+        total_valid_votes INTEGER,
+        total_rejected_votes INTEGER,
+        total_votes_cast INTEGER,
+        result_type TEXT DEFAULT 'official',
+        status TEXT DEFAULT 'pending',
+        source_url TEXT,
+        source_name TEXT DEFAULT 'INEC',
+        source_updated_at TIMESTAMPTZ,
+        declared_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_results_election ON election_results(election_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_results_position ON election_results(position_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_results_party ON election_results(party_acronym)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_results_status ON election_results(status)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_results_state ON election_results(state_id) WHERE state_id IS NOT NULL`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_results_lga ON election_results(lga_id) WHERE lga_id IS NOT NULL`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_results_ward ON election_results(ward_id) WHERE ward_id IS NOT NULL`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_results_pu ON election_results(polling_unit_id) WHERE polling_unit_id IS NOT NULL`;
+
+      // election_result_summaries
+      await sql`CREATE TABLE IF NOT EXISTS election_result_summaries (
+        id SERIAL PRIMARY KEY,
+        election_id INTEGER NOT NULL REFERENCES political_elections(id) ON DELETE CASCADE,
+        position_id INTEGER REFERENCES political_positions(id),
+        geo_level TEXT NOT NULL,
+        state_id INTEGER REFERENCES states(id),
+        lga_id INTEGER REFERENCES lgas(id),
+        ward_id INTEGER REFERENCES wards(id),
+        total_valid_votes INTEGER DEFAULT 0,
+        total_rejected_votes INTEGER DEFAULT 0,
+        total_votes_cast INTEGER DEFAULT 0,
+        total_registered_voters INTEGER,
+        total_accredited_voters INTEGER,
+        leading_party TEXT,
+        leading_votes INTEGER DEFAULT 0,
+        results_count INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'pending',
+        computed_at TIMESTAMPTZ DEFAULT NOW()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_summary_election ON election_result_summaries(election_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_summary_position ON election_result_summaries(position_id)`;
+
+      // Enhanced political_parties columns (additive ALTER)
+      try { await sql`ALTER TABLE political_parties ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active'` } catch {}
+      try { await sql`ALTER TABLE political_parties ADD COLUMN IF NOT EXISTS date_registered DATE` } catch {}
+      try { await sql`ALTER TABLE political_parties ADD COLUMN IF NOT EXISTS date_deregistered DATE` } catch {}
+      try { await sql`ALTER TABLE political_parties ADD COLUMN IF NOT EXISTS headquarters TEXT` } catch {}
+      try { await sql`ALTER TABLE political_parties ADD COLUMN IF NOT EXISTS source_url TEXT` } catch {}
+      try { await sql`ALTER TABLE political_parties ADD COLUMN IF NOT EXISTS source_name TEXT` } catch {}
+      try { await sql`ALTER TABLE political_parties ADD COLUMN IF NOT EXISTS source_updated_at TIMESTAMPTZ` } catch {}
+      try { await sql`ALTER TABLE political_parties ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'` } catch {}
+      try { await sql`ALTER TABLE political_parties ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()` } catch {}
+
+      politicsV11Ensured = true;
+    } catch (e) {
+      console.error("[DB Init] politics v11 tables ensure error (non-fatal):", e);
     }
   }
 

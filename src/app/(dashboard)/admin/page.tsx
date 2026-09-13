@@ -57,6 +57,7 @@ import { AdminAnalytics } from "@/components/admin-analytics";
 import { VerifiedBadge } from "@/components/verified-badge";
 import { AdminSecurity } from "@/components/admin-security";
 import { AdminPolitics } from "@/components/admin-politics";
+import { AdminPoliticsModules } from "@/components/admin-politics-modules";
 import { AdminConfig } from "@/components/admin-config";
 import { SubAdminManager } from "@/components/admin/sub-admin-manager";
 
@@ -2497,6 +2498,7 @@ export default function AdminDashboard() {
         {/* ----------------------------------------------------------------- */}
         <TabsContent value="politics" className="space-y-4">
           <AdminPolitics />
+          <AdminPoliticsModules />
         </TabsContent>
         <TabsContent value="sub-admins" className="space-y-4">
           <SubAdminManager />

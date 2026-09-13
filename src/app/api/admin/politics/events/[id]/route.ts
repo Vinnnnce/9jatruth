@@ -4,10 +4,27 @@ import { requireSuperAdmin } from "@/lib/admin-auth";
 import { z } from "zod";
 
 /**
- * PATCH /api/admin/politics/events/[id]
- * Approve / reject / delete a user-submitted political event (super-admin).
+ * Admin: Update or delete an election event.
+ * PUT  /api/admin/politics/events/[id] — Update event
+ * DELETE /api/admin/politics/events/[id] — Delete event
  */
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export const dynamic = "force-dynamic";
+
+const updateSchema = z.object({
+  name: z.string().min(2).max(200).optional(),
+  description: z.string().optional(),
+  event_type: z.enum(["voter_registration", "party_primaries", "campaign_period", "election_day", "collation", "result_announcement", "voter_verification", "party_registration"]).optional(),
+  geo_scope: z.string().optional(),
+  state_id: z.number().int().optional(),
+  start_date: z.string().optional(),
+  end_date: z.string().optional(),
+  sort_order: z.number().int().optional(),
+  status: z.enum(["scheduled", "ongoing", "completed", "cancelled"]).optional(),
+  notes: z.string().optional(),
+  source_url: z.string().url().optional().or(z.literal("")).optional(),
+});
+
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await ensureDbInitialized();
   const auth = await requireSuperAdmin();
   if ("error" in auth) return auth.error;
@@ -15,16 +32,32 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (csrfError) return csrfError;
 
   const { id } = await params;
-  const body = await request.json().catch(() => ({}));
-  const status = z.enum(["approved", "rejected", "pending", "flagged"]).parse(body.status);
+  const eventId = parseInt(id, 10);
+  const body = await request.json().catch(() => null);
+  const parsed = updateSchema.safeParse(body);
+  if (!parsed.success) return Response.json({ message: "Invalid event data", errors: parsed.error.flatten() }, { status: 400 });
+
+  const d = parsed.data;
   const sql = getDb();
-  const updated = (await sql`
-    UPDATE political_events SET status = ${status}
-    WHERE id = ${Number(id)}
+  const result = ((await sql`
+    UPDATE election_events SET
+      name = COALESCE(${d.name ?? null}, name),
+      description = COALESCE(${d.description ?? null}, description),
+      event_type = COALESCE(${d.event_type ?? null}, event_type),
+      geo_scope = COALESCE(${d.geo_scope ?? null}, geo_scope),
+      state_id = COALESCE(${d.state_id ?? null}, state_id),
+      start_date = COALESCE(${d.start_date ?? null}, start_date),
+      end_date = COALESCE(${d.end_date ?? null}, end_date),
+      sort_order = COALESCE(${d.sort_order ?? null}, sort_order),
+      status = COALESCE(${d.status ?? null}, status),
+      notes = COALESCE(${d.notes ?? null}, notes),
+      source_url = COALESCE(${d.source_url ?? null}, source_url),
+      updated_at = NOW()
+    WHERE id = ${eventId}
     RETURNING *
-  `) as unknown as any[];
-  if (updated.length === 0) return Response.json({ message: "Event not found" }, { status: 404 });
-  return Response.json({ event: updated[0] });
+  `) as unknown as any[])[0];
+  if (!result) return Response.json({ message: "Event not found" }, { status: 404 });
+  return Response.json({ event: result });
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -35,7 +68,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (csrfError) return csrfError;
 
   const { id } = await params;
+  const eventId = parseInt(id, 10);
   const sql = getDb();
-  await sql`DELETE FROM political_events WHERE id = ${Number(id)}`;
+  await sql`DELETE FROM election_events WHERE id = ${eventId}`;
   return Response.json({ success: true });
 }

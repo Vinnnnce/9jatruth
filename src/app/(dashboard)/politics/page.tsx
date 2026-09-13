@@ -89,6 +89,13 @@ export default function PoliticsPage() {
         Track candidates, parties, and election integrity. Submit on-the-ground political reports — AI fact-checks every submission. Election figures are transcribed evidence, not official INEC counts.
       </p>
 
+      {/* Politics Navigation */}
+      <div className="flex flex-wrap gap-2">
+        <Link href="/politics/elections"><Button variant="outline" size="sm"><Vote className="h-4 w-4 mr-1" />Election Calendar</Button></Link>
+        <Link href="/politics/results"><Button variant="outline" size="sm"><Vote className="h-4 w-4 mr-1" />Results Portal</Button></Link>
+        <Link href="/politics/parties"><Button variant="outline" size="sm"><Landmark className="h-4 w-4 mr-1" />Party Directory</Button></Link>
+      </div>
+
       <Tabs defaultValue="overview">
         <TabsList className="flex flex-wrap h-auto">
           <TabsTrigger value="overview">Parties & Candidates</TabsTrigger>
