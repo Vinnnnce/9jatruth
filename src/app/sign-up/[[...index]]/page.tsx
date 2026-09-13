@@ -38,6 +38,7 @@ export default function SignUpPage() {
           </p>
         </div>
         <ClerkAuthBoundary>
+        {/* @ts-expect-error — Clerk SignUp accepts children for CAPTCHA container injection */}
         <SignUp
           appearance={{
             elements: {
@@ -58,7 +59,9 @@ export default function SignUpPage() {
           signInUrl="/sign-in"
           fallbackRedirectUrl="/feeds"
           forceRedirectUrl="/feeds"
-        />
+        >
+          <div id="clerk-captcha"></div>
+        </SignUp>
         </ClerkAuthBoundary>
       </div>
     </div>
