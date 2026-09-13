@@ -151,7 +151,14 @@ async function main() {
   console.log(`Inserting ${rows.length} rows in ${chunks.length} batches of ${batchSize}...`);
 
   for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i];
+    const rawChunk = chunks[i];
+    // Deduplicate within batch by (ward_id, pu_code) to avoid ON CONFLICT cardinality error
+    const seen = new Set();
+    const chunk = [];
+    for (const row of rawChunk) {
+      const key = `${row[6]}:${row[7]}`; // ward_id:pu_code
+      if (!seen.has(key)) { seen.add(key); chunk.push(row); }
+    }
     const tuples = [];
     const params = [];
     let p = 1;
