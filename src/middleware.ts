@@ -143,30 +143,39 @@ const isUserRoute = createRouteMatcher([
 const passThrough = () => NextResponse.next();
 
 const middleware = isClerkConfigured
-  ? clerkMiddleware(async (auth, req) => {
-      // ─── Launch gate: redirect to countdown if before launch date ───
-      if (isBeforeLaunch() && !isPreLaunchRoute(req)) {
-        // Block all non-pre-launch API calls during countdown
-        const isApiCall = req.nextUrl.pathname.startsWith("/api/");
-        if (isApiCall) {
-          return NextResponse.json(
-            { message: "Site launches August 21, 2026" },
-            { status: 503 }
-          );
+  ? clerkMiddleware(
+      async (auth, req) => {
+        // ─── Launch gate: redirect to countdown if before launch date ───
+        if (isBeforeLaunch() && !isPreLaunchRoute(req)) {
+          // Block all non-pre-launch API calls during countdown
+          const isApiCall = req.nextUrl.pathname.startsWith("/api/");
+          if (isApiCall) {
+            return NextResponse.json(
+              { message: "Site launches August 21, 2026" },
+              { status: 503 }
+            );
+          }
+          return NextResponse.redirect(new URL("/countdown", req.url));
         }
-        return NextResponse.redirect(new URL("/countdown", req.url));
-      }
 
-      // Protect admin, org, and user dashboard pages — require authentication
-      if (isAdminRoute(req) || isOrgRoute(req) || isUserRoute(req)) {
-        await auth.protect();
-      }
+        // Protect admin, org, and user dashboard pages — require authentication
+        if (isAdminRoute(req) || isOrgRoute(req) || isUserRoute(req)) {
+          await auth.protect();
+        }
 
-      // Protect sensitive API routes
-      if (isAdminApiRoute(req) || isOrgApiRoute(req) || isUserApiRoute(req)) {
-        await auth.protect();
+        // Protect sensitive API routes
+        if (isAdminApiRoute(req) || isOrgApiRoute(req) || isUserApiRoute(req)) {
+          await auth.protect();
+        }
+      },
+      {
+        // Override Clerk Dashboard's sign_in_url/sign_up_url (which point to
+        // accounts.9jatruth.com — not provisioned). Redirect to the app's own
+        // embedded Clerk sign-in/sign-up routes instead.
+        signInUrl: "/sign-in",
+        signUpUrl: "/sign-up",
       }
-    })
+    )
   : (async (req: NextRequest) => {
       // ─── Launch gate without Clerk ───
       if (isBeforeLaunch() && !isPreLaunchRoute(req)) {
