@@ -156,7 +156,7 @@ export async function POST(request: Request) {
   }
 
   // For larger files (videos > 15MB), try filesystem in dev or /tmp on Vercel
-  const ext = path.extname(file.name) || (isImage ? ".jpg" : ".mp4");
+  const ext = path.extname(file.name) || (isImage ? ".jpg" : isVideo ? ".mp4" : isAudio ? ".webm" : ".bin");
   const hash = crypto.createHash("sha256").update(userHash + Date.now()).digest("hex").slice(0, 16);
   const dateDir = new Date().toISOString().slice(0, 10);
   const filename = `${hash}${ext}`;

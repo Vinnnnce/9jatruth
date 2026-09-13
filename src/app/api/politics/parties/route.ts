@@ -31,10 +31,11 @@ export async function GET() {
       console.error("[politics/parties] Nigeria2 sync failed:", err);
     }
   }
+  console.log(`[politics/parties] Returning ${rows.length} parties`);
   return Response.json({ parties: rows });
   } catch (err: any) {
     console.error("[politics/parties] GET failed:", err);
-    return Response.json({ message: "Failed to load parties" }, { status: 500 });
+    return Response.json({ message: "Failed to load parties", error: err.message, parties: [] }, { status: 500 });
   }
 }
 

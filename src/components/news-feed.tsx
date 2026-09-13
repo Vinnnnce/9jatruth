@@ -9,17 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { motion, AnimatePresence } from "framer-motion";
-import { BatchAISummaries } from "@/components/ai-content-summaries";
-import {
-  Heart,
-  MessageCircle,
-  Clock,
-  ChevronLeft,
-  ChevronRight,
-  ShieldCheck,
-  Newspaper,
-  ExternalLink,
-} from "lucide-react";
+import { ExternalLink, AlertCircle, RotateCcw, Newspaper, ChevronLeft, ChevronRight, ShieldCheck, Clock, Heart, MessageCircle } from "lucide-react";
 
 // ─── Types ───
 
@@ -61,12 +51,13 @@ export function NewsFeed() {
   const [activeCategory, setActiveCategory] = useState("All");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { data, isLoading } = useQuery<NewsFeedResponse>({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery<NewsFeedResponse>({
     queryKey: ["/api/news/feed"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/news/feed");
       return res.json();
     },
+    retry: 1,
   });
 
   const articles = data?.articles ?? [];
@@ -128,6 +119,20 @@ export function NewsFeed() {
           {[...Array(4)].map((_, i) => (
             <Skeleton key={i} className="h-64 w-72 shrink-0 rounded-xl" />
           ))}
+        </div>
+      ) : isError ? (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+          <AlertCircle className="h-6 w-6 mx-auto mb-2 text-destructive" />
+          <p className="text-sm text-muted-foreground mb-3">Failed to load news. Please try again.</p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => refetch()}
+            disabled={isFetching}
+          >
+            <RotateCcw className={`h-3.5 w-3.5 mr-1 ${isFetching ? "animate-spin" : ""}`} />
+            Retry
+          </Button>
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-border p-8 text-center">
@@ -246,10 +251,6 @@ export function NewsFeed() {
         </div>
       )}
 
-      {/* AI Batch Summaries */}
-      {filtered.length > 0 && (
-        <BatchAISummaries articles={filtered.map(a => ({ id: a.id, title: a.title, content: a.excerpt }))} />
-      )}
     </div>
   );
 }

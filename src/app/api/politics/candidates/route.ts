@@ -13,8 +13,11 @@ import { z } from "zod";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  await ensureDbInitialized();
   const { searchParams } = new URL(request.url);
+  const limit = Math.min(parseInt(searchParams.get("limit") || "100", 10) || 100, 500);
+  const offset = Math.max(parseInt(searchParams.get("offset") || "0", 10) || 0, 0);
+  try {
+  await ensureDbInitialized();
   const party = searchParams.get("party");
   const office = searchParams.get("office");
   const level = searchParams.get("level");
@@ -26,8 +29,6 @@ export async function GET(request: Request) {
   const type = searchParams.get("type"); // incumbent | candidate | aspirant | nominee
   const verified = searchParams.get("verified"); // unverified|pending|verified|disputed
   const search = searchParams.get("search");
-  const limit = Math.min(parseInt(searchParams.get("limit") || "100", 10) || 100, 500);
-  const offset = Math.max(parseInt(searchParams.get("offset") || "0", 10) || 0, 0);
 
   const sql = getDb();
   const rows = (await sql`
@@ -67,7 +68,12 @@ export async function GET(request: Request) {
       AND (${search ?? null}::text IS NULL OR c.name ILIKE ${"%" + (search ?? "") + "%"})
   `) as unknown as any[];
 
+  console.log(`[politics/candidates] Returning ${rows.length} candidates (total: ${countRow[0]?.total ?? rows.length})`);
   return Response.json({ candidates: rows, total: countRow[0]?.total ?? rows.length, limit, offset });
+  } catch (err: any) {
+    console.error("[politics/candidates] GET failed:", err);
+    return Response.json({ message: "Failed to load candidates", error: err.message, candidates: [], total: 0, limit, offset }, { status: 500 });
+  }
 }
 
 // Helper: stringify JSON array fields safely

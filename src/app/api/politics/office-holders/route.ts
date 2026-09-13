@@ -10,15 +10,16 @@ import { ensureDbInitialized, getDb } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  await ensureDbInitialized();
   const { searchParams } = new URL(request.url);
+  const limit = Math.min(parseInt(searchParams.get("limit") || "200", 10) || 200, 1000);
+  try {
+  await ensureDbInitialized();
   const zone = searchParams.get("zone"); // geopolitical zone code (NC/NE/...)
   const state = searchParams.get("state"); // state id or name
   const lga = searchParams.get("lga");
   const ward = searchParams.get("ward");
   const position = searchParams.get("position"); // position code
   const party = searchParams.get("party");
-  const limit = Math.min(parseInt(searchParams.get("limit") || "200", 10) || 200, 1000);
 
   const sql = getDb();
 
@@ -62,5 +63,10 @@ export async function GET(request: Request) {
     LIMIT ${limit}
   `) as unknown as any[];
 
+  console.log(`[politics/office-holders] Returning ${rows.length} office holders`);
   return Response.json({ officeHolders: rows, total: rows.length, limit });
+  } catch (err: any) {
+    console.error("[politics/office-holders] GET failed:", err);
+    return Response.json({ message: "Failed to load office holders", error: err.message, officeHolders: [], total: 0, limit }, { status: 500 });
+  }
 }

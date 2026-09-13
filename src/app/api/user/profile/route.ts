@@ -218,6 +218,23 @@ export async function PUT(request: Request) {
   values.push(clerkUserId);
 
   try {
+    // Sync avatar to Clerk profile image when avatarUrl is updated
+    if (body.avatarUrl) {
+      try {
+        const clerkKey = process.env.CLERK_SECRET_KEY;
+        const clerkPubKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+        const isClerkConfigured = clerkPubKey && !clerkPubKey.includes("placeholder") && clerkPubKey.length > 20;
+        if (isClerkConfigured && clerkKey && body.avatarUrl.startsWith("data:")) {
+          const { clerkClient } = await import("@clerk/nextjs/server");
+          const client = await clerkClient();
+          // Upload the avatar to Clerk's user profile
+          await client.users.updateUserProfileImage(clerkUserId, { file: body.avatarUrl });
+        }
+      } catch (clerkErr) {
+        console.error("[user/profile] Clerk avatar sync failed:", clerkErr);
+        // Non-fatal — DB is updated, Clerk sync is best-effort
+      }
+    }
     // Update each field individually using Neon's tagged template
     // Column names are validated against the allowedFields whitelist (no injection risk)
     for (const u of updates) {
